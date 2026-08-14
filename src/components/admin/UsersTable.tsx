@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { Trash2, UserPlus } from "lucide-react";
 
 type UserRow = {
   id: string;
   username: string;
   role: string;
   createdAt: string;
+  inRoster: boolean;
 };
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" });
@@ -25,6 +26,20 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role }),
+    });
+    const data = await res.json();
+    if (!res.ok) setError(data.error ?? "Что-то пошло не так.");
+    setBusyId(null);
+    router.refresh();
+  }
+
+  async function handleAddToRoster(username: string) {
+    setBusyId(username);
+    setError(null);
+    const res = await fetch("/api/players", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: username, role: "Без роли", level: 1, xp: 0, attendancePct: 0 }),
     });
     const data = await res.json();
     if (!res.ok) setError(data.error ?? "Что-то пошло не так.");
@@ -76,17 +91,31 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
                 </td>
                 <td className="px-4 py-3 text-muted">{dateFmt.format(new Date(u.createdAt))}</td>
                 <td className="px-4 py-3">
-                  {u.id !== currentUserId && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(u.id)}
-                      disabled={busyId === u.id}
-                      aria-label="Удалить"
-                      className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-60"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {u.inRoster ? (
+                      <span className="text-xs text-muted">В составе</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleAddToRoster(u.username)}
+                        disabled={busyId === u.username}
+                        className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+                      >
+                        <UserPlus size={13} /> Добавить в состав
+                      </button>
+                    )}
+                    {u.id !== currentUserId && (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(u.id)}
+                        disabled={busyId === u.id}
+                        aria-label="Удалить"
+                        className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-60"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

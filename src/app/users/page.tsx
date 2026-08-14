@@ -7,14 +7,23 @@ export default async function UsersPage() {
   const admin = await requireAdmin();
   if (!admin) redirect("/dashboard");
 
-  const users = await prisma.user.findMany({
-    orderBy: { createdAt: "desc" },
-    select: { id: true, username: true, role: true, createdAt: true },
-  });
+  const [users, players] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, username: true, role: true, createdAt: true },
+    }),
+    prisma.player.findMany({ select: { name: true } }),
+  ]);
+
+  const rosterNames = new Set(players.map((p) => p.name.toLowerCase()));
 
   return (
     <UsersTable
-      users={users.map((u) => ({ ...u, createdAt: u.createdAt.toISOString() }))}
+      users={users.map((u) => ({
+        ...u,
+        createdAt: u.createdAt.toISOString(),
+        inRoster: rosterNames.has(u.username.toLowerCase()),
+      }))}
       currentUserId={admin.sub}
     />
   );

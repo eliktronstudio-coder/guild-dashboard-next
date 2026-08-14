@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-
-const ROLES = ["Танк", "Хил", "Милик", "Лучник", "Маг"];
+import { ROLES } from "@/lib/roles";
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();

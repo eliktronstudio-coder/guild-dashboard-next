@@ -4,8 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Plus, X } from "lucide-react";
-
-const ROLES = ["Танк", "Хил", "Милик", "Лучник", "Маг"] as const;
+import { ROLES } from "@/lib/roles";
 
 type Player = {
   id: string;
