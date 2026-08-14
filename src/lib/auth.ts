@@ -51,7 +51,10 @@ export async function setSessionCookie(payload: SessionPayload) {
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Secure cookies are only stored by browsers over HTTPS. The site currently
+    // runs on plain HTTP, so this must stay false until TLS is set up — flip via
+    // COOKIE_SECURE=true once there's a real domain + certificate.
+    secure: process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
