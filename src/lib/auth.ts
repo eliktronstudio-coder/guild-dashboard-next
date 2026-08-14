@@ -72,3 +72,9 @@ export async function getCurrentUser(): Promise<SessionPayload | null> {
   if (!token) return null;
   return verifySessionToken(token);
 }
+
+export async function requireAdmin(): Promise<SessionPayload | null> {
+  const user = await getCurrentUser();
+  if (!user || user.role !== "admin") return null;
+  return user;
+}

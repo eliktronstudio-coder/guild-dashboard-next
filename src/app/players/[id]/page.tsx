@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { players } from "@/lib/mock-data";
+import { getPlayerById } from "@/lib/queries";
 import StatCard from "@/components/StatCard";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -11,7 +11,7 @@ export default async function PlayerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const player = players.find((p) => String(p.id) === id);
+  const player = await getPlayerById(id);
   if (!player) notFound();
 
   return (

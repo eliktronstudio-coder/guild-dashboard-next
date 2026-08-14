@@ -2,20 +2,18 @@ import Link from "next/link";
 import StatCard from "@/components/StatCard";
 import TreasuryChart from "@/components/charts/TreasuryChart";
 import AttendanceChart from "@/components/charts/AttendanceChart";
-import {
-  stats,
-  treasuryHistory,
-  attendanceHistory,
-  activities,
-  topByAttendance,
-  topByXp,
-} from "@/lib/mock-data";
+import { stats, treasuryHistory, attendanceHistory } from "@/lib/mock-data";
+import { topPlayersByAttendance, topPlayersByXp, getAllActivities } from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
-export default function DashboardPage() {
-  const attendanceTop = topByAttendance(5);
-  const xpTop = topByXp(5);
+export default async function DashboardPage() {
+  const [attendanceTop, xpTop, allActivities] = await Promise.all([
+    topPlayersByAttendance(5),
+    topPlayersByXp(5),
+    getAllActivities(),
+  ]);
+  const recentActivities = allActivities.slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -129,7 +127,7 @@ export default function DashboardPage() {
           </Link>
         </div>
         <ul className="divide-y divide-border">
-          {activities.map((a) => (
+          {recentActivities.map((a) => (
             <li key={a.id}>
               <Link
                 href={`/activities/${a.id}`}

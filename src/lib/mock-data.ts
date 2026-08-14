@@ -1,21 +1,3 @@
-export type Role = "Танк" | "Хил" | "Милик" | "Лучник" | "Маг";
-
-export type Player = {
-  id: number;
-  name: string;
-  role: Role;
-  level: number;
-  xp: number;
-  attendancePct: number;
-};
-
-export type Activity = {
-  id: number;
-  name: string;
-  participants: number;
-  date: string;
-};
-
 export type TreasuryPoint = {
   date: string;
   gold: number;
@@ -42,27 +24,6 @@ export type Payment = {
   status: "Выплачено" | "Ожидает" | "Отклонено";
   date: string;
 };
-
-export const players: Player[] = [
-  { id: 1, name: "Amagami", role: "Милик", level: 9, xp: 4975, attendancePct: 100 },
-  { id: 2, name: "Boop", role: "Хил", level: 8, xp: 4210, attendancePct: 96 },
-  { id: 3, name: "Estq", role: "Милик", level: 10, xp: 5460, attendancePct: 100 },
-  { id: 4, name: "Harwester", role: "Лучник", level: 7, xp: 3680, attendancePct: 92 },
-  { id: 5, name: "Khinaar", role: "Хил", level: 12, xp: 7375, attendancePct: 100 },
-  { id: 6, name: "Neverq", role: "Танк", level: 11, xp: 6860, attendancePct: 89 },
-  { id: 7, name: "Neneverq", role: "Хил", level: 11, xp: 6375, attendancePct: 94 },
-  { id: 8, name: "Yupi", role: "Танк", level: 10, xp: 5460, attendancePct: 87 },
-  { id: 9, name: "Sorvin", role: "Маг", level: 6, xp: 2980, attendancePct: 81 },
-  { id: 10, name: "Latrys", role: "Лучник", level: 9, xp: 4720, attendancePct: 90 },
-];
-
-export const activities: Activity[] = [
-  { id: 1633, name: "АГЛ", participants: 13, date: "14 августа" },
-  { id: 1632, name: "Разъяренный Морфеос", participants: 11, date: "14 августа" },
-  { id: 1631, name: "Логово Вирма", participants: 15, date: "13 августа" },
-  { id: 1630, name: "Страж Бездны", participants: 9, date: "12 августа" },
-  { id: 1629, name: "АГЛ", participants: 14, date: "11 августа" },
-];
 
 export const treasuryHistory: TreasuryPoint[] = [
   { date: "1 авг", gold: 512000, inventory: 84000 },
@@ -105,11 +66,3 @@ export const stats = {
   avgActivityDays: 7,
   daysUntilPayout: 3,
 };
-
-export function topByAttendance(count = 5): Player[] {
-  return [...players].sort((a, b) => b.attendancePct - a.attendancePct).slice(0, count);
-}
-
-export function topByXp(count = 5): Player[] {
-  return [...players].sort((a, b) => b.xp - a.xp).slice(0, count);
-}

@@ -19,3 +19,32 @@ model User {
   role         String   @default("member")
   createdAt    DateTime @default(now())
 }
+
+model Player {
+  id            String                @id @default(cuid())
+  name          String
+  role          String
+  level         Int                   @default(1)
+  xp            Int                   @default(0)
+  attendancePct Int                   @default(0)
+  createdAt     DateTime              @default(now())
+  activities    ActivityParticipant[]
+}
+
+model Activity {
+  id           String                @id @default(cuid())
+  name         String
+  date         DateTime              @default(now())
+  createdAt    DateTime              @default(now())
+  participants ActivityParticipant[]
+}
+
+model ActivityParticipant {
+  id         String   @id @default(cuid())
+  activityId String
+  playerId   String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([activityId, playerId])
+}

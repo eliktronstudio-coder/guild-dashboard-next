@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { activities, players } from "@/lib/mock-data";
+import { getActivityById } from "@/lib/queries";
 
 export default async function ActivityDetailPage({
   params,
@@ -8,10 +8,8 @@ export default async function ActivityDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const activity = activities.find((a) => String(a.id) === id);
+  const activity = await getActivityById(id);
   if (!activity) notFound();
-
-  const roster = players.slice(0, activity.participants % players.length || players.length);
 
   return (
     <div className="space-y-4">
@@ -23,7 +21,7 @@ export default async function ActivityDetailPage({
       <div className="rounded-lg border border-border bg-surface p-4">
         <h2 className="text-lg font-semibold">{activity.name}</h2>
         <p className="mt-1 text-xs text-muted">
-          {activity.date} · {activity.participants} участников
+          {activity.date} · {activity.roster.length} участников
         </p>
       </div>
       <div className="rounded-lg border border-border bg-surface">
@@ -31,12 +29,15 @@ export default async function ActivityDetailPage({
           <h3 className="text-sm font-semibold">Состав участников</h3>
         </div>
         <ul className="divide-y divide-border">
-          {roster.map((p) => (
+          {activity.roster.map((p) => (
             <li key={p.id} className="flex items-center justify-between px-4 py-3 text-sm">
               <span className="font-medium">{p.name}</span>
               <span className="text-xs text-muted">{p.role}</span>
             </li>
           ))}
+          {activity.roster.length === 0 && (
+            <li className="px-4 py-6 text-center text-muted">Участники не выбраны.</li>
+          )}
         </ul>
       </div>
     </div>
