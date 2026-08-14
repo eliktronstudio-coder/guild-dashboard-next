@@ -8,6 +8,7 @@ import {
   Gavel,
   Wallet,
   Calculator,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -15,6 +16,7 @@ export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  adminOnly?: boolean;
 };
 
 export type NavSection = {
@@ -45,6 +47,12 @@ export const navSections: NavSection[] = [
     title: "Инструменты",
     items: [
       { href: "/calculator", label: "Калькулятор РБ опыта", icon: Calculator },
+    ],
+  },
+  {
+    title: "Администрирование",
+    items: [
+      { href: "/users", label: "Пользователи", icon: ShieldCheck, adminOnly: true },
     ],
   },
 ];

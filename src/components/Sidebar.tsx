@@ -59,13 +59,16 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
         </Link>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          {navSections.map((section) => (
+          {navSections.map((section) => {
+            const items = section.items.filter((item) => !item.adminOnly || user?.role === "admin");
+            if (items.length === 0) return null;
+            return (
             <div key={section.title} className="mb-6">
               <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wider text-muted">
                 {section.title}
               </p>
               <ul className="space-y-1">
-                {section.items.map((item) => {
+                {items.map((item) => {
                   const active = pathname === item.href || pathname.startsWith(item.href + "/");
                   const Icon = item.icon;
                   return (
@@ -88,7 +91,8 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
                 })}
               </ul>
             </div>
-          ))}
+            );
+          })}
         </nav>
 
         <div className="border-t border-border p-4">
