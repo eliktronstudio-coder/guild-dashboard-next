@@ -15,6 +15,13 @@ export async function getPlayerById(id: string) {
   return prisma.player.findUnique({ where: { id } });
 }
 
+export async function getRegisteredPlayers() {
+  return prisma.player.findMany({
+    where: { userId: { not: null } },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 export async function topPlayersByAttendance(count = 5) {
   return prisma.player.findMany({ orderBy: { attendancePct: "desc" }, take: count });
 }

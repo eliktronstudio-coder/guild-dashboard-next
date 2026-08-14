@@ -76,7 +76,7 @@ export default function ActivitiesList({
       setOcrNotice(
         matched.length > 0
           ? `Распознано и отмечено: ${matched.map((p) => p.name).join(", ")}`
-          : "Не удалось найти совпадений с составом. Отметьте участников вручную."
+          : "Совпадений не найдено. Отмечать можно только зарегистрированных на сайте — попробуйте другой скриншот или отметьте участников вручную."
       );
     } catch {
       setError("Не удалось связаться с сервером.");
@@ -207,9 +207,15 @@ export default function ActivitiesList({
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs text-muted">Участники</p>
+                <p className="mb-1.5 text-xs text-muted">
+                  Участники <span className="text-muted/70">(только зарегистрированные на сайте)</span>
+                </p>
                 <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
-                  {players.length === 0 && <p className="text-xs text-muted">Сначала добавьте игроков в состав.</p>}
+                  {players.length === 0 && (
+                    <p className="text-xs text-muted">
+                      Пока никто из состава не зарегистрирован на сайте — участников добавить нельзя.
+                    </p>
+                  )}
                   {players.map((p) => (
                     <label
                       key={p.id}
