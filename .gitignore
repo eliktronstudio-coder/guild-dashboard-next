@@ -41,3 +41,17 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+/src/generated/prisma
+
+# sqlite database
+/prisma/*.db
+/prisma/*.db-journal
+/dev.db
+/dev.db-journal
+
+# prisma agent-skill scaffolding (local tooling only)
+/.claude/skills
+/.agents
+/.windsurf
+skills-lock.json

@@ -5,8 +5,9 @@ import Sidebar from "./Sidebar";
 import Header from "./Header";
 import LoginDialog from "./LoginDialog";
 import { guild } from "@/lib/config";
+import type { SessionPayload } from "@/lib/auth";
 
-export default function AppShell({ children }: { children: ReactNode }) {
+export default function AppShell({ children, user }: { children: ReactNode; user: SessionPayload | null }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
 
@@ -16,6 +17,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         mobileOpen={mobileOpen}
         onCloseMobile={() => setMobileOpen(false)}
         onLoginClick={() => setLoginOpen(true)}
+        user={user}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

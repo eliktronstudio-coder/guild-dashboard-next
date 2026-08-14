@@ -1,19 +1,36 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { navSections } from "@/lib/nav";
 import { guild } from "@/lib/config";
+import type { SessionPayload } from "@/lib/auth";
 
 type SidebarProps = {
   mobileOpen: boolean;
   onCloseMobile: () => void;
   onLoginClick: () => void;
+  user: SessionPayload | null;
 };
 
-export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick }: SidebarProps) {
+const roleLabel: Record<string, string> = {
+  admin: "Админ",
+  member: "Участник",
+};
+
+export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.refresh();
+    setLoggingOut(false);
+  }
 
   return (
     <>
@@ -75,13 +92,32 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick }: Sid
         </nav>
 
         <div className="border-t border-border p-4">
-          <button
-            type="button"
-            onClick={onLoginClick}
-            className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-black transition-opacity hover:opacity-90"
-          >
-            Войти
-          </button>
+          {user ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between rounded-md bg-surface-2 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{user.username}</p>
+                  <p className="text-xs text-muted">{roleLabel[user.role] ?? user.role}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground/80 transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+              >
+                Выйти
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={onLoginClick}
+              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-black transition-opacity hover:opacity-90"
+            >
+              Войти
+            </button>
+          )}
         </div>
       </aside>
     </>

@@ -1,36 +1,108 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
+import clsx from "clsx";
 
 type LoginDialogProps = {
   open: boolean;
   onClose: () => void;
 };
 
+type Mode = "login" | "register";
+
 export default function LoginDialog({ open, onClose }: LoginDialogProps) {
-  const [notice, setNotice] = useState<string | null>(null);
+  const router = useRouter();
+  const [mode, setMode] = useState<Mode>("login");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   if (!open) return null;
 
-  function handleSubmit(e: FormEvent) {
+  function reset() {
+    setUsername("");
+    setPassword("");
+    setConfirmPassword("");
+    setError(null);
+    setSubmitting(false);
+  }
+
+  function handleClose() {
+    reset();
+    setMode("login");
+    onClose();
+  }
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setNotice("Авторизация пока не подключена — это демо-интерфейс.");
+    setError(null);
+
+    if (mode === "register" && password !== confirmPassword) {
+      setError("Пароли не совпадают.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/auth/${mode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Что-то пошло не так.");
+        setSubmitting(false);
+        return;
+      }
+      handleClose();
+      router.refresh();
+    } catch {
+      setError("Не удалось связаться с сервером.");
+      setSubmitting(false);
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        aria-label="Закрыть"
-        onClick={onClose}
-        className="fixed inset-0 bg-black/70"
-      />
+      <button aria-label="Закрыть" onClick={handleClose} className="fixed inset-0 bg-black/70" />
       <div className="relative z-10 w-full max-w-sm rounded-lg border border-border bg-surface p-6 shadow-xl">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-base font-semibold">Вход</h2>
+          <div className="flex gap-1 rounded-md border border-border p-1 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                setMode("login");
+                setError(null);
+              }}
+              className={clsx(
+                "rounded px-2.5 py-1 font-medium transition-colors",
+                mode === "login" ? "bg-accent text-black" : "text-muted hover:text-foreground"
+              )}
+            >
+              Вход
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setMode("register");
+                setError(null);
+              }}
+              className={clsx(
+                "rounded px-2.5 py-1 font-medium transition-colors",
+                mode === "register" ? "bg-accent text-black" : "text-muted hover:text-foreground"
+              )}
+            >
+              Регистрация
+            </button>
+          </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Закрыть"
             className="rounded p-1 text-muted hover:bg-surface-2 hover:text-foreground"
           >
@@ -40,13 +112,16 @@ export default function LoginDialog({ open, onClose }: LoginDialogProps) {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="login" className="mb-1.5 block text-xs text-muted">
+            <label htmlFor="username" className="mb-1.5 block text-xs text-muted">
               Логин
             </label>
             <input
-              id="login"
+              id="username"
               type="text"
               autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
               className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
             />
           </div>
@@ -57,18 +132,40 @@ export default function LoginDialog({ open, onClose }: LoginDialogProps) {
             <input
               id="password"
               type="password"
-              autoComplete="current-password"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={6}
               className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
             />
           </div>
+          {mode === "register" && (
+            <div>
+              <label htmlFor="confirmPassword" className="mb-1.5 block text-xs text-muted">
+                Повторите пароль
+              </label>
+              <input
+                id="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                minLength={6}
+                className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </div>
+          )}
 
-          {notice && <p className="text-xs text-accent">{notice}</p>}
+          {error && <p className="text-xs text-danger">{error}</p>}
 
           <button
             type="submit"
-            className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90"
+            disabled={submitting}
+            className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-60"
           >
-            Войти
+            {mode === "login" ? "Войти" : "Зарегистрироваться"}
           </button>
         </form>
       </div>
