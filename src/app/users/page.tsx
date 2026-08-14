@@ -12,9 +12,10 @@ export default async function UsersPage() {
       orderBy: { createdAt: "desc" },
       select: { id: true, username: true, role: true, createdAt: true },
     }),
-    prisma.player.findMany({ select: { name: true } }),
+    prisma.player.findMany({ select: { name: true, userId: true } }),
   ]);
 
+  const linkedUserIds = new Set(players.map((p) => p.userId).filter(Boolean));
   const rosterNames = new Set(players.map((p) => p.name.toLowerCase()));
 
   return (
@@ -22,7 +23,7 @@ export default async function UsersPage() {
       users={users.map((u) => ({
         ...u,
         createdAt: u.createdAt.toISOString(),
-        inRoster: rosterNames.has(u.username.toLowerCase()),
+        inRoster: linkedUserIds.has(u.id) || rosterNames.has(u.username.toLowerCase()),
       }))}
       currentUserId={admin.sub}
     />

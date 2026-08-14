@@ -18,6 +18,7 @@ model User {
   passwordHash String
   role         String   @default("member")
   createdAt    DateTime @default(now())
+  player       Player?
 }
 
 model Player {
@@ -29,6 +30,8 @@ model Player {
   attendancePct Int                   @default(0)
   createdAt     DateTime              @default(now())
   activities    ActivityParticipant[]
+  userId        String?               @unique
+  user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model Activity {

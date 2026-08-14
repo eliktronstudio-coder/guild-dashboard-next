@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import clsx from "clsx";
+import { ROLES } from "@/lib/roles";
 
 type LoginDialogProps = {
   open: boolean;
@@ -12,12 +13,16 @@ type LoginDialogProps = {
 
 type Mode = "login" | "register";
 
+const GAME_ROLES = ROLES.filter((r) => r !== "Без роли");
+
 export default function LoginDialog({ open, onClose }: LoginDialogProps) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [nickname, setNickname] = useState("");
+  const [role, setRole] = useState(GAME_ROLES[0]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -27,6 +32,8 @@ export default function LoginDialog({ open, onClose }: LoginDialogProps) {
     setUsername("");
     setPassword("");
     setConfirmPassword("");
+    setNickname("");
+    setRole(GAME_ROLES[0]);
     setError(null);
     setSubmitting(false);
   }
@@ -48,10 +55,12 @@ export default function LoginDialog({ open, onClose }: LoginDialogProps) {
 
     setSubmitting(true);
     try {
+      const body =
+        mode === "register" ? { username, password, nickname, role } : { username, password };
       const res = await fetch(`/api/auth/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -141,21 +150,54 @@ export default function LoginDialog({ open, onClose }: LoginDialogProps) {
             />
           </div>
           {mode === "register" && (
-            <div>
-              <label htmlFor="confirmPassword" className="mb-1.5 block text-xs text-muted">
-                Повторите пароль
-              </label>
-              <input
-                id="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-              />
-            </div>
+            <>
+              <div>
+                <label htmlFor="confirmPassword" className="mb-1.5 block text-xs text-muted">
+                  Повторите пароль
+                </label>
+                <input
+                  id="confirmPassword"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label htmlFor="nickname" className="mb-1.5 block text-xs text-muted">
+                  Игровой ник
+                </label>
+                <input
+                  id="nickname"
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  required
+                  maxLength={40}
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label htmlFor="role" className="mb-1.5 block text-xs text-muted">
+                  Роль
+                </label>
+                <select
+                  id="role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                >
+                  {GAME_ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
           )}
 
           {error && <p className="text-xs text-danger">{error}</p>}

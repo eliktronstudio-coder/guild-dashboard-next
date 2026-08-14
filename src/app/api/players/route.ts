@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
   const level = Number(body?.level);
   const xp = Number(body?.xp);
   const attendancePct = Number(body?.attendancePct);
+  const userId = typeof body?.userId === "string" ? body.userId : undefined;
 
   if (!name || name.length > 40) {
     return NextResponse.json({ error: "Укажите имя игрока (до 40 символов)." }, { status: 400 });
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
   }
 
   const player = await prisma.player.create({
-    data: { name, role, level, xp, attendancePct },
+    data: { name, role, level, xp, attendancePct, userId },
   });
 
   return NextResponse.json(player, { status: 201 });

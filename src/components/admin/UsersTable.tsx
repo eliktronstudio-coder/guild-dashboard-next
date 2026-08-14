@@ -33,13 +33,13 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
     router.refresh();
   }
 
-  async function handleAddToRoster(username: string) {
-    setBusyId(username);
+  async function handleAddToRoster(id: string, username: string) {
+    setBusyId(id);
     setError(null);
     const res = await fetch("/api/players", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: username, role: "Без роли", level: 1, xp: 0, attendancePct: 0 }),
+      body: JSON.stringify({ name: username, role: "Без роли", level: 1, xp: 0, attendancePct: 0, userId: id }),
     });
     const data = await res.json();
     if (!res.ok) setError(data.error ?? "Что-то пошло не так.");
@@ -97,8 +97,8 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
                     ) : (
                       <button
                         type="button"
-                        onClick={() => handleAddToRoster(u.username)}
-                        disabled={busyId === u.username}
+                        onClick={() => handleAddToRoster(u.id, u.username)}
+                        disabled={busyId === u.id}
                         className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
                       >
                         <UserPlus size={13} /> Добавить в состав
