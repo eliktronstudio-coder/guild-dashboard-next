@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useRef, type FormEvent, type ChangeEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, X } from "lucide-react";
+import { Plus, Trash2, X, Image as ImageIcon, Loader2 } from "lucide-react";
 
 type Activity = {
   id: string;
@@ -18,6 +18,18 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function findMatchingPlayers(text: string, players: PlayerOption[]) {
+  return players.filter((p) => {
+    const escaped = escapeRegExp(p.name);
+    const re = new RegExp(`(^|[^a-zа-яё0-9])${escaped}([^a-zа-яё0-9]|$)`, "i");
+    return re.test(text);
+  });
+}
+
 export default function ActivitiesList({
   activities,
   players,
@@ -28,12 +40,51 @@ export default function ActivitiesList({
   isAdmin: boolean;
 }) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [date, setDate] = useState(todayISO());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrNotice, setOcrNotice] = useState<string | null>(null);
+
+  const knownActivityNames = [...new Set(activities.map((a) => a.name))];
+
+  async function handleScreenshot(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOcrBusy(true);
+    setOcrNotice(null);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+      const res = await fetch("/api/activities/ocr", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "Не удалось распознать скриншот.");
+        return;
+      }
+      const matched = findMatchingPlayers(data.text as string, players);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        matched.forEach((p) => next.add(p.id));
+        return next;
+      });
+      setOcrNotice(
+        matched.length > 0
+          ? `Распознано и отмечено: ${matched.map((p) => p.name).join(", ")}`
+          : "Не удалось найти совпадений с составом. Отметьте участников вручную."
+      );
+    } catch {
+      setError("Не удалось связаться с сервером.");
+    } finally {
+      setOcrBusy(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -50,6 +101,7 @@ export default function ActivitiesList({
     setDate(todayISO());
     setSelected(new Set());
     setError(null);
+    setOcrNotice(null);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -109,8 +161,15 @@ export default function ActivitiesList({
                     onChange={(e) => setName(e.target.value)}
                     required
                     maxLength={60}
+                    list="activity-name-options"
+                    placeholder="Выберите или введите новое"
                     className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
                   />
+                  <datalist id="activity-name-options">
+                    {knownActivityNames.map((n) => (
+                      <option key={n} value={n} />
+                    ))}
+                  </datalist>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs text-muted">Дата</label>
@@ -122,6 +181,29 @@ export default function ActivitiesList({
                     className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
                   />
                 </div>
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-xs text-muted">Заполнить по скриншоту</p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={ocrBusy}
+                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+                  >
+                    {ocrBusy ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
+                    {ocrBusy ? "Распознаём…" : "Загрузить скриншот участников"}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleScreenshot}
+                    className="hidden"
+                  />
+                </div>
+                {ocrNotice && <p className="mt-1.5 text-xs text-muted">{ocrNotice}</p>}
               </div>
 
               <div>
