@@ -32,6 +32,8 @@ model Player {
   activities    ActivityParticipant[]
   userId        String?               @unique
   user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  payments      Payment[]
+  auctionLots   AuctionLot[]
 }
 
 model Activity {
@@ -50,4 +52,48 @@ model ActivityParticipant {
   player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@unique([activityId, playerId])
+}
+
+model TreasuryTransaction {
+  id          String   @id @default(cuid())
+  description String
+  amount      Int
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model GuildSettings {
+  id                     Int       @id @default(1)
+  raidDropGoldEquivalent Int       @default(0)
+  nextPayoutDate         DateTime?
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  playerId  String
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  amount    Int
+  status    String   @default("Ожидает")
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+}
+
+model AuctionLot {
+  id        String   @id @default(cuid())
+  item      String
+  sellerId  String
+  seller    Player   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  price     Int
+  endsAt    DateTime
+  createdAt DateTime @default(now())
+}
+
+model Tournament {
+  id        String    @id @default(cuid())
+  name      String
+  status    String    @default("Регистрация")
+  teams     Int       @default(0)
+  startDate DateTime  @default(now())
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
 }

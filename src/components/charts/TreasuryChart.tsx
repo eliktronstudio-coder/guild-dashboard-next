@@ -9,11 +9,15 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { TreasuryPoint } from "@/lib/mock-data";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
-export default function TreasuryChart({ data }: { data: TreasuryPoint[] }) {
+export type TreasuryChartPoint = {
+  date: string;
+  gold: number;
+};
+
+export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -21,10 +25,6 @@ export default function TreasuryChart({ data }: { data: TreasuryPoint[] }) {
           <linearGradient id="goldFill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#d6ad4f" stopOpacity={0.35} />
             <stop offset="100%" stopColor="#d6ad4f" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="invFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#5cc79a" stopOpacity={0.3} />
-            <stop offset="100%" stopColor="#5cc79a" stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid stroke="#232833" strokeDasharray="3 3" vertical={false} />
@@ -51,13 +51,9 @@ export default function TreasuryChart({ data }: { data: TreasuryPoint[] }) {
             fontSize: 12,
           }}
           labelStyle={{ color: "#e8e9ec" }}
-          formatter={(value, name) => [
-            `${numberFmt.format(Number(value))} золота`,
-            name === "gold" ? "Золото" : "Инвентарь",
-          ]}
+          formatter={(value) => [`${numberFmt.format(Number(value))} золота`, "Золото"]}
         />
         <Area type="monotone" dataKey="gold" stroke="#d6ad4f" strokeWidth={2} fill="url(#goldFill)" />
-        <Area type="monotone" dataKey="inventory" stroke="#5cc79a" strokeWidth={2} fill="url(#invFill)" />
       </AreaChart>
     </ResponsiveContainer>
   );

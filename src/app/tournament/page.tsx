@@ -1,30 +1,28 @@
-const tournaments = [
-  { id: 1, name: "Кубок гильдий · Осень", status: "Идёт", teams: 8, date: "до 20 августа" },
-  { id: 2, name: "Арена 3х3", status: "Регистрация", teams: 5, date: "старт 25 августа" },
-  { id: 3, name: "Летний турнир", status: "Завершён", teams: 12, date: "1–14 июля" },
-];
+import { getAllTournaments } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/auth";
+import TournamentsList from "@/components/admin/TournamentsList";
 
-const statusColor: Record<string, string> = {
-  "Идёт": "text-accent",
-  "Регистрация": "text-success",
-  "Завершён": "text-muted",
-};
+const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 
-export default function TournamentPage() {
+function dateLabel(status: string, startDate: Date, endDate: Date | null) {
+  if (status === "Регистрация") return `старт ${dateFmt.format(startDate)}`;
+  if (status === "Идёт") return endDate ? `до ${dateFmt.format(endDate)}` : `с ${dateFmt.format(startDate)}`;
+  return endDate ? `${dateFmt.format(startDate)} – ${dateFmt.format(endDate)}` : dateFmt.format(startDate);
+}
+
+export default async function TournamentPage() {
+  const [tournaments, user] = await Promise.all([getAllTournaments(), getCurrentUser()]);
+
   return (
-    <div className="space-y-3">
-      {tournaments.map((t) => (
-        <div
-          key={t.id}
-          className="flex items-center justify-between rounded-lg border border-border bg-surface p-4"
-        >
-          <div>
-            <p className="text-sm font-medium">{t.name}</p>
-            <p className="mt-1 text-xs text-muted">{t.teams} команд · {t.date}</p>
-          </div>
-          <span className={`text-xs font-medium ${statusColor[t.status]}`}>{t.status}</span>
-        </div>
-      ))}
-    </div>
+    <TournamentsList
+      tournaments={tournaments.map((t) => ({
+        id: t.id,
+        name: t.name,
+        status: t.status,
+        teams: t.teams,
+        dateLabel: dateLabel(t.status, t.startDate, t.endDate),
+      }))}
+      isAdmin={user?.role === "admin"}
+    />
   );
 }

@@ -2,40 +2,57 @@ import Link from "next/link";
 import StatCard from "@/components/StatCard";
 import TreasuryChart from "@/components/charts/TreasuryChart";
 import AttendanceChart from "@/components/charts/AttendanceChart";
-import { stats, treasuryHistory, attendanceHistory } from "@/lib/mock-data";
-import { topPlayersByAttendance, topPlayersByXp, getAllActivities } from "@/lib/queries";
+import {
+  topPlayersByAttendance,
+  topPlayersByXp,
+  getAllActivities,
+  getTreasuryGold,
+  getTreasuryChartData,
+  getAttendanceChartData,
+  getGuildSettings,
+  getAvgActivityDays,
+} from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
+function daysUntil(date: Date | null) {
+  if (!date) return null;
+  const diff = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  return Math.max(diff, 0);
+}
+
 export default async function DashboardPage() {
-  const [attendanceTop, xpTop, allActivities] = await Promise.all([
-    topPlayersByAttendance(5),
-    topPlayersByXp(5),
-    getAllActivities(),
-  ]);
+  const [attendanceTop, xpTop, allActivities, treasuryGold, treasuryChart, attendanceChart, settings, avgActivityDays] =
+    await Promise.all([
+      topPlayersByAttendance(5),
+      topPlayersByXp(5),
+      getAllActivities(),
+      getTreasuryGold(),
+      getTreasuryChartData(),
+      getAttendanceChartData(),
+      getGuildSettings(),
+      getAvgActivityDays(),
+    ]);
   const recentActivities = allActivities.slice(0, 5);
+  const payoutDays = daysUntil(settings.nextPayoutDate);
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Золото в казне"
-          value={`${numberFmt.format(stats.treasuryGold)} золота`}
-          hint="—"
-        />
+        <StatCard label="Золото в казне" value={`${numberFmt.format(treasuryGold)} золота`} hint="—" />
         <StatCard
           label="Дроп с РБ"
-          value={`${numberFmt.format(stats.raidDropGoldEquivalent)} золота`}
+          value={`${numberFmt.format(settings.raidDropGoldEquivalent)} золота`}
           hint="эквивалент в золоте"
         />
         <StatCard
           label="Ср. активность"
-          value={`${stats.avgActivityDays} дней`}
-          hint="—"
+          value={avgActivityDays > 0 ? `${avgActivityDays} дней` : "—"}
+          hint="между активностями"
         />
         <StatCard
           label="Дней до выплаты"
-          value={`${stats.daysUntilPayout}`}
+          value={payoutDays === null ? "—" : `${payoutDays}`}
           hint="до дня выплат"
         />
       </div>
@@ -44,16 +61,16 @@ export default async function DashboardPage() {
         <div className="rounded-lg border border-border bg-surface p-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-sm font-semibold">Динамика казны</h2>
-            <span className="text-xs text-muted">золото + инвентарь</span>
+            <span className="text-xs text-muted">золото</span>
           </div>
-          <TreasuryChart data={treasuryHistory} />
+          <TreasuryChart data={treasuryChart} />
         </div>
         <div className="rounded-lg border border-border bg-surface p-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-sm font-semibold">Посещаемость</h2>
             <span className="text-xs text-muted">участия / день</span>
           </div>
-          <AttendanceChart data={attendanceHistory} />
+          <AttendanceChart data={attendanceChart} />
         </div>
       </div>
 

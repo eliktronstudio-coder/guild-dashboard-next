@@ -9,9 +9,12 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import type { AttendancePoint } from "@/lib/mock-data";
+export type AttendanceChartPoint = {
+  date: string;
+  count: number;
+};
 
-export default function AttendanceChart({ data }: { data: AttendancePoint[] }) {
+export default function AttendanceChart({ data }: { data: AttendanceChartPoint[] }) {
   return (
     <ResponsiveContainer width="100%" height={260}>
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
