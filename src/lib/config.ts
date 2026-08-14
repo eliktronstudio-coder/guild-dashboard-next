@@ -1,5 +1,5 @@
 export const guild = {
-  name: "Наша Гильдия",
+  name: "XD",
   tagline: "Дашборд гильдии",
   version: "v0.1.0",
 };
