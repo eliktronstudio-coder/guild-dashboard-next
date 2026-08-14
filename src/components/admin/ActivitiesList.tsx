@@ -18,17 +18,23 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function extractCandidateNames(text: string) {
+  const names = new Set<string>();
+  for (const rawLine of text.split(/\r?\n/)) {
+    for (const part of rawLine.split(/\s{2,}|\t/)) {
+      const token = part
+        .trim()
+        .replace(/^[^\p{L}]+/u, "")
+        .replace(/[^\p{L}\d]+$/u, "");
+      if (token.length >= 2 && token.length <= 24 && /\p{L}/u.test(token)) {
+        names.add(token);
+      }
+    }
+  }
+  return [...names];
 }
 
-function findMatchingPlayers(text: string, players: PlayerOption[]) {
-  return players.filter((p) => {
-    const escaped = escapeRegExp(p.name);
-    const re = new RegExp(`(^|[^a-zа-яё0-9])${escaped}([^a-zа-яё0-9]|$)`, "i");
-    return re.test(text);
-  });
-}
+type OcrResult = { name: string; player: PlayerOption | null };
 
 export default function ActivitiesList({
   activities,
@@ -48,7 +54,8 @@ export default function ActivitiesList({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ocrBusy, setOcrBusy] = useState(false);
-  const [ocrNotice, setOcrNotice] = useState<string | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrResults, setOcrResults] = useState<OcrResult[] | null>(null);
 
   const knownActivityNames = [...new Set(activities.map((a) => a.name))];
 
@@ -56,30 +63,32 @@ export default function ActivitiesList({
     const file = e.target.files?.[0];
     if (!file) return;
     setOcrBusy(true);
-    setOcrNotice(null);
-    setError(null);
+    setOcrResults(null);
+    setOcrError(null);
     try {
       const formData = new FormData();
       formData.append("image", file);
       const res = await fetch("/api/activities/ocr", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Не удалось распознать скриншот.");
+        setOcrError(data.error ?? "Не удалось распознать скриншот.");
         return;
       }
-      const matched = findMatchingPlayers(data.text as string, players);
+      const candidates = extractCandidateNames(data.text as string);
+      const results: OcrResult[] = candidates.map((candidate) => ({
+        name: candidate,
+        player: players.find((p) => p.name.toLowerCase() === candidate.toLowerCase()) ?? null,
+      }));
+      setOcrResults(results);
       setSelected((prev) => {
         const next = new Set(prev);
-        matched.forEach((p) => next.add(p.id));
+        results.forEach((r) => {
+          if (r.player) next.add(r.player.id);
+        });
         return next;
       });
-      setOcrNotice(
-        matched.length > 0
-          ? `Распознано и отмечено: ${matched.map((p) => p.name).join(", ")}`
-          : "Совпадений не найдено. Отмечать можно только зарегистрированных на сайте — попробуйте другой скриншот или отметьте участников вручную."
-      );
     } catch {
-      setError("Не удалось связаться с сервером.");
+      setOcrError("Не удалось связаться с сервером.");
     } finally {
       setOcrBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -101,7 +110,8 @@ export default function ActivitiesList({
     setDate(todayISO());
     setSelected(new Set());
     setError(null);
-    setOcrNotice(null);
+    setOcrError(null);
+    setOcrResults(null);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -203,7 +213,36 @@ export default function ActivitiesList({
                     className="hidden"
                   />
                 </div>
-                {ocrNotice && <p className="mt-1.5 text-xs text-muted">{ocrNotice}</p>}
+                {ocrError && <p className="mt-1.5 text-xs text-danger">{ocrError}</p>}
+                {ocrResults && (
+                  <div className="mt-2">
+                    {ocrResults.length === 0 ? (
+                      <p className="text-xs text-muted">Не удалось распознать ни одного ника на скриншоте.</p>
+                    ) : (
+                      <>
+                        <p className="mb-1 text-xs text-muted">
+                          Распознано ников: {ocrResults.length}. Зелёным — есть на сайте (добавлены в участники),
+                          красным — не зарегистрированы.
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {ocrResults.map((r) => (
+                            <span
+                              key={r.name}
+                              className={
+                                "rounded-md border px-2 py-0.5 text-xs " +
+                                (r.player
+                                  ? "border-success/40 bg-success/10 text-success"
+                                  : "border-danger/40 bg-danger/10 text-danger")
+                              }
+                            >
+                              {r.player ? r.player.name : r.name}
+                            </span>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
