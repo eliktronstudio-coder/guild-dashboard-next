@@ -11,6 +11,7 @@ type Drop = {
   id: string;
   item: string;
   value: number;
+  quantity: number;
   status: string;
   date: string;
   activityName: string | null;
@@ -39,6 +40,7 @@ export default function DropsPanel({
   const [adding, setAdding] = useState(false);
   const [item, setItem] = useState("");
   const [value, setValue] = useState("");
+  const [quantity, setQuantity] = useState("1");
   const [date, setDate] = useState(todayISO());
   const [activityId, setActivityId] = useState("");
   const [playerId, setPlayerId] = useState("");
@@ -49,6 +51,7 @@ export default function DropsPanel({
     setAdding(false);
     setItem("");
     setValue("");
+    setQuantity("1");
     setDate(todayISO());
     setActivityId("");
     setPlayerId("");
@@ -66,6 +69,7 @@ export default function DropsPanel({
         body: JSON.stringify({
           item,
           value: Number(value),
+          quantity: Number(quantity),
           date,
           activityId: activityId || null,
           playerId: playerId || null,
@@ -123,7 +127,7 @@ export default function DropsPanel({
           {adding && (
             <form
               onSubmit={handleSubmit}
-              className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-5"
+              className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-6"
             >
               <div className="lg:col-span-2">
                 <label className="mb-1 block text-xs text-muted">Предмет</label>
@@ -136,7 +140,18 @@ export default function DropsPanel({
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted">Стоимость (золото)</label>
+                <label className="mb-1 block text-xs text-muted">Кол-во</label>
+                <input
+                  type="number"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  min={1}
+                  required
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted">Цена за ед. (золото)</label>
                 <input
                   type="number"
                   value={value}
@@ -187,9 +202,9 @@ export default function DropsPanel({
                 </select>
               </div>
 
-              {error && <p className="text-xs text-danger lg:col-span-5">{error}</p>}
+              {error && <p className="text-xs text-danger lg:col-span-6">{error}</p>}
 
-              <div className="flex items-center gap-2 lg:col-span-5">
+              <div className="flex items-center gap-2 lg:col-span-6">
                 <button
                   type="submit"
                   disabled={busyId === "new"}
@@ -219,6 +234,9 @@ export default function DropsPanel({
             <li key={d.id} className="flex items-center justify-between px-4 py-3 text-sm">
               <span>
                 <span className="font-medium">{d.item}</span>
+                <span className="ml-2 text-xs text-muted">
+                  ×{d.quantity} · {numberFmt.format(d.value)}/ед.
+                </span>
                 {(d.activityName || d.playerName) && (
                   <span className="ml-2 text-xs text-muted">
                     {[d.activityName, d.playerName].filter(Boolean).join(" · ")}
@@ -226,7 +244,7 @@ export default function DropsPanel({
                 )}
               </span>
               <span className="flex items-center gap-3">
-                <span className="text-accent">{numberFmt.format(d.value)} золота</span>
+                <span className="text-accent">{numberFmt.format(d.value * d.quantity)} золота</span>
                 <span className="text-xs text-muted">{d.date}</span>
                 {isAdmin ? (
                   <button

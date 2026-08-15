@@ -539,7 +539,7 @@ export default function ActivityDetailPanel({
                 type="number"
                 value={dropValue}
                 onChange={(e) => setDropValue(e.target.value)}
-                placeholder="Цена"
+                placeholder="Цена за ед."
                 min={0}
                 required
                 className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-accent"
@@ -591,10 +591,10 @@ export default function ActivityDetailPanel({
                 )}
                 <p className="pr-4 text-xs font-medium">{d.item}</p>
                 <p className="mt-1 text-xs text-muted">
-                  ×{d.quantity}
+                  ×{d.quantity} · {numberFmt.format(d.value)}/ед.
                   {d.playerName && <> · {d.playerName}</>}
                 </p>
-                <p className="mt-1.5 text-sm font-semibold text-accent">{numberFmt.format(d.value)}</p>
+                <p className="mt-1.5 text-sm font-semibold text-accent">{numberFmt.format(d.value * d.quantity)}</p>
               </div>
             ))}
             {activity.drops.length === 0 && <p className="text-xs text-muted">Дроп ещё не внесён.</p>}

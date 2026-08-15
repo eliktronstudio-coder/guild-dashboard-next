@@ -76,6 +76,7 @@ export default async function TreasuryPage() {
           id: d.id,
           item: d.item,
           value: d.value,
+          quantity: d.quantity,
           status: d.status,
           date: dateFmt.format(d.date),
           activityName: d.activity?.name ?? null,

@@ -26,7 +26,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (status === "Продано") {
     const updated = await prisma.$transaction(async (tx) => {
       const transaction = await tx.treasuryTransaction.create({
-        data: { description: `Продажа дропа: ${drop.item}`, amount: drop.value },
+        data: { description: `Продажа дропа: ${drop.item}`, amount: drop.value * drop.quantity },
       });
       return tx.dropItem.update({
         where: { id },

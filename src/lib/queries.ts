@@ -218,7 +218,7 @@ export async function getActivityById(id: string) {
   });
   if (!activity) return null;
 
-  const dropTotal = activity.drops.reduce((sum, d) => sum + d.value, 0);
+  const dropTotal = activity.drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
   const roleCounts: Record<string, number> = {};
   for (const p of activity.participants) {
     roleCounts[p.player.role] = (roleCounts[p.player.role] ?? 0) + 1;
@@ -300,13 +300,14 @@ export async function getAllDrops(limit?: number) {
 }
 
 // Считаем только непроданный дроп: проданный уже вычтен отсюда и учтён
-// в казне отдельной операцией (см. PATCH /api/drops/[id]).
+// в казне отдельной операцией (см. PATCH /api/drops/[id]). value — цена за
+// единицу, поэтому вклад записи в сумму — value * quantity.
 export async function getDropGoldTotal() {
-  const result = await prisma.dropItem.aggregate({
+  const drops = await prisma.dropItem.findMany({
     where: { status: "Не продано" },
-    _sum: { value: true },
+    select: { value: true, quantity: true },
   });
-  return result._sum.value ?? 0;
+  return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
 }
 
 // Инвентарь: предметы из журнала дропа, которые ещё не выданы конкретному
@@ -316,12 +317,13 @@ export async function getInventory() {
   const drops = await prisma.dropItem.findMany({ where: { playerId: null, status: "Не продано" } });
   const map = new Map<string, { item: string; quantity: number; totalValue: number }>();
   for (const d of drops) {
+    const lineValue = d.value * d.quantity;
     const existing = map.get(d.item);
     if (existing) {
       existing.quantity += d.quantity;
-      existing.totalValue += d.value;
+      existing.totalValue += lineValue;
     } else {
-      map.set(d.item, { item: d.item, quantity: d.quantity, totalValue: d.value });
+      map.set(d.item, { item: d.item, quantity: d.quantity, totalValue: lineValue });
     }
   }
   return [...map.values()].sort((a, b) => b.totalValue - a.totalValue);
