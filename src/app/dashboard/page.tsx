@@ -11,6 +11,7 @@ import {
   getAttendanceChartData,
   getGuildSettings,
   getAvgActivityDays,
+  getDropGoldTotal,
 } from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -22,17 +23,27 @@ function daysUntil(date: Date | null) {
 }
 
 export default async function DashboardPage() {
-  const [attendanceTop, xpTop, allActivities, treasuryGold, treasuryChart, attendanceChart, settings, avgActivityDays] =
-    await Promise.all([
-      topPlayersByAttendance(5),
-      topPlayersByXp(5),
-      getAllActivities(),
-      getTreasuryGold(),
-      getTreasuryChartData(),
-      getAttendanceChartData(),
-      getGuildSettings(),
-      getAvgActivityDays(),
-    ]);
+  const [
+    attendanceTop,
+    xpTop,
+    allActivities,
+    treasuryGold,
+    treasuryChart,
+    attendanceChart,
+    settings,
+    avgActivityDays,
+    dropGoldTotal,
+  ] = await Promise.all([
+    topPlayersByAttendance(5),
+    topPlayersByXp(5),
+    getAllActivities(),
+    getTreasuryGold(),
+    getTreasuryChartData(),
+    getAttendanceChartData(),
+    getGuildSettings(),
+    getAvgActivityDays(),
+    getDropGoldTotal(),
+  ]);
   const recentActivities = allActivities.slice(0, 5);
   const payoutDays = daysUntil(settings.nextPayoutDate);
 
@@ -42,7 +53,7 @@ export default async function DashboardPage() {
         <StatCard label="Золото в казне" value={`${numberFmt.format(treasuryGold)} золота`} hint="—" />
         <StatCard
           label="Дроп с РБ"
-          value={`${numberFmt.format(settings.raidDropGoldEquivalent)} золота`}
+          value={`${numberFmt.format(dropGoldTotal)} золота`}
           hint="эквивалент в золоте"
         />
         <StatCard

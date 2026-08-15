@@ -14,7 +14,6 @@ type Transaction = {
 };
 
 type Settings = {
-  raidDropGoldEquivalent: number;
   nextPayoutDate: string | null;
 };
 
@@ -37,7 +36,6 @@ export default function TreasuryPanel({
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(todayISO());
-  const [raidDrop, setRaidDrop] = useState(String(settings.raidDropGoldEquivalent));
   const [payoutDate, setPayoutDate] = useState(settings.nextPayoutDate?.slice(0, 10) ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,7 +76,7 @@ export default function TreasuryPanel({
       const res = await fetch("/api/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ raidDropGoldEquivalent: Number(raidDrop), nextPayoutDate: payoutDate || null }),
+        body: JSON.stringify({ nextPayoutDate: payoutDate || null }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -142,17 +140,6 @@ export default function TreasuryPanel({
           onSubmit={handleSaveSettings}
           className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3"
         >
-          <div>
-            <label className="mb-1 block text-xs text-muted">Дроп с РБ (золота)</label>
-            <input
-              type="number"
-              value={raidDrop}
-              onChange={(e) => setRaidDrop(e.target.value)}
-              min={0}
-              required
-              className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-            />
-          </div>
           <div>
             <label className="mb-1 block text-xs text-muted">Дата следующей выплаты</label>
             <input

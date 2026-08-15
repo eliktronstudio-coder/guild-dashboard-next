@@ -34,6 +34,7 @@ model Player {
   user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   payments      Payment[]
   auctionLots   AuctionLot[]
+  drops         DropItem[]
 }
 
 model Activity {
@@ -42,6 +43,7 @@ model Activity {
   date         DateTime              @default(now())
   createdAt    DateTime              @default(now())
   participants ActivityParticipant[]
+  drops        DropItem[]
 }
 
 model ActivityParticipant {
@@ -63,9 +65,20 @@ model TreasuryTransaction {
 }
 
 model GuildSettings {
-  id                     Int       @id @default(1)
-  raidDropGoldEquivalent Int       @default(0)
-  nextPayoutDate         DateTime?
+  id             Int       @id @default(1)
+  nextPayoutDate DateTime?
+}
+
+model DropItem {
+  id         String    @id @default(cuid())
+  item       String
+  value      Int
+  date       DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+  activityId String?
+  activity   Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  playerId   String?
+  player     Player?   @relation(fields: [playerId], references: [id], onDelete: SetNull)
 }
 
 model Payment {

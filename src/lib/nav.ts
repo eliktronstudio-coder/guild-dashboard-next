@@ -9,6 +9,7 @@ import {
   Wallet,
   Calculator,
   ShieldCheck,
+  Gem,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,6 +40,7 @@ export const navSections: NavSection[] = [
     title: "Экономика",
     items: [
       { href: "/treasury", label: "Казна", icon: Landmark },
+      { href: "/drops", label: "Дроп", icon: Gem },
       { href: "/auction", label: "Аукцион", icon: Gavel },
       { href: "/payments", label: "Выплаты", icon: Wallet },
     ],

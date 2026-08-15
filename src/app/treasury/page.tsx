@@ -26,13 +26,8 @@ export default async function TreasuryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard label="Золото в казне" value={`${numberFmt.format(treasuryGold)} золота`} hint="—" />
-        <StatCard
-          label="Дроп с РБ"
-          value={`${numberFmt.format(settings.raidDropGoldEquivalent)} золота`}
-          hint="эквивалент в золоте"
-        />
         <StatCard
           label="Дней до выплаты"
           value={payoutDays === null ? "—" : `${payoutDays}`}
@@ -48,7 +43,6 @@ export default async function TreasuryPage() {
       <TreasuryPanel
         transactions={transactions.map((t) => ({ ...t, date: dateFmt.format(t.date) }))}
         settings={{
-          raidDropGoldEquivalent: settings.raidDropGoldEquivalent,
           nextPayoutDate: settings.nextPayoutDate ? settings.nextPayoutDate.toISOString() : null,
         }}
         isAdmin={user?.role === "admin"}

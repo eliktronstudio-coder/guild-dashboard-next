@@ -7,12 +7,7 @@ export async function PATCH(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const body = await request.json().catch(() => null);
-  const raidDropGoldEquivalent = Number(body?.raidDropGoldEquivalent);
   const nextPayoutDateStr = typeof body?.nextPayoutDate === "string" ? body.nextPayoutDate : "";
-
-  if (!Number.isFinite(raidDropGoldEquivalent) || raidDropGoldEquivalent < 0) {
-    return NextResponse.json({ error: "Неверное значение дропа с РБ." }, { status: 400 });
-  }
 
   let nextPayoutDate: Date | null = null;
   if (nextPayoutDateStr) {
@@ -24,8 +19,8 @@ export async function PATCH(request: NextRequest) {
 
   const settings = await prisma.guildSettings.upsert({
     where: { id: 1 },
-    update: { raidDropGoldEquivalent, nextPayoutDate },
-    create: { id: 1, raidDropGoldEquivalent, nextPayoutDate },
+    update: { nextPayoutDate },
+    create: { id: 1, nextPayoutDate },
   });
 
   return NextResponse.json(settings);

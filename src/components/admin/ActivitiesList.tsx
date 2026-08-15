@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, type FormEvent, type ChangeEvent } from "react";
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, X, Image as ImageIcon, Loader2 } from "lucide-react";
+import { Plus, Trash2, X, Search } from "lucide-react";
 
 type Activity = {
   id: string;
@@ -18,24 +18,6 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function extractCandidateNames(text: string) {
-  const names = new Set<string>();
-  for (const rawLine of text.split(/\r?\n/)) {
-    for (const part of rawLine.split(/\s{2,}|\t/)) {
-      const token = part
-        .trim()
-        .replace(/^[^\p{L}]+/u, "")
-        .replace(/[^\p{L}\d]+$/u, "");
-      if (token.length >= 2 && token.length <= 24 && /\p{L}/u.test(token)) {
-        names.add(token);
-      }
-    }
-  }
-  return [...names];
-}
-
-type OcrResult = { name: string; player: PlayerOption | null };
-
 export default function ActivitiesList({
   activities,
   players,
@@ -46,54 +28,16 @@ export default function ActivitiesList({
   isAdmin: boolean;
 }) {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [date, setDate] = useState(todayISO());
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [ocrBusy, setOcrBusy] = useState(false);
-  const [ocrError, setOcrError] = useState<string | null>(null);
-  const [ocrResults, setOcrResults] = useState<OcrResult[] | null>(null);
 
   const knownActivityNames = [...new Set(activities.map((a) => a.name))];
-
-  async function handleScreenshot(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setOcrBusy(true);
-    setOcrResults(null);
-    setOcrError(null);
-    try {
-      const formData = new FormData();
-      formData.append("image", file);
-      const res = await fetch("/api/activities/ocr", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) {
-        setOcrError(data.error ?? "Не удалось распознать скриншот.");
-        return;
-      }
-      const candidates = extractCandidateNames(data.text as string);
-      const results: OcrResult[] = candidates.map((candidate) => ({
-        name: candidate,
-        player: players.find((p) => p.name.toLowerCase() === candidate.toLowerCase()) ?? null,
-      }));
-      setOcrResults(results);
-      setSelected((prev) => {
-        const next = new Set(prev);
-        results.forEach((r) => {
-          if (r.player) next.add(r.player.id);
-        });
-        return next;
-      });
-    } catch {
-      setOcrError("Не удалось связаться с сервером.");
-    } finally {
-      setOcrBusy(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  }
+  const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -109,9 +53,8 @@ export default function ActivitiesList({
     setName("");
     setDate(todayISO());
     setSelected(new Set());
+    setSearch("");
     setError(null);
-    setOcrError(null);
-    setOcrResults(null);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -194,68 +137,28 @@ export default function ActivitiesList({
               </div>
 
               <div>
-                <p className="mb-1.5 text-xs text-muted">Заполнить по скриншоту</p>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={ocrBusy}
-                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
-                  >
-                    {ocrBusy ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />}
-                    {ocrBusy ? "Распознаём…" : "Загрузить скриншот участников"}
-                  </button>
+                <p className="mb-1.5 text-xs text-muted">
+                  Состав <span className="text-muted/70">(только зарегистрированные на сайте)</span>
+                </p>
+                <div className="relative mb-2">
+                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
                   <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleScreenshot}
-                    className="hidden"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Поиск по нику…"
+                    className="w-full rounded-md border border-border bg-surface-2 py-2 pl-8 pr-3 text-sm outline-none focus:border-accent"
                   />
                 </div>
-                {ocrError && <p className="mt-1.5 text-xs text-danger">{ocrError}</p>}
-                {ocrResults && (
-                  <div className="mt-2">
-                    {ocrResults.length === 0 ? (
-                      <p className="text-xs text-muted">Не удалось распознать ни одного ника на скриншоте.</p>
-                    ) : (
-                      <>
-                        <p className="mb-1 text-xs text-muted">
-                          Распознано ников: {ocrResults.length}. Зелёным — есть на сайте (добавлены в участники),
-                          красным — не зарегистрированы.
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {ocrResults.map((r) => (
-                            <span
-                              key={r.name}
-                              className={
-                                "rounded-md border px-2 py-0.5 text-xs " +
-                                (r.player
-                                  ? "border-success/40 bg-success/10 text-success"
-                                  : "border-danger/40 bg-danger/10 text-danger")
-                              }
-                            >
-                              {r.player ? r.player.name : r.name}
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <p className="mb-1.5 text-xs text-muted">
-                  Участники <span className="text-muted/70">(только зарегистрированные на сайте)</span>
-                </p>
-                <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
+                <div className="flex max-h-52 flex-wrap gap-2 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
                   {players.length === 0 && (
                     <p className="text-xs text-muted">
                       Пока никто из состава не зарегистрирован на сайте — участников добавить нельзя.
                     </p>
                   )}
-                  {players.map((p) => (
+                  {players.length > 0 && filteredPlayers.length === 0 && (
+                    <p className="text-xs text-muted">Никого не найдено.</p>
+                  )}
+                  {filteredPlayers.map((p) => (
                     <label
                       key={p.id}
                       className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs"
@@ -270,6 +173,9 @@ export default function ActivitiesList({
                     </label>
                   ))}
                 </div>
+                {selected.size > 0 && (
+                  <p className="mt-1.5 text-xs text-muted">Выбрано: {selected.size}</p>
+                )}
               </div>
 
               {error && <p className="text-xs text-danger">{error}</p>}

@@ -86,7 +86,35 @@ export async function getTreasuryChartData() {
 
 export async function getGuildSettings() {
   const settings = await prisma.guildSettings.findUnique({ where: { id: 1 } });
-  return settings ?? { id: 1, raidDropGoldEquivalent: 0, nextPayoutDate: null };
+  return settings ?? { id: 1, nextPayoutDate: null };
+}
+
+export async function getAllDrops(limit?: number) {
+  return prisma.dropItem.findMany({
+    orderBy: { date: "desc" },
+    take: limit,
+    include: { activity: true, player: true },
+  });
+}
+
+export async function getDropGoldTotal() {
+  const result = await prisma.dropItem.aggregate({ _sum: { value: true } });
+  return result._sum.value ?? 0;
+}
+
+export async function getDropChartData() {
+  const drops = await prisma.dropItem.findMany({ orderBy: { date: "asc" } });
+  const byDay = new Map<string, number>();
+  for (const d of drops) {
+    const key = dayKey(d.date);
+    byDay.set(key, (byDay.get(key) ?? 0) + d.value);
+  }
+  const days = [...byDay.keys()].sort();
+  let running = 0;
+  return days.map((key) => {
+    running += byDay.get(key)!;
+    return { date: shortDateFmt.format(new Date(key)), gold: running };
+  });
 }
 
 export async function getAvgActivityDays() {
