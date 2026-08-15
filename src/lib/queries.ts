@@ -7,14 +7,10 @@ function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-// Посещаемость считается динамически: доля активностей за последние
-// ATTENDANCE_WINDOW_DAYS дней, в которых игрок реально участвовал.
-const ATTENDANCE_WINDOW_DAYS = 30;
-
+// Посещаемость считается динамически: доля всех активностей за всё время,
+// в которых игрок реально участвовал.
 async function getAttendanceMap(): Promise<Map<string, number>> {
-  const since = new Date(Date.now() - ATTENDANCE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
   const activities = await prisma.activity.findMany({
-    where: { date: { gte: since } },
     select: { participants: { select: { playerId: true } } },
   });
 

@@ -90,7 +90,7 @@ export default async function DashboardPage() {
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-sm font-semibold">Топ по посещаемости</h2>
             <div className="flex items-center gap-3">
-              <span className="text-xs text-muted">30 дней</span>
+              <span className="text-xs text-muted">за всё время</span>
               <Link href="/players" className="text-xs text-accent hover:underline">
                 Состав
               </Link>

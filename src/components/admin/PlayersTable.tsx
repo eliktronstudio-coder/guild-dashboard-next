@@ -207,7 +207,7 @@ export default function PlayersTable({
               <th className="px-4 py-3 font-medium">Роль</th>
               <th className="px-4 py-3 font-medium">Уровень</th>
               <th className="px-4 py-3 font-medium">XP</th>
-              <th className="px-4 py-3 font-medium" title="Считается автоматически: доля активностей за 30 дней, в которых участвовал игрок">
+              <th className="px-4 py-3 font-medium" title="Считается автоматически: доля активностей за всё время, в которых участвовал игрок">
                 Посещаемость
               </th>
               {isAdmin && <th className="px-4 py-3 font-medium" />}
