@@ -50,12 +50,19 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
         <Link
           href="/dashboard"
           onClick={onCloseMobile}
-          className="flex items-center gap-2 border-b border-border px-5 py-5"
+          className="flex items-center gap-2.5 border-b border-border px-5 py-5"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-accent-soft text-accent font-bold">
-            {guild.name.charAt(0)}
+          <span className="flex h-8 w-8 flex-shrink-0 rotate-45 items-center justify-center border border-accent text-accent-bright">
+            <span className="-rotate-45 font-display text-xs font-bold">{guild.name}</span>
           </span>
-          <span className="font-semibold tracking-tight">{guild.name}</span>
+          <span>
+            <span className="block font-display text-base font-bold leading-tight tracking-tight">
+              Гильдия {guild.name}
+            </span>
+            <span className="block font-mono text-[10px] uppercase tracking-widest text-muted">
+              учётная книга
+            </span>
+          </span>
         </Link>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -64,10 +71,10 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
             if (items.length === 0) return null;
             return (
             <div key={section.title} className="mb-6">
-              <p className="px-3 pb-2 text-xs font-medium uppercase tracking-wider text-muted">
+              <p className="px-3 pb-2 font-mono text-[10px] font-medium uppercase tracking-widest text-accent-dim">
                 {section.title}
               </p>
-              <ul className="space-y-1">
+              <ul className="space-y-0.5">
                 {items.map((item) => {
                   const active = pathname === item.href || pathname.startsWith(item.href + "/");
                   const Icon = item.icon;
@@ -77,10 +84,10 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
                         href={item.href}
                         onClick={onCloseMobile}
                         className={clsx(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                          "flex items-center gap-3 border-l-2 px-3 py-2 text-sm transition-colors",
                           active
-                            ? "bg-accent-soft text-accent"
-                            : "text-foreground/80 hover:bg-surface-2 hover:text-foreground"
+                            ? "border-accent bg-accent-soft text-accent-bright"
+                            : "border-transparent text-foreground/80 hover:border-border-strong hover:bg-surface-2 hover:text-foreground"
                         )}
                       >
                         <Icon size={17} strokeWidth={2} />

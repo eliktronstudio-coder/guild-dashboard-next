@@ -1,4 +1,4 @@
-import { getFilteredActivities, getDistinctActivityNames, getRegisteredPlayers } from "@/lib/queries";
+import { getFilteredActivities, getDistinctActivityNames, getRegisteredPlayers, getDropCatalog } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import ActivitiesList from "@/components/admin/ActivitiesList";
 
@@ -21,11 +21,12 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
     page: sp.page && typeof sp.page === "string" ? Math.max(1, Number(sp.page) || 1) : 1,
   };
 
-  const [result, distinctNames, players, user] = await Promise.all([
+  const [result, distinctNames, players, user, catalog] = await Promise.all([
     getFilteredActivities(filters),
     getDistinctActivityNames(),
     getRegisteredPlayers(),
     getCurrentUser(),
+    getDropCatalog(),
   ]);
 
   return (
@@ -36,6 +37,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
       filters={filters}
       distinctNames={distinctNames}
       players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+      catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
       isAdmin={user?.role === "admin"}
     />
   );

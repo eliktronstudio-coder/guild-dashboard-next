@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, X } from "lucide-react";
+import Image from "next/image";
+import { Plus, Trash2, X, ImageOff } from "lucide-react";
 import clsx from "clsx";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -16,10 +17,12 @@ type Drop = {
   date: string;
   activityName: string | null;
   playerName: string | null;
+  imageUrl: string | null;
 };
 
 type ActivityOption = { id: string; name: string };
 type PlayerOption = { id: string; name: string };
+type CatalogItem = { id: string; name: string; price: number; imageUrl: string | null };
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -29,15 +32,18 @@ export default function DropsPanel({
   drops,
   activities,
   players,
+  catalog,
   isAdmin,
 }: {
   drops: Drop[];
   activities: ActivityOption[];
   players: PlayerOption[];
+  catalog: CatalogItem[];
   isAdmin: boolean;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [catalogId, setCatalogId] = useState("");
   const [item, setItem] = useState("");
   const [value, setValue] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -49,6 +55,7 @@ export default function DropsPanel({
 
   function cancel() {
     setAdding(false);
+    setCatalogId("");
     setItem("");
     setValue("");
     setQuantity("1");
@@ -56,6 +63,15 @@ export default function DropsPanel({
     setActivityId("");
     setPlayerId("");
     setError(null);
+  }
+
+  function handleCatalogSelect(id: string) {
+    setCatalogId(id);
+    const found = catalog.find((c) => c.id === id);
+    if (found) {
+      setItem(found.name);
+      setValue(String(found.price));
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -73,6 +89,7 @@ export default function DropsPanel({
           date,
           activityId: activityId || null,
           playerId: playerId || null,
+          catalogItemId: catalogId || null,
         }),
       });
       const data = await res.json();
@@ -129,11 +146,29 @@ export default function DropsPanel({
               onSubmit={handleSubmit}
               className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-2 lg:grid-cols-6"
             >
+              <div className="sm:col-span-2 lg:col-span-6">
+                <label className="mb-1 block text-xs text-muted">Из реестра дропа</label>
+                <select
+                  value={catalogId}
+                  onChange={(e) => handleCatalogSelect(e.target.value)}
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                >
+                  <option value="">— выбрать или ввести вручную ниже —</option>
+                  {catalog.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {numberFmt.format(c.price)}/ед.
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="lg:col-span-2">
                 <label className="mb-1 block text-xs text-muted">Предмет</label>
                 <input
                   value={item}
-                  onChange={(e) => setItem(e.target.value)}
+                  onChange={(e) => {
+                    setItem(e.target.value);
+                    setCatalogId("");
+                  }}
                   required
                   maxLength={60}
                   className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
@@ -232,13 +267,27 @@ export default function DropsPanel({
         <ul className="divide-y divide-border">
           {drops.map((d) => (
             <li key={d.id} className="flex items-center justify-between px-4 py-3 text-sm">
-              <span>
+              <span className="flex items-center gap-2">
+                {d.imageUrl ? (
+                  <Image
+                    src={d.imageUrl}
+                    alt=""
+                    width={24}
+                    height={24}
+                    unoptimized
+                    className="h-6 w-6 flex-shrink-0 rounded border border-border object-cover"
+                  />
+                ) : (
+                  <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-border bg-surface-2 text-muted">
+                    <ImageOff size={10} />
+                  </div>
+                )}
                 <span className="font-medium">{d.item}</span>
-                <span className="ml-2 text-xs text-muted">
+                <span className="text-xs text-muted">
                   ×{d.quantity} · {numberFmt.format(d.value)}/ед.
                 </span>
                 {(d.activityName || d.playerName) && (
-                  <span className="ml-2 text-xs text-muted">
+                  <span className="text-xs text-muted">
                     {[d.activityName, d.playerName].filter(Boolean).join(" · ")}
                   </span>
                 )}

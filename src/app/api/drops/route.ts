@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
   const dateStr = typeof body?.date === "string" ? body.date : "";
   const activityId = typeof body?.activityId === "string" && body.activityId ? body.activityId : null;
   const playerId = typeof body?.playerId === "string" && body.playerId ? body.playerId : null;
+  const catalogItemId = typeof body?.catalogItemId === "string" && body.catalogItemId ? body.catalogItemId : null;
 
   if (!item || item.length > 60) {
     return NextResponse.json({ error: "Укажите название предмета (до 60 символов)." }, { status: 400 });
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   const drop = await prisma.dropItem.create({
-    data: { item, value, quantity, date, activityId, playerId },
+    data: { item, value, quantity, date, activityId, playerId, catalogItemId },
     include: { activity: true, player: true },
   });
 

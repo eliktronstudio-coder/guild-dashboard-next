@@ -28,6 +28,12 @@ const emptyForm: FormState = { name: "", role: ROLES[0], salaryCoefficient: "1" 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+function attendanceColor(pct: number) {
+  if (pct <= 20) return { text: "text-danger", bar: "bg-danger" };
+  if (pct <= 50) return { text: "text-amber-500", bar: "bg-amber-500" };
+  return { text: "text-success", bar: "bg-success" };
+}
+
 export default function PlayersTable({
   players,
   isAdmin,
@@ -231,11 +237,13 @@ export default function PlayersTable({
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
                       <div
-                        className="h-full rounded-full bg-accent"
+                        className={clsx("h-full rounded-full", attendanceColor(p.attendancePct).bar)}
                         style={{ width: `${Math.min(p.attendancePct, 100)}%` }}
                       />
                     </div>
-                    <span className="text-xs font-medium text-accent">{p.attendancePct}%</span>
+                    <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePct).text)}>
+                      {p.attendancePct}%
+                    </span>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-muted">{coefficientFmt.format(p.salaryCoefficient)}</td>

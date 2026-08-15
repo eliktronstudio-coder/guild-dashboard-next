@@ -73,24 +73,30 @@ model TreasuryTransaction {
   createdAt   DateTime @default(now())
 }
 
-model GuildSettings {
-  id             Int       @id @default(1)
-  nextPayoutDate DateTime?
+model DropCatalogItem {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  imageUrl  String?
+  price     Int
+  createdAt DateTime   @default(now())
+  drops     DropItem[]
 }
 
 model DropItem {
-  id                    String    @id @default(cuid())
+  id                    String           @id @default(cuid())
   item                  String
-  quantity              Int       @default(1)
+  quantity              Int              @default(1)
   value                 Int
-  status                String    @default("Не продано")
+  status                String           @default("Не продано")
   treasuryTransactionId String?
-  date                  DateTime  @default(now())
-  createdAt             DateTime  @default(now())
+  date                  DateTime         @default(now())
+  createdAt             DateTime         @default(now())
   activityId            String?
-  activity              Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  activity              Activity?        @relation(fields: [activityId], references: [id], onDelete: SetNull)
   playerId              String?
-  player                Player?   @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  player                Player?          @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  catalogItemId         String?
+  catalogItem           DropCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
 }
 
 model Payment {

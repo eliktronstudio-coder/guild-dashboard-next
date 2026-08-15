@@ -1,7 +1,9 @@
 import Link from "next/link";
+import clsx from "clsx";
 import StatCard from "@/components/StatCard";
 import TreasuryChart from "@/components/charts/TreasuryChart";
 import AttendanceChart from "@/components/charts/AttendanceChart";
+import { daysUntilNextPayout } from "@/lib/payout";
 import {
   topPlayersByAttendance,
   topPlayersByXp,
@@ -9,43 +11,32 @@ import {
   getTreasuryBreakdown,
   getTreasuryChartData,
   getAttendanceChartData,
-  getGuildSettings,
   getAvgActivityDays,
   getDropGoldTotal,
 } from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
-function daysUntil(date: Date | null) {
-  if (!date) return null;
-  const diff = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  return Math.max(diff, 0);
+function attendanceColor(pct: number) {
+  if (pct <= 20) return { text: "text-danger", bar: "bg-danger" };
+  if (pct <= 50) return { text: "text-amber-500", bar: "bg-amber-500" };
+  return { text: "text-success", bar: "bg-success" };
 }
 
 export default async function DashboardPage() {
-  const [
-    attendanceTop,
-    xpTop,
-    allActivities,
-    treasuryBreakdown,
-    treasuryChart,
-    attendanceChart,
-    settings,
-    avgActivityDays,
-    dropGoldTotal,
-  ] = await Promise.all([
-    topPlayersByAttendance(5),
-    topPlayersByXp(5),
-    getAllActivities(),
-    getTreasuryBreakdown(),
-    getTreasuryChartData(),
-    getAttendanceChartData(),
-    getGuildSettings(),
-    getAvgActivityDays(),
-    getDropGoldTotal(),
-  ]);
+  const [attendanceTop, xpTop, allActivities, treasuryBreakdown, treasuryChart, attendanceChart, avgActivityDays, dropGoldTotal] =
+    await Promise.all([
+      topPlayersByAttendance(5),
+      topPlayersByXp(5),
+      getAllActivities(),
+      getTreasuryBreakdown(),
+      getTreasuryChartData(),
+      getAttendanceChartData(),
+      getAvgActivityDays(),
+      getDropGoldTotal(),
+    ]);
   const recentActivities = allActivities.slice(0, 5);
-  const payoutDays = daysUntil(settings.nextPayoutDate);
+  const payoutDays = daysUntilNextPayout();
 
   return (
     <div className="space-y-6">
@@ -70,11 +61,7 @@ export default async function DashboardPage() {
           value={avgActivityDays > 0 ? `${avgActivityDays} дней` : "—"}
           hint="между активностями"
         />
-        <StatCard
-          label="Дней до выплаты"
-          value={payoutDays === null ? "—" : `${payoutDays}`}
-          hint="до дня выплат"
-        />
+        <StatCard label="Дней до выплаты" value={`${payoutDays}`} hint="выплата 15-го числа" />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -118,11 +105,13 @@ export default async function DashboardPage() {
                       <span className="font-medium">{p.name}</span>
                       <span className="text-xs text-muted">{p.role}</span>
                     </span>
-                    <span className="text-xs font-medium text-accent">{p.attendancePct}%</span>
+                    <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePct).text)}>
+                      {p.attendancePct}%
+                    </span>
                   </div>
                   <div className="mt-1.5 ml-7 h-1.5 overflow-hidden rounded-full bg-surface-2">
                     <div
-                      className="h-full rounded-full bg-accent"
+                      className={clsx("h-full rounded-full", attendanceColor(p.attendancePct).bar)}
                       style={{ width: `${Math.min(p.attendancePct, 100)}%` }}
                     />
                   </div>

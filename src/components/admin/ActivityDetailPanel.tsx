@@ -2,7 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Check, X, Plus, Trash2, Moon, Search } from "lucide-react";
+import Image from "next/image";
+import { Pencil, Check, X, Plus, Trash2, Moon, Search, ImageOff } from "lucide-react";
 import clsx from "clsx";
 import {
   ACTIVITY_STATUSES,
@@ -21,9 +22,11 @@ type Drop = {
   quantity: number;
   value: number;
   playerName: string | null;
+  imageUrl: string | null;
 };
 
 type Player = { id: string; name: string; role: string };
+type CatalogItem = { id: string; name: string; price: number; imageUrl: string | null };
 
 type Activity = {
   id: string;
@@ -46,10 +49,12 @@ type Activity = {
 export default function ActivityDetailPanel({
   activity,
   players,
+  catalog,
   isAdmin,
 }: {
   activity: Activity;
   players: Player[];
+  catalog: CatalogItem[];
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -57,6 +62,7 @@ export default function ActivityDetailPanel({
   const [editingPerAttendance, setEditingPerAttendance] = useState(false);
   const [perAttendance, setPerAttendance] = useState(String(activity.perAttendanceValue));
   const [addingDrop, setAddingDrop] = useState(false);
+  const [dropCatalogId, setDropCatalogId] = useState("");
   const [dropItem, setDropItem] = useState("");
   const [dropQty, setDropQty] = useState("1");
   const [dropValue, setDropValue] = useState("");
@@ -206,6 +212,15 @@ export default function ActivityDetailPanel({
     }
   }
 
+  function handleCatalogSelect(id: string) {
+    setDropCatalogId(id);
+    const found = catalog.find((c) => c.id === id);
+    if (found) {
+      setDropItem(found.name);
+      setDropValue(String(found.price));
+    }
+  }
+
   async function handleAddDrop(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -220,6 +235,7 @@ export default function ActivityDetailPanel({
           value: Number(dropValue),
           activityId: activity.id,
           playerId: dropPlayerId || null,
+          catalogItemId: dropCatalogId || null,
         }),
       });
       const data = await res.json();
@@ -229,6 +245,7 @@ export default function ActivityDetailPanel({
         return;
       }
       setAddingDrop(false);
+      setDropCatalogId("");
       setDropItem("");
       setDropQty("1");
       setDropValue("");
@@ -516,10 +533,27 @@ export default function ActivityDetailPanel({
               onSubmit={handleAddDrop}
               className="mb-3 grid grid-cols-2 gap-2 rounded-md border border-border bg-surface-2 p-3 sm:grid-cols-5"
             >
+              <div className="sm:col-span-5">
+                <select
+                  value={dropCatalogId}
+                  onChange={(e) => handleCatalogSelect(e.target.value)}
+                  className="w-full rounded-md border border-border bg-surface px-2 py-1.5 text-sm outline-none focus:border-accent"
+                >
+                  <option value="">Из реестра дропа…</option>
+                  {catalog.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} · {numberFmt.format(c.price)}/ед.
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="sm:col-span-2">
                 <input
                   value={dropItem}
-                  onChange={(e) => setDropItem(e.target.value)}
+                  onChange={(e) => {
+                    setDropItem(e.target.value);
+                    setDropCatalogId("");
+                  }}
                   placeholder="Название предмета"
                   required
                   maxLength={60}
@@ -589,7 +623,23 @@ export default function ActivityDetailPanel({
                     <Trash2 size={12} />
                   </button>
                 )}
-                <p className="pr-4 text-xs font-medium">{d.item}</p>
+                <div className="flex items-start gap-2 pr-4">
+                  {d.imageUrl ? (
+                    <Image
+                      src={d.imageUrl}
+                      alt=""
+                      width={28}
+                      height={28}
+                      unoptimized
+                      className="h-7 w-7 flex-shrink-0 rounded border border-border object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded border border-border bg-surface text-muted">
+                      <ImageOff size={11} />
+                    </div>
+                  )}
+                  <p className="text-xs font-medium">{d.item}</p>
+                </div>
                 <p className="mt-1 text-xs text-muted">
                   ×{d.quantity} · {numberFmt.format(d.value)}/ед.
                   {d.playerName && <> · {d.playerName}</>}

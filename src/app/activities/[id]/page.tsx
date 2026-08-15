@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getActivityById, getRegisteredPlayers } from "@/lib/queries";
+import { getActivityById, getRegisteredPlayers, getDropCatalog } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import ActivityDetailPanel from "@/components/admin/ActivityDetailPanel";
 
@@ -10,10 +10,11 @@ export default async function ActivityDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [activity, user, players] = await Promise.all([
+  const [activity, user, players, catalog] = await Promise.all([
     getActivityById(id),
     getCurrentUser(),
     getRegisteredPlayers(),
+    getDropCatalog(),
   ]);
   if (!activity) notFound();
 
@@ -27,6 +28,7 @@ export default async function ActivityDetailPage({
       <ActivityDetailPanel
         activity={activity}
         players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+        catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price, imageUrl: c.imageUrl }))}
         isAdmin={user?.role === "admin"}
       />
     </div>

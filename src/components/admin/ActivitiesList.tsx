@@ -21,6 +21,7 @@ type ActivityRow = {
 };
 
 type PlayerOption = { id: string; name: string; role: string };
+type CatalogItem = { id: string; name: string; price: number };
 
 type Filters = {
   dateFrom?: string;
@@ -44,6 +45,7 @@ export default function ActivitiesList({
   filters,
   distinctNames,
   players,
+  catalog,
   isAdmin,
 }: {
   activities: ActivityRow[];
@@ -52,6 +54,7 @@ export default function ActivitiesList({
   filters: Filters;
   distinctNames: string[];
   players: PlayerOption[];
+  catalog: CatalogItem[];
   isAdmin: boolean;
 }) {
   const router = useRouter();
@@ -75,10 +78,13 @@ export default function ActivitiesList({
   const [newPerAttendance, setNewPerAttendance] = useState("0");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const [dropSelected, setDropSelected] = useState<Record<string, string>>({});
+  const [dropSearch, setDropSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
+  const filteredCatalog = catalog.filter((c) => c.name.toLowerCase().includes(dropSearch.trim().toLowerCase()));
 
   function applyFilters(overrides: Partial<Record<string, string>> = {}) {
     const params = new URLSearchParams();
@@ -130,6 +136,8 @@ export default function ActivitiesList({
     setNewPerAttendance("0");
     setSelected(new Set());
     setSearch("");
+    setDropSelected({});
+    setDropSearch("");
     setError(null);
   }
 
@@ -140,6 +148,19 @@ export default function ActivitiesList({
       else next.add(id);
       return next;
     });
+  }
+
+  function toggleDrop(id: string) {
+    setDropSelected((prev) => {
+      const next = { ...prev };
+      if (id in next) delete next[id];
+      else next[id] = "1";
+      return next;
+    });
+  }
+
+  function setDropQty(id: string, qty: string) {
+    setDropSelected((prev) => ({ ...prev, [id]: qty }));
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -159,6 +180,10 @@ export default function ActivitiesList({
           isNight: newIsNight,
           perAttendanceValue: Number(newPerAttendance),
           participantIds: [...selected],
+          drops: Object.entries(dropSelected).map(([catalogItemId, quantity]) => ({
+            catalogItemId,
+            quantity: Number(quantity) || 1,
+          })),
         }),
       });
       const data = await res.json();
@@ -431,6 +456,60 @@ export default function ActivitiesList({
                   ))}
                 </div>
                 {selected.size > 0 && <p className="mt-1.5 text-xs text-muted">Выбрано: {selected.size}</p>}
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-xs text-muted">
+                  Дроп <span className="text-muted/70">(необязательно, из реестра)</span>
+                </p>
+                <div className="relative mb-2">
+                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                  <input
+                    value={dropSearch}
+                    onChange={(e) => setDropSearch(e.target.value)}
+                    placeholder="Поиск по названию…"
+                    className="w-full rounded-md border border-border bg-surface-2 py-2 pl-8 pr-3 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
+                  {catalog.length === 0 && (
+                    <p className="text-xs text-muted">
+                      Реестр дропа пуст — добавьте предметы в разделе «Реестр дропа».
+                    </p>
+                  )}
+                  {catalog.length > 0 && filteredCatalog.length === 0 && (
+                    <p className="text-xs text-muted">Ничего не найдено.</p>
+                  )}
+                  {filteredCatalog.map((c) => {
+                    const checked = c.id in dropSelected;
+                    return (
+                      <label
+                        key={c.id}
+                        className="flex cursor-pointer items-center gap-2 rounded-md border border-border bg-surface px-2 py-1.5 text-xs"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleDrop(c.id)}
+                          className="accent-accent"
+                        />
+                        <span className="flex-1">
+                          {c.name} <span className="text-muted">· {c.price}/ед.</span>
+                        </span>
+                        {checked && (
+                          <input
+                            type="number"
+                            min={1}
+                            value={dropSelected[c.id]}
+                            onChange={(e) => setDropQty(c.id, e.target.value)}
+                            onClick={(e) => e.preventDefault()}
+                            className="w-16 rounded border border-border bg-surface-2 px-1.5 py-1 text-xs outline-none focus:border-accent"
+                          />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               {error && <p className="text-xs text-danger">{error}</p>}

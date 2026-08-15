@@ -212,7 +212,7 @@ export async function getActivityById(id: string) {
     where: { id },
     include: {
       participants: { include: { player: true } },
-      drops: { include: { player: true }, orderBy: { createdAt: "desc" } },
+      drops: { include: { player: true, catalogItem: true }, orderBy: { createdAt: "desc" } },
       addedBy: { select: { username: true } },
     },
   });
@@ -245,6 +245,7 @@ export async function getActivityById(id: string) {
       quantity: d.quantity,
       value: d.value,
       playerName: d.player?.name ?? null,
+      imageUrl: d.catalogItem?.imageUrl ?? null,
     })),
   };
 }
@@ -286,17 +287,16 @@ export async function getTreasuryChartData() {
   });
 }
 
-export async function getGuildSettings() {
-  const settings = await prisma.guildSettings.findUnique({ where: { id: 1 } });
-  return settings ?? { id: 1, nextPayoutDate: null };
-}
-
 export async function getAllDrops(limit?: number) {
   return prisma.dropItem.findMany({
     orderBy: { date: "desc" },
     take: limit,
-    include: { activity: true, player: true },
+    include: { activity: true, player: true, catalogItem: true },
   });
+}
+
+export async function getDropCatalog() {
+  return prisma.dropCatalogItem.findMany({ orderBy: { name: "asc" } });
 }
 
 // Считаем только непроданный дроп: проданный уже вычтен отсюда и учтён

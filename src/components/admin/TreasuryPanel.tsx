@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, X, Settings } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -13,30 +13,22 @@ type Transaction = {
   date: string;
 };
 
-type Settings = {
-  nextPayoutDate: string | null;
-};
-
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
 export default function TreasuryPanel({
   transactions,
-  settings,
   isAdmin,
 }: {
   transactions: Transaction[];
-  settings: Settings;
   isAdmin: boolean;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
-  const [editingSettings, setEditingSettings] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(todayISO());
-  const [payoutDate, setPayoutDate] = useState(settings.nextPayoutDate?.slice(0, 10) ?? "");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -68,31 +60,6 @@ export default function TreasuryPanel({
     }
   }
 
-  async function handleSaveSettings(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
-    try {
-      const res = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nextPayoutDate: payoutDate || null }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Что-то пошло не так.");
-        setBusy(false);
-        return;
-      }
-      setEditingSettings(false);
-      router.refresh();
-    } catch {
-      setError("Не удалось связаться с сервером.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function handleDelete(id: string) {
     if (!confirm("Удалить операцию?")) return;
     setBusy(true);
@@ -114,58 +81,14 @@ export default function TreasuryPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90"
-          >
-            <Plus size={16} /> Добавить операцию
-          </button>
-        )}
-        {!editingSettings && (
-          <button
-            type="button"
-            onClick={() => setEditingSettings(true)}
-            className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground/80 hover:bg-surface-2 hover:text-foreground"
-          >
-            <Settings size={16} /> Настройки казны
-          </button>
-        )}
-      </div>
-
-      {editingSettings && (
-        <form
-          onSubmit={handleSaveSettings}
-          className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3"
+      {!adding && (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90"
         >
-          <div>
-            <label className="mb-1 block text-xs text-muted">Дата следующей выплаты</label>
-            <input
-              type="date"
-              value={payoutDate}
-              onChange={(e) => setPayoutDate(e.target.value)}
-              className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-            />
-          </div>
-          <div className="flex items-end gap-2">
-            <button
-              type="submit"
-              disabled={busy}
-              className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-60"
-            >
-              Сохранить
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditingSettings(false)}
-              className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
-            >
-              <X size={14} /> Отмена
-            </button>
-          </div>
-        </form>
+          <Plus size={16} /> Добавить операцию
+        </button>
       )}
 
       {adding && (
@@ -225,7 +148,7 @@ export default function TreasuryPanel({
         </form>
       )}
 
-      {error && !adding && !editingSettings && <p className="text-xs text-danger">{error}</p>}
+      {error && !adding && <p className="text-xs text-danger">{error}</p>}
 
       <div className="rounded-lg border border-border bg-surface">
         <div className="border-b border-border p-4">
