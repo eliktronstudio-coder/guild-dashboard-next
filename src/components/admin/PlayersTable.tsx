@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Plus, X } from "lucide-react";
+import clsx from "clsx";
 import { ROLES } from "@/lib/roles";
 
 type Player = {
@@ -13,6 +14,7 @@ type Player = {
   level: number;
   xp: number;
   attendancePct: number;
+  userId: string | null;
 };
 
 type FormState = {
@@ -27,7 +29,15 @@ const emptyForm: FormState = { name: "", role: ROLES[0], level: "1", xp: "0", at
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
-export default function PlayersTable({ players, isAdmin }: { players: Player[]; isAdmin: boolean }) {
+export default function PlayersTable({
+  players,
+  isAdmin,
+  currentUserId,
+}: {
+  players: Player[];
+  isAdmin: boolean;
+  currentUserId: string | null;
+}) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -218,12 +228,22 @@ export default function PlayersTable({ players, isAdmin }: { players: Player[]; 
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {players.map((p) => (
-              <tr key={p.id} className="hover:bg-surface-2">
+            {players.map((p) => {
+              const isSelf = currentUserId !== null && p.userId === currentUserId;
+              return (
+              <tr
+                key={p.id}
+                className={clsx("hover:bg-surface-2", isSelf && "bg-accent-soft")}
+              >
                 <td className="px-4 py-3">
                   <Link href={`/players/${p.id}`} className="font-medium hover:text-accent">
                     {p.name}
                   </Link>
+                  {isSelf && (
+                    <span className="ml-2 rounded-full border border-accent/40 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                      это вы
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-muted">{p.role}</td>
                 <td className="px-4 py-3">{p.level}</td>
@@ -252,7 +272,8 @@ export default function PlayersTable({ players, isAdmin }: { players: Player[]; 
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
             {players.length === 0 && (
               <tr>
                 <td colSpan={isAdmin ? 6 : 5} className="px-4 py-6 text-center text-muted">
