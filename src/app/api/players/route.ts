@@ -31,6 +31,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Посещаемость должна быть от 0 до 100." }, { status: 400 });
   }
 
+  if (userId) {
+    const unlinked = await prisma.player.findMany({ where: { userId: null } });
+    const existing = unlinked.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      const linked = await prisma.player.update({
+        where: { id: existing.id },
+        data: { userId },
+      });
+      return NextResponse.json(linked, { status: 200 });
+    }
+  }
+
   const player = await prisma.player.create({
     data: { name, role, level, xp, attendancePct, userId },
   });
