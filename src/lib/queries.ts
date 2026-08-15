@@ -43,17 +43,115 @@ export async function getAllActivities() {
   }));
 }
 
+export async function getDistinctActivityNames() {
+  const rows = await prisma.activity.findMany({
+    distinct: ["name"],
+    select: { name: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((r) => r.name);
+}
+
+export type ActivityFilters = {
+  dateFrom?: string;
+  dateTo?: string;
+  status?: string;
+  mode?: string;
+  category?: string;
+  name?: string;
+  player?: string;
+  page?: number;
+  pageSize?: number;
+};
+
+export async function getFilteredActivities(filters: ActivityFilters) {
+  const { dateFrom, dateTo, status, mode, category, name, player, page = 1, pageSize = 15 } = filters;
+
+  const where: Record<string, unknown> = {};
+  const dateFilter: Record<string, Date> = {};
+  if (dateFrom) dateFilter.gte = new Date(dateFrom);
+  if (dateTo) {
+    const end = new Date(dateTo);
+    end.setHours(23, 59, 59, 999);
+    dateFilter.lte = end;
+  }
+  if (Object.keys(dateFilter).length > 0) where.date = dateFilter;
+  if (status) where.status = status;
+  if (mode) where.mode = mode;
+  if (category) where.category = category;
+  if (name) where.name = name;
+  if (player) {
+    where.participants = { some: { player: { name: { contains: player } } } };
+  }
+
+  const [activities, total] = await Promise.all([
+    prisma.activity.findMany({
+      where,
+      orderBy: { date: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { _count: { select: { participants: true } } },
+    }),
+    prisma.activity.count({ where }),
+  ]);
+
+  return {
+    activities: activities.map((a) => ({
+      id: a.id,
+      name: a.name,
+      category: a.category,
+      mode: a.mode,
+      difficulty: a.difficulty,
+      status: a.status,
+      isNight: a.isNight,
+      date: dateFmt.format(a.date),
+      dateIso: a.date.toISOString().slice(0, 10),
+      participants: a._count.participants,
+    })),
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    page,
+  };
+}
+
 export async function getActivityById(id: string) {
   const activity = await prisma.activity.findUnique({
     where: { id },
-    include: { participants: { include: { player: true } } },
+    include: {
+      participants: { include: { player: true } },
+      drops: { include: { player: true }, orderBy: { createdAt: "desc" } },
+      addedBy: { select: { username: true } },
+    },
   });
   if (!activity) return null;
+
+  const dropTotal = activity.drops.reduce((sum, d) => sum + d.value, 0);
+  const roleCounts: Record<string, number> = {};
+  for (const p of activity.participants) {
+    roleCounts[p.player.role] = (roleCounts[p.player.role] ?? 0) + 1;
+  }
+
   return {
     id: activity.id,
     name: activity.name,
+    category: activity.category,
+    mode: activity.mode,
+    difficulty: activity.difficulty,
+    status: activity.status,
+    isNight: activity.isNight,
+    perAttendanceValue: activity.perAttendanceValue,
+    addedByUsername: activity.addedBy?.username ?? null,
     date: dateFmt.format(activity.date),
+    dropTotal,
+    roleCounts,
     roster: activity.participants.map((p) => p.player),
+    drops: activity.drops.map((d) => ({
+      id: d.id,
+      item: d.item,
+      quantity: d.quantity,
+      value: d.value,
+      playerName: d.player?.name ?? null,
+    })),
   };
 }
 

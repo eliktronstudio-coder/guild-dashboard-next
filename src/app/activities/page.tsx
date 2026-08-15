@@ -1,13 +1,42 @@
-import { getAllActivities, getRegisteredPlayers } from "@/lib/queries";
+import { getFilteredActivities, getDistinctActivityNames, getRegisteredPlayers } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import ActivitiesList from "@/components/admin/ActivitiesList";
 
-export default async function ActivitiesPage() {
-  const [activities, players, user] = await Promise.all([
-    getAllActivities(),
+type SearchParams = { [key: string]: string | string[] | undefined };
+
+function str(v: string | string[] | undefined): string | undefined {
+  return typeof v === "string" && v ? v : undefined;
+}
+
+export default async function ActivitiesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  const sp = await searchParams;
+  const filters = {
+    dateFrom: str(sp.dateFrom),
+    dateTo: str(sp.dateTo),
+    status: str(sp.status),
+    mode: str(sp.mode),
+    category: str(sp.category),
+    name: str(sp.name),
+    player: str(sp.player),
+    page: sp.page && typeof sp.page === "string" ? Math.max(1, Number(sp.page) || 1) : 1,
+  };
+
+  const [result, distinctNames, players, user] = await Promise.all([
+    getFilteredActivities(filters),
+    getDistinctActivityNames(),
     getRegisteredPlayers(),
     getCurrentUser(),
   ]);
 
-  return <ActivitiesList activities={activities} players={players} isAdmin={user?.role === "admin"} />;
+  return (
+    <ActivitiesList
+      activities={result.activities}
+      total={result.total}
+      totalPages={result.totalPages}
+      filters={filters}
+      distinctNames={distinctNames}
+      players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+      isAdmin={user?.role === "admin"}
+    />
+  );
 }

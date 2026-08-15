@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const item = typeof body?.item === "string" ? body.item.trim() : "";
   const value = Number(body?.value);
+  const quantity = body?.quantity !== undefined ? Number(body.quantity) : 1;
   const dateStr = typeof body?.date === "string" ? body.date : "";
   const activityId = typeof body?.activityId === "string" && body.activityId ? body.activityId : null;
   const playerId = typeof body?.playerId === "string" && body.playerId ? body.playerId : null;
@@ -18,6 +19,9 @@ export async function POST(request: NextRequest) {
   }
   if (!Number.isFinite(value) || value < 0) {
     return NextResponse.json({ error: "Укажите стоимость в золоте (0 или больше)." }, { status: 400 });
+  }
+  if (!Number.isFinite(quantity) || quantity < 1) {
+    return NextResponse.json({ error: "Количество должно быть не меньше 1." }, { status: 400 });
   }
 
   const date = dateStr ? new Date(dateStr) : new Date();
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
   }
 
   const drop = await prisma.dropItem.create({
-    data: { item, value, date, activityId, playerId },
+    data: { item, value, quantity, date, activityId, playerId },
     include: { activity: true, player: true },
   });
 

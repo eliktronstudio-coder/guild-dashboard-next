@@ -19,6 +19,7 @@ model User {
   role         String   @default("member")
   createdAt    DateTime @default(now())
   player       Player?
+  addedActivities Activity[]
 }
 
 model Player {
@@ -38,12 +39,20 @@ model Player {
 }
 
 model Activity {
-  id           String                @id @default(cuid())
-  name         String
-  date         DateTime              @default(now())
-  createdAt    DateTime              @default(now())
-  participants ActivityParticipant[]
-  drops        DropItem[]
+  id                 String                @id @default(cuid())
+  name               String
+  category           String                @default("Мини-РБ")
+  mode               String                @default("PvE")
+  difficulty         String                @default("Обычная")
+  status             String                @default("К выплате")
+  isNight            Boolean               @default(false)
+  perAttendanceValue Int                   @default(0)
+  addedByUserId      String?
+  addedBy            User?                 @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
+  date               DateTime              @default(now())
+  createdAt          DateTime              @default(now())
+  participants       ActivityParticipant[]
+  drops              DropItem[]
 }
 
 model ActivityParticipant {
@@ -72,6 +81,7 @@ model GuildSettings {
 model DropItem {
   id         String    @id @default(cuid())
   item       String
+  quantity   Int       @default(1)
   value      Int
   date       DateTime  @default(now())
   createdAt  DateTime  @default(now())
