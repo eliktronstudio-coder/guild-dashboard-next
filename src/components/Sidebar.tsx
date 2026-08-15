@@ -21,6 +21,8 @@ const roleLabel: Record<string, string> = {
   member: "Участник",
 };
 
+const numberFmt = new Intl.NumberFormat("ru-RU");
+
 export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -48,13 +50,8 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <Link
-          href="/dashboard"
-          onClick={onCloseMobile}
-          className="flex items-center gap-2.5 border-b border-border px-5 py-5"
-        >
-          <Logo size={30} />
-          <span className="text-base font-semibold leading-tight tracking-tight">{guild.name} Guild</span>
+        <Link href="/dashboard" onClick={onCloseMobile} className="border-b border-border px-5 py-5">
+          <Logo size="lg" />
         </Link>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -76,12 +73,11 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
                         href={item.href}
                         onClick={onCloseMobile}
                         className={clsx(
-                          "flex items-center gap-3 rounded-md border-l-2 py-2 pl-2.5 pr-3 text-sm transition-colors",
+                          "flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors",
                           active
-                            ? "border-accent bg-surface-2 text-accent-bright"
-                            : "border-transparent text-foreground/80 hover:bg-surface-2 hover:text-foreground"
+                            ? "border-accent/40 bg-accent-soft text-accent-bright"
+                            : "border-transparent text-foreground/75 hover:bg-surface-2 hover:text-foreground"
                         )}
-                        style={active ? { boxShadow: "inset 0 0 24px -12px var(--accent)" } : undefined}
                       >
                         <Icon size={17} strokeWidth={2} />
                         <span>{item.label}</span>
@@ -95,10 +91,29 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
           })}
         </nav>
 
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border px-4 pt-4">
+          <div className="mb-1 flex items-baseline justify-between">
+            <span className="text-xs font-semibold text-foreground">{guild.name} GUILD</span>
+            <span className="text-[10px] text-muted">Уровень {guild.level}</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-accent to-violet"
+              style={{ width: `${Math.min(100, Math.round((guild.xp / guild.xpToNext) * 100))}%` }}
+            />
+          </div>
+          <p className="mt-1 text-[10px] text-muted">
+            {numberFmt.format(guild.xp)} / {numberFmt.format(guild.xpToNext)} XP
+          </p>
+        </div>
+
+        <div className="p-4 pt-3">
           {user ? (
             <div className="space-y-2">
-              <div className="flex items-center justify-between rounded-md bg-surface-2 px-3 py-2">
+              <div className="flex items-center gap-2.5 rounded-lg bg-surface-2 px-3 py-2">
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold text-accent-bright">
+                  {user.username.charAt(0).toUpperCase()}
+                </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{user.username}</p>
                   <p className="text-xs text-muted">{roleLabel[user.role] ?? user.role}</p>

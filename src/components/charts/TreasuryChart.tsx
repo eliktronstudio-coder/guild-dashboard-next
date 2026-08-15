@@ -59,7 +59,15 @@ export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) 
             labelStyle={{ color: "var(--foreground)" }}
             formatter={(value) => [`${numberFmt.format(Number(value))} золота`, "Золото"]}
           />
-          <Area type="monotone" dataKey="gold" stroke="var(--accent)" strokeWidth={2} fill="url(#goldFill)" />
+          <Area
+            type="monotone"
+            dataKey="gold"
+            stroke="var(--accent)"
+            strokeWidth={2}
+            fill="url(#goldFill)"
+            dot={{ r: 3, fill: "var(--accent-bright)", strokeWidth: 0 }}
+            activeDot={{ r: 5, fill: "var(--accent-bright)", stroke: "var(--surface)", strokeWidth: 2 }}
+          />
         </AreaChart>
       </ResponsiveContainer>
     </div>

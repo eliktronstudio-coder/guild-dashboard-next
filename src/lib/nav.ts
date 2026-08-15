@@ -27,7 +27,7 @@ export const navSections: NavSection[] = [
     title: "Обзор",
     items: [
       { href: "/dashboard", label: "Статистика", icon: LayoutDashboard },
-      { href: "/activities", label: "Активности", icon: Swords },
+      { href: "/activities", label: "Активность", icon: Swords },
       { href: "/players", label: "Состав", icon: Users },
     ],
   },

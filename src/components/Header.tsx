@@ -6,6 +6,7 @@ import { Menu } from "lucide-react";
 import clsx from "clsx";
 import { allNavItems, navSections } from "@/lib/nav";
 import ThemeToggle from "./ThemeToggle";
+import Logo from "./Logo";
 import type { SessionPayload } from "@/lib/auth";
 
 type HeaderProps = {
@@ -40,6 +41,7 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
         >
           <Menu size={18} />
         </button>
+        <Logo size="sm" variant="mark" className="lg:hidden" />
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold leading-tight">{label}</h1>
           <p className="truncate text-xs text-muted">

@@ -25,6 +25,12 @@ export default function AttendanceChart({ data }: { data: AttendanceChartPoint[]
     <div className="min-w-0">
       <ResponsiveContainer width="100%" height={260}>
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent-bright)" />
+              <stop offset="100%" stopColor="var(--accent-dim)" />
+            </linearGradient>
+          </defs>
           <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="date"
@@ -51,7 +57,7 @@ export default function AttendanceChart({ data }: { data: AttendanceChartPoint[]
             labelStyle={{ color: "var(--foreground)" }}
             formatter={(value) => [`${value} участий`, "Активность"]}
           />
-          <Bar dataKey="count" fill="var(--accent)" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="count" fill="url(#barGrad)" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>

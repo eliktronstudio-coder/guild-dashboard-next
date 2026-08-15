@@ -1,5 +1,6 @@
 import Link from "next/link";
 import clsx from "clsx";
+import { Crown, ShieldCheck, TrendingUp, Users, CalendarClock } from "lucide-react";
 import StatCard from "@/components/StatCard";
 import TreasuryChart from "@/components/charts/TreasuryChart";
 import AttendanceChart from "@/components/charts/AttendanceChart";
@@ -41,28 +42,68 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard
-          label="Основная казна"
-          value={`${numberFmt.format(treasuryBreakdown.main)} золота`}
-          hint="70% — фонд ЗП"
-        />
-        <StatCard
-          label="Казна гильдии"
-          value={`${numberFmt.format(treasuryBreakdown.guild)} золота`}
-          hint="30% — резерв гильдии"
-        />
-        <StatCard
-          label="Дроп с РБ"
-          value={`${numberFmt.format(dropGoldTotal)} золота`}
-          hint="эквивалент в золоте"
-        />
-        <StatCard
-          label="Ср. активность"
-          value={avgActivityDays > 0 ? `${avgActivityDays} дней` : "—"}
-          hint="между активностями"
-        />
-        <StatCard label="Дней до выплаты" value={`${payoutDays}`} hint="выплата 15-го числа" />
+      <div className="relative">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -inset-x-4 -top-6 -z-10 h-[380px] overflow-hidden sm:-inset-x-6"
+        >
+          <div
+            className="absolute inset-0"
+            style={{
+              maskImage: "linear-gradient(to bottom, black 55%, transparent 100%)",
+              WebkitMaskImage: "linear-gradient(to bottom, black 55%, transparent 100%)",
+            }}
+          >
+            <div
+              className="absolute inset-0 bg-cover bg-[position:78%_18%]"
+              style={{
+                backgroundImage: "url(/images/atmosphere.png)",
+                maskImage: "linear-gradient(to left, black 0%, black 42%, transparent 88%)",
+                WebkitMaskImage: "linear-gradient(to left, black 0%, black 42%, transparent 88%)",
+                opacity: 0.55,
+                filter: "saturate(1.05)",
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <StatCard
+            label="Основная казна"
+            value={`${numberFmt.format(treasuryBreakdown.main)} золота`}
+            hint="70% — фонд ЗП"
+            icon={Crown}
+            tone="accent"
+          />
+          <StatCard
+            label="Казна гильдии"
+            value={`${numberFmt.format(treasuryBreakdown.guild)} золота`}
+            hint="30% — резерв гильдии"
+            icon={ShieldCheck}
+            tone="violet"
+          />
+          <StatCard
+            label="Дроп с РБ"
+            value={`${numberFmt.format(dropGoldTotal)} золота`}
+            hint="эквивалент в золоте"
+            icon={TrendingUp}
+            tone="ember"
+          />
+          <StatCard
+            label="Ср. активность"
+            value={avgActivityDays > 0 ? `${avgActivityDays} дней` : "—"}
+            hint="между активностями"
+            icon={Users}
+            tone="info"
+          />
+          <StatCard
+            label="Дней до выплаты"
+            value={`${payoutDays}`}
+            hint="выплата 15-го числа"
+            icon={CalendarClock}
+            tone="accent-dim"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
