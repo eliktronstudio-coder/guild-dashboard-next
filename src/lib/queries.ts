@@ -30,17 +30,17 @@ async function getAttendanceMap(): Promise<Map<string, number>> {
   return map;
 }
 
-// Зарплата считается динамически: общий фонд (казна + дроп с РБ) делится
-// между игроками пропорционально их посещаемости, скорректированной
-// индивидуальным коэффициентом (0.0–1.25), который настраивает админ.
+// Зарплата считается динамически: основная казна (проданный дроп попадает
+// туда отдельной операцией) делится между игроками пропорционально их
+// посещаемости, скорректированной индивидуальным коэффициентом (0.0–1.25),
+// который настраивает админ.
 async function getSalaryMap(attendanceMap: Map<string, number>): Promise<Map<string, number>> {
-  const [players, treasuryBreakdown, dropGoldTotal] = await Promise.all([
+  const [players, treasuryBreakdown] = await Promise.all([
     prisma.player.findMany({ select: { id: true, salaryCoefficient: true } }),
     getTreasuryBreakdown(),
-    getDropGoldTotal(),
   ]);
 
-  const pool = treasuryBreakdown.main + dropGoldTotal;
+  const pool = treasuryBreakdown.main;
   const map = new Map<string, number>();
   if (pool <= 0) {
     for (const p of players) map.set(p.id, 0);
@@ -304,9 +304,10 @@ export async function getDropGoldTotal() {
 }
 
 // Инвентарь: предметы из журнала дропа, которые ещё не выданы конкретному
-// игроку (playerId не указан) — то, что сейчас числится за гильдией.
+// игроку (playerId не указан) и не проданы — то, что сейчас числится за
+// гильдией в виде предметов, а не золота.
 export async function getInventory() {
-  const drops = await prisma.dropItem.findMany({ where: { playerId: null } });
+  const drops = await prisma.dropItem.findMany({ where: { playerId: null, status: "Не продано" } });
   const map = new Map<string, { item: string; quantity: number; totalValue: number }>();
   for (const d of drops) {
     const existing = map.get(d.item);

@@ -80,16 +80,18 @@ model GuildSettings {
 }
 
 model DropItem {
-  id         String    @id @default(cuid())
-  item       String
-  quantity   Int       @default(1)
-  value      Int
-  date       DateTime  @default(now())
-  createdAt  DateTime  @default(now())
-  activityId String?
-  activity   Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
-  playerId   String?
-  player     Player?   @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  id                    String    @id @default(cuid())
+  item                  String
+  quantity              Int       @default(1)
+  value                 Int
+  status                String    @default("Не продано")
+  treasuryTransactionId String?
+  date                  DateTime  @default(now())
+  createdAt             DateTime  @default(now())
+  activityId            String?
+  activity              Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  playerId              String?
+  player                Player?   @relation(fields: [playerId], references: [id], onDelete: SetNull)
 }
 
 model Payment {
