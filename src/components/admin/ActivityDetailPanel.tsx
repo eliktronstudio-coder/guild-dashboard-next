@@ -76,7 +76,54 @@ export default function ActivityDetailPanel({
   const [editError, setEditError] = useState<string | null>(null);
   const [editBusy, setEditBusy] = useState(false);
 
+  const [editingRoster, setEditingRoster] = useState(false);
+  const [rosterSelected, setRosterSelected] = useState<Set<string>>(new Set(activity.roster.map((p) => p.id)));
+  const [rosterSearch, setRosterSearch] = useState("");
+  const [rosterError, setRosterError] = useState<string | null>(null);
+  const [rosterBusy, setRosterBusy] = useState(false);
+
   const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(editSearch.trim().toLowerCase()));
+  const filteredRosterPlayers = players.filter((p) => p.name.toLowerCase().includes(rosterSearch.trim().toLowerCase()));
+
+  function toggleRosterSelected(id: string) {
+    setRosterSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function cancelEditRoster() {
+    setEditingRoster(false);
+    setRosterSelected(new Set(activity.roster.map((p) => p.id)));
+    setRosterSearch("");
+    setRosterError(null);
+  }
+
+  async function handleSaveRoster() {
+    setRosterError(null);
+    setRosterBusy(true);
+    try {
+      const res = await fetch(`/api/activities/${activity.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantIds: [...rosterSelected] }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRosterError(data.error ?? "Что-то пошло не так.");
+        setRosterBusy(false);
+        return;
+      }
+      setEditingRoster(false);
+      router.refresh();
+    } catch {
+      setRosterError("Не удалось связаться с сервером.");
+    } finally {
+      setRosterBusy(false);
+    }
+  }
 
   function toggleEditSelected(id: string) {
     setEditSelected((prev) => {
@@ -555,18 +602,90 @@ export default function ActivityDetailPanel({
         </div>
 
         <div className="rounded-lg border border-border bg-surface p-4">
-          <h3 className="mb-3 text-sm font-semibold">Участники ({activity.roster.length})</h3>
-          <div className="flex flex-wrap gap-2">
-            {activity.roster.map((p) => (
-              <span
-                key={p.id}
-                className={clsx("rounded-full border px-2.5 py-1 text-xs font-medium", roleColor[p.role] ?? roleColor["Без роли"])}
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Участники ({activity.roster.length})</h3>
+            {isAdmin && !editingRoster && (
+              <button
+                type="button"
+                onClick={() => setEditingRoster(true)}
+                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground"
               >
-                {p.name}
-              </span>
-            ))}
-            {activity.roster.length === 0 && <p className="text-xs text-muted">Участники не выбраны.</p>}
+                <Pencil size={13} /> Редактировать
+              </button>
+            )}
           </div>
+
+          {editingRoster ? (
+            <div>
+              <p className="mb-1.5 text-xs text-muted">
+                Только зарегистрированные на сайте
+              </p>
+              <div className="relative mb-2">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                <input
+                  value={rosterSearch}
+                  onChange={(e) => setRosterSearch(e.target.value)}
+                  placeholder="Поиск по нику…"
+                  className="w-full rounded-md border border-border bg-surface-2 py-2 pl-8 pr-3 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex max-h-52 flex-wrap gap-2 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
+                {players.length === 0 && (
+                  <p className="text-xs text-muted">
+                    Пока никто из состава не зарегистрирован на сайте — участников добавить нельзя.
+                  </p>
+                )}
+                {players.length > 0 && filteredRosterPlayers.length === 0 && (
+                  <p className="text-xs text-muted">Никого не найдено.</p>
+                )}
+                {filteredRosterPlayers.map((p) => (
+                  <label
+                    key={p.id}
+                    className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={rosterSelected.has(p.id)}
+                      onChange={() => toggleRosterSelected(p.id)}
+                      className="accent-accent"
+                    />
+                    {p.name} <span className="text-muted">· {p.role}</span>
+                  </label>
+                ))}
+              </div>
+              {rosterSelected.size > 0 && <p className="mt-1.5 text-xs text-muted">Выбрано: {rosterSelected.size}</p>}
+              {rosterError && <p className="mt-1.5 text-xs text-danger">{rosterError}</p>}
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveRoster}
+                  disabled={rosterBusy}
+                  className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-black hover:opacity-90 disabled:opacity-60"
+                >
+                  Сохранить
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEditRoster}
+                  className="rounded-md border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {activity.roster.map((p) => (
+                <span
+                  key={p.id}
+                  className={clsx("rounded-full border px-2.5 py-1 text-xs font-medium", roleColor[p.role] ?? roleColor["Без роли"])}
+                >
+                  {p.name}
+                </span>
+              ))}
+              {activity.roster.length === 0 && <p className="text-xs text-muted">Участники не выбраны.</p>}
+            </div>
+          )}
         </div>
       </div>
 
