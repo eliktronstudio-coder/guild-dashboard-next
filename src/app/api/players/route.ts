@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
   const role = typeof body?.role === "string" ? body.role : "";
   const level = Number(body?.level);
   const xp = Number(body?.xp);
-  const gearScore = body?.gearScore === undefined ? 0 : Number(body.gearScore);
+  const salaryCoefficient = body?.salaryCoefficient === undefined ? 1 : Number(body.salaryCoefficient);
   const userId = typeof body?.userId === "string" ? body.userId : undefined;
 
   if (!name || name.length > 40) {
@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(xp) || xp < 0) {
     return NextResponse.json({ error: "Неверный опыт." }, { status: 400 });
   }
-  if (!Number.isFinite(gearScore) || gearScore < 0) {
-    return NextResponse.json({ error: "Неверный ГС." }, { status: 400 });
+  if (!Number.isFinite(salaryCoefficient) || salaryCoefficient < 0 || salaryCoefficient > 1.25) {
+    return NextResponse.json({ error: "Коэффициент должен быть от 0.0 до 1.25." }, { status: 400 });
   }
 
   if (userId) {
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   }
 
   const player = await prisma.player.create({
-    data: { name, role, level, xp, gearScore, userId },
+    data: { name, role, level, xp, salaryCoefficient, userId },
   });
 
   return NextResponse.json(player, { status: 201 });

@@ -32,19 +32,12 @@ async function getAttendanceMap(): Promise<Map<string, number>> {
 
 // Зарплата считается динамически: общий фонд (казна + дроп с РБ) делится
 // между игроками пропорционально их посещаемости, скорректированной
-// коэффициентом ГС (0% ниже salaryGsTier1, 50% от salaryGsTier1, 100% от salaryGsTier2).
-function gsMultiplier(gearScore: number, tier1: number, tier2: number) {
-  if (gearScore >= tier2) return 1;
-  if (gearScore >= tier1) return 0.5;
-  return 0;
-}
-
+// индивидуальным коэффициентом (0.0–1.25), который настраивает админ.
 async function getSalaryMap(attendanceMap: Map<string, number>): Promise<Map<string, number>> {
-  const [players, treasuryBreakdown, dropGoldTotal, settings] = await Promise.all([
-    prisma.player.findMany({ select: { id: true, gearScore: true } }),
+  const [players, treasuryBreakdown, dropGoldTotal] = await Promise.all([
+    prisma.player.findMany({ select: { id: true, salaryCoefficient: true } }),
     getTreasuryBreakdown(),
     getDropGoldTotal(),
-    getGuildSettings(),
   ]);
 
   const pool = treasuryBreakdown.main + dropGoldTotal;
@@ -56,7 +49,7 @@ async function getSalaryMap(attendanceMap: Map<string, number>): Promise<Map<str
 
   const weights = players.map((p) => ({
     id: p.id,
-    weight: (attendanceMap.get(p.id) ?? 0) * gsMultiplier(p.gearScore, settings.salaryGsTier1, settings.salaryGsTier2),
+    weight: (attendanceMap.get(p.id) ?? 0) * p.salaryCoefficient,
   }));
   const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
   if (totalWeight <= 0) {
@@ -294,7 +287,7 @@ export async function getTreasuryChartData() {
 
 export async function getGuildSettings() {
   const settings = await prisma.guildSettings.findUnique({ where: { id: 1 } });
-  return settings ?? { id: 1, nextPayoutDate: null, salaryGsTier1: 10000, salaryGsTier2: 20000 };
+  return settings ?? { id: 1, nextPayoutDate: null };
 }
 
 export async function getAllDrops(limit?: number) {

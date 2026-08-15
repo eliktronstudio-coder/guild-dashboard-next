@@ -4,6 +4,7 @@ import { getPlayerById } from "@/lib/queries";
 import StatCard from "@/components/StatCard";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
+const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function PlayerDetailPage({
   params,
@@ -29,7 +30,7 @@ export default async function PlayerDetailPage({
         <StatCard label="Уровень" value={String(player.level)} hint="текущий уровень" />
         <StatCard label="Опыт" value={`${numberFmt.format(player.xp)} XP`} hint="накоплено" />
         <StatCard label="Посещаемость" value={`${player.attendancePct}%`} hint="за всё время" />
-        <StatCard label="ГС" value={numberFmt.format(player.gearScore)} hint="гир-скор" />
+        <StatCard label="Коэффициент" value={coefficientFmt.format(player.salaryCoefficient)} hint="настраивает админ" />
         <StatCard label="Зарплата" value={`${numberFmt.format(player.salary)} золота`} hint="расчётная" />
       </div>
     </div>
