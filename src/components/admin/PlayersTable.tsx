@@ -234,7 +234,17 @@ export default function PlayersTable({
                 <td className="px-4 py-3 text-muted">{p.role}</td>
                 <td className="px-4 py-3">{p.level}</td>
                 <td className="px-4 py-3">{numberFmt.format(p.xp)}</td>
-                <td className="px-4 py-3 text-accent">{p.attendancePct}%</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className="h-full rounded-full bg-accent"
+                        style={{ width: `${Math.min(p.attendancePct, 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-medium text-accent">{p.attendancePct}%</span>
+                  </div>
+                </td>
                 {isAdmin && (
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">

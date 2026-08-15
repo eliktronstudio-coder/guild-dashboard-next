@@ -96,22 +96,31 @@ export default async function DashboardPage() {
               </Link>
             </div>
           </div>
-          <ol className="space-y-1">
+          <ol className="space-y-2">
             {attendanceTop.map((p, i) => (
               <li key={p.id}>
                 <Link
                   href={`/players/${p.id}`}
-                  className="flex items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-surface-2"
+                  className="block rounded-md px-2 py-2 text-sm hover:bg-surface-2"
                 >
-                  <span className="flex items-center gap-3">
-                    <span className="w-4 text-muted">{i + 1}</span>
-                    <span className="font-medium">{p.name}</span>
-                    <span className="text-xs text-muted">{p.role}</span>
-                  </span>
-                  <span className="text-xs font-medium text-accent">{p.attendancePct}%</span>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-3">
+                      <span className="w-4 text-muted">{i + 1}</span>
+                      <span className="font-medium">{p.name}</span>
+                      <span className="text-xs text-muted">{p.role}</span>
+                    </span>
+                    <span className="text-xs font-medium text-accent">{p.attendancePct}%</span>
+                  </div>
+                  <div className="mt-1.5 ml-7 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                    <div
+                      className="h-full rounded-full bg-accent"
+                      style={{ width: `${Math.min(p.attendancePct, 100)}%` }}
+                    />
+                  </div>
                 </Link>
               </li>
             ))}
+            {attendanceTop.length === 0 && <p className="px-2 py-2 text-xs text-muted">Пока нет данных.</p>}
           </ol>
         </div>
 
