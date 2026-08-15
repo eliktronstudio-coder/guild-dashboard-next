@@ -39,7 +39,7 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
     const res = await fetch("/api/players", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: username, role: "Без роли", level: 1, xp: 0, attendancePct: 0, userId: id }),
+      body: JSON.stringify({ name: username, role: "Без роли", level: 1, xp: 0, userId: id }),
     });
     const data = await res.json();
     if (!res.ok) setError(data.error ?? "Что-то пошло не так.");

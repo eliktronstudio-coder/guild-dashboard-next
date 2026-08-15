@@ -12,7 +12,6 @@ export async function POST(request: NextRequest) {
   const role = typeof body?.role === "string" ? body.role : "";
   const level = Number(body?.level);
   const xp = Number(body?.xp);
-  const attendancePct = Number(body?.attendancePct);
   const userId = typeof body?.userId === "string" ? body.userId : undefined;
 
   if (!name || name.length > 40) {
@@ -26,9 +25,6 @@ export async function POST(request: NextRequest) {
   }
   if (!Number.isFinite(xp) || xp < 0) {
     return NextResponse.json({ error: "Неверный опыт." }, { status: 400 });
-  }
-  if (!Number.isFinite(attendancePct) || attendancePct < 0 || attendancePct > 100) {
-    return NextResponse.json({ error: "Посещаемость должна быть от 0 до 100." }, { status: 400 });
   }
 
   if (userId) {
@@ -44,7 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   const player = await prisma.player.create({
-    data: { name, role, level, xp, attendancePct, userId },
+    data: { name, role, level, xp, userId },
   });
 
   return NextResponse.json(player, { status: 201 });

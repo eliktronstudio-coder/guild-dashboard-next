@@ -3,16 +3,16 @@ import { prisma } from "../src/lib/prisma";
 import { hashPassword } from "../src/lib/auth";
 
 const seedPlayers = [
-  { name: "Amagami", role: "Милик", level: 9, xp: 4975, attendancePct: 100 },
-  { name: "Boop", role: "Хил", level: 8, xp: 4210, attendancePct: 96 },
-  { name: "Estq", role: "Милик", level: 10, xp: 5460, attendancePct: 100 },
-  { name: "Harwester", role: "Лучник", level: 7, xp: 3680, attendancePct: 92 },
-  { name: "Khinaar", role: "Хил", level: 12, xp: 7375, attendancePct: 100 },
-  { name: "Neverq", role: "Танк", level: 11, xp: 6860, attendancePct: 89 },
-  { name: "Neneverq", role: "Хил", level: 11, xp: 6375, attendancePct: 94 },
-  { name: "Yupi", role: "Танк", level: 10, xp: 5460, attendancePct: 87 },
-  { name: "Sorvin", role: "Маг", level: 6, xp: 2980, attendancePct: 81 },
-  { name: "Latrys", role: "Лучник", level: 9, xp: 4720, attendancePct: 90 },
+  { name: "Amagami", role: "Милик", level: 9, xp: 4975 },
+  { name: "Boop", role: "Хил", level: 8, xp: 4210 },
+  { name: "Estq", role: "Милик", level: 10, xp: 5460 },
+  { name: "Harwester", role: "Лучник", level: 7, xp: 3680 },
+  { name: "Khinaar", role: "Хил", level: 12, xp: 7375 },
+  { name: "Neverq", role: "Танк", level: 11, xp: 6860 },
+  { name: "Neneverq", role: "Хил", level: 11, xp: 6375 },
+  { name: "Yupi", role: "Танк", level: 10, xp: 5460 },
+  { name: "Sorvin", role: "Маг", level: 6, xp: 2980 },
+  { name: "Latrys", role: "Лучник", level: 9, xp: 4720 },
 ];
 
 const seedActivities = [
@@ -52,7 +52,7 @@ async function seedGuildData() {
   const createdPlayers = await Promise.all(
     seedPlayers.map((p) =>
       prisma.player.create({
-        data: { name: p.name, role: p.role, level: p.level, xp: p.xp, attendancePct: p.attendancePct },
+        data: { name: p.name, role: p.role, level: p.level, xp: p.xp },
       })
     )
   );

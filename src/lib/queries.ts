@@ -7,23 +7,70 @@ function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+// Посещаемость считается динамически: доля активностей за последние
+// ATTENDANCE_WINDOW_DAYS дней, в которых игрок реально участвовал.
+const ATTENDANCE_WINDOW_DAYS = 30;
+
+async function getAttendanceMap(): Promise<Map<string, number>> {
+  const since = new Date(Date.now() - ATTENDANCE_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const activities = await prisma.activity.findMany({
+    where: { date: { gte: since } },
+    select: { participants: { select: { playerId: true } } },
+  });
+
+  const totalActivities = activities.length;
+  const map = new Map<string, number>();
+  if (totalActivities === 0) return map;
+
+  const counts = new Map<string, number>();
+  for (const a of activities) {
+    for (const p of a.participants) {
+      counts.set(p.playerId, (counts.get(p.playerId) ?? 0) + 1);
+    }
+  }
+  for (const [playerId, count] of counts) {
+    map.set(playerId, Math.round((count / totalActivities) * 100));
+  }
+  return map;
+}
+
+function withAttendance<T extends { id: string }>(players: T[], map: Map<string, number>) {
+  return players.map((p) => ({ ...p, attendancePct: map.get(p.id) ?? 0 }));
+}
+
 export async function getAllPlayers() {
-  return prisma.player.findMany({ orderBy: { createdAt: "asc" } });
+  const [players, attendanceMap] = await Promise.all([
+    prisma.player.findMany({ orderBy: { createdAt: "asc" } }),
+    getAttendanceMap(),
+  ]);
+  return withAttendance(players, attendanceMap);
 }
 
 export async function getPlayerById(id: string) {
-  return prisma.player.findUnique({ where: { id } });
+  const [player, attendanceMap] = await Promise.all([
+    prisma.player.findUnique({ where: { id } }),
+    getAttendanceMap(),
+  ]);
+  if (!player) return null;
+  return { ...player, attendancePct: attendanceMap.get(player.id) ?? 0 };
 }
 
 export async function getRegisteredPlayers() {
-  return prisma.player.findMany({
-    where: { userId: { not: null } },
-    orderBy: { createdAt: "asc" },
-  });
+  const [players, attendanceMap] = await Promise.all([
+    prisma.player.findMany({
+      where: { userId: { not: null } },
+      orderBy: { createdAt: "asc" },
+    }),
+    getAttendanceMap(),
+  ]);
+  return withAttendance(players, attendanceMap);
 }
 
 export async function topPlayersByAttendance(count = 5) {
-  return prisma.player.findMany({ orderBy: { attendancePct: "desc" }, take: count });
+  const [players, attendanceMap] = await Promise.all([prisma.player.findMany(), getAttendanceMap()]);
+  return withAttendance(players, attendanceMap)
+    .sort((a, b) => b.attendancePct - a.attendancePct)
+    .slice(0, count);
 }
 
 export async function topPlayersByXp(count = 5) {

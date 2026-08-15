@@ -22,10 +22,9 @@ type FormState = {
   role: string;
   level: string;
   xp: string;
-  attendancePct: string;
 };
 
-const emptyForm: FormState = { name: "", role: ROLES[0], level: "1", xp: "0", attendancePct: "0" };
+const emptyForm: FormState = { name: "", role: ROLES[0], level: "1", xp: "0" };
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -58,7 +57,6 @@ export default function PlayersTable({
       role: p.role,
       level: String(p.level),
       xp: String(p.xp),
-      attendancePct: String(p.attendancePct),
     });
     setError(null);
     setAdding(false);
@@ -81,7 +79,6 @@ export default function PlayersTable({
       role: form.role,
       level: Number(form.level),
       xp: Number(form.xp),
-      attendancePct: Number(form.attendancePct),
     };
 
     try {
@@ -179,19 +176,6 @@ export default function PlayersTable({
                   className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted">Посещаемость %</label>
-                <input
-                  type="number"
-                  value={form.attendancePct}
-                  onChange={(e) => setForm((f) => ({ ...f, attendancePct: e.target.value }))}
-                  min={0}
-                  max={100}
-                  required
-                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-                />
-              </div>
-
               {error && <p className="text-xs text-danger lg:col-span-6">{error}</p>}
 
               <div className="flex items-end gap-2 lg:col-span-6">
@@ -223,7 +207,9 @@ export default function PlayersTable({
               <th className="px-4 py-3 font-medium">Роль</th>
               <th className="px-4 py-3 font-medium">Уровень</th>
               <th className="px-4 py-3 font-medium">XP</th>
-              <th className="px-4 py-3 font-medium">Посещаемость</th>
+              <th className="px-4 py-3 font-medium" title="Считается автоматически: доля активностей за 30 дней, в которых участвовал игрок">
+                Посещаемость
+              </th>
               {isAdmin && <th className="px-4 py-3 font-medium" />}
             </tr>
           </thead>

@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     data: {
       username,
       passwordHash,
-      player: { create: { name: nickname, role, level: 1, xp: 0, attendancePct: 0 } },
+      player: { create: { name: nickname, role, level: 1, xp: 0 } },
     },
   });
 
