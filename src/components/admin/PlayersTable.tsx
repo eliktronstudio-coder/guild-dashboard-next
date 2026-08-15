@@ -11,8 +11,6 @@ type Player = {
   id: string;
   name: string;
   role: string;
-  level: number;
-  xp: number;
   attendancePct: number;
   salaryCoefficient: number;
   salary: number;
@@ -22,12 +20,10 @@ type Player = {
 type FormState = {
   name: string;
   role: string;
-  level: string;
-  xp: string;
   salaryCoefficient: string;
 };
 
-const emptyForm: FormState = { name: "", role: ROLES[0], level: "1", xp: "0", salaryCoefficient: "1" };
+const emptyForm: FormState = { name: "", role: ROLES[0], salaryCoefficient: "1" };
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -59,8 +55,6 @@ export default function PlayersTable({
     setForm({
       name: p.name,
       role: p.role,
-      level: String(p.level),
-      xp: String(p.xp),
       salaryCoefficient: String(p.salaryCoefficient),
     });
     setError(null);
@@ -82,8 +76,6 @@ export default function PlayersTable({
     const payload = {
       name: form.name,
       role: form.role,
-      level: Number(form.level),
-      xp: Number(form.xp),
       salaryCoefficient: Number(form.salaryCoefficient),
     };
 
@@ -160,29 +152,6 @@ export default function PlayersTable({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted">Уровень</label>
-                <input
-                  type="number"
-                  value={form.level}
-                  onChange={(e) => setForm((f) => ({ ...f, level: e.target.value }))}
-                  min={1}
-                  max={999}
-                  required
-                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-muted">XP</label>
-                <input
-                  type="number"
-                  value={form.xp}
-                  onChange={(e) => setForm((f) => ({ ...f, xp: e.target.value }))}
-                  min={0}
-                  required
-                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-                />
-              </div>
-              <div>
                 <label className="mb-1 block text-xs text-muted">Коэффициент</label>
                 <input
                   type="number"
@@ -224,8 +193,6 @@ export default function PlayersTable({
             <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
               <th className="px-4 py-3 font-medium">Имя</th>
               <th className="px-4 py-3 font-medium">Роль</th>
-              <th className="px-4 py-3 font-medium">Уровень</th>
-              <th className="px-4 py-3 font-medium">XP</th>
               <th className="px-4 py-3 font-medium" title="Считается автоматически: доля активностей за всё время, в которых участвовал игрок">
                 Посещаемость
               </th>
@@ -260,8 +227,6 @@ export default function PlayersTable({
                   )}
                 </td>
                 <td className="px-4 py-3 text-muted">{p.role}</td>
-                <td className="px-4 py-3">{p.level}</td>
-                <td className="px-4 py-3">{numberFmt.format(p.xp)}</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
@@ -302,7 +267,7 @@ export default function PlayersTable({
             })}
             {players.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 8 : 7} className="px-4 py-6 text-center text-muted">
+                <td colSpan={isAdmin ? 6 : 5} className="px-4 py-6 text-center text-muted">
                   Пока никого нет в составе.
                 </td>
               </tr>

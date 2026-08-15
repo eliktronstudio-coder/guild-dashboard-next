@@ -10,8 +10,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const role = typeof body?.role === "string" ? body.role : "";
-  const level = Number(body?.level);
-  const xp = Number(body?.xp);
+  const level = body?.level === undefined ? 1 : Number(body.level);
+  const xp = body?.xp === undefined ? 0 : Number(body.xp);
   const salaryCoefficient = body?.salaryCoefficient === undefined ? 1 : Number(body.salaryCoefficient);
   const userId = typeof body?.userId === "string" ? body.userId : undefined;
 
