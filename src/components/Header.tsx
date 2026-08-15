@@ -13,7 +13,7 @@ type HeaderProps = {
 function useCurrentPage(pathname: string) {
   const item = allNavItems.find((i) => pathname === i.href || pathname.startsWith(i.href + "/"));
   const section = navSections.find((s) => s.items.includes(item!));
-  return { label: item?.label ?? "Дашборд", section: section?.title ?? "Обзор" };
+  return { label: item?.label ?? "Статистика", section: section?.title ?? "Обзор" };
 }
 
 export default function Header({ onMenuClick }: HeaderProps) {

@@ -355,11 +355,3 @@ export async function getAttendanceChartData() {
 export async function getAllPayments() {
   return prisma.payment.findMany({ orderBy: { date: "desc" }, include: { player: true } });
 }
-
-export async function getAllAuctionLots() {
-  return prisma.auctionLot.findMany({ orderBy: { endsAt: "asc" }, include: { seller: true } });
-}
-
-export async function getAllTournaments() {
-  return prisma.tournament.findMany({ orderBy: { startDate: "desc" } });
-}

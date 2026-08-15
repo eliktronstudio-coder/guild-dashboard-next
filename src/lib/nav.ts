@@ -2,10 +2,7 @@ import {
   LayoutDashboard,
   Swords,
   Users,
-  Image,
-  Trophy,
   Landmark,
-  Gavel,
   Wallet,
   Calculator,
   ShieldCheck,
@@ -28,18 +25,15 @@ export const navSections: NavSection[] = [
   {
     title: "Обзор",
     items: [
-      { href: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Статистика", icon: LayoutDashboard },
       { href: "/activities", label: "Активности", icon: Swords },
       { href: "/players", label: "Состав", icon: Users },
-      { href: "/media", label: "Мультимедиа", icon: Image },
-      { href: "/tournament", label: "Турниры", icon: Trophy },
     ],
   },
   {
     title: "Экономика",
     items: [
       { href: "/treasury", label: "Казна", icon: Landmark },
-      { href: "/auction", label: "Аукцион", icon: Gavel },
       { href: "/payments", label: "Выплаты", icon: Wallet },
     ],
   },

@@ -35,7 +35,6 @@ model Player {
   userId        String?               @unique
   user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   payments      Payment[]
-  auctionLots   AuctionLot[]
   drops         DropItem[]
 }
 
@@ -102,24 +101,4 @@ model Payment {
   status    String   @default("Ожидает")
   date      DateTime @default(now())
   createdAt DateTime @default(now())
-}
-
-model AuctionLot {
-  id        String   @id @default(cuid())
-  item      String
-  sellerId  String
-  seller    Player   @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  price     Int
-  endsAt    DateTime
-  createdAt DateTime @default(now())
-}
-
-model Tournament {
-  id        String    @id @default(cuid())
-  name      String
-  status    String    @default("Регистрация")
-  teams     Int       @default(0)
-  startDate DateTime  @default(now())
-  endDate   DateTime?
-  createdAt DateTime  @default(now())
 }
