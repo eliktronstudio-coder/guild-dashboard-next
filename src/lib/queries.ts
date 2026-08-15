@@ -310,6 +310,23 @@ export async function getDropGoldTotal() {
   return result._sum.value ?? 0;
 }
 
+// Инвентарь: предметы из журнала дропа, которые ещё не выданы конкретному
+// игроку (playerId не указан) — то, что сейчас числится за гильдией.
+export async function getInventory() {
+  const drops = await prisma.dropItem.findMany({ where: { playerId: null } });
+  const map = new Map<string, { item: string; quantity: number; totalValue: number }>();
+  for (const d of drops) {
+    const existing = map.get(d.item);
+    if (existing) {
+      existing.quantity += d.quantity;
+      existing.totalValue += d.value;
+    } else {
+      map.set(d.item, { item: d.item, quantity: d.quantity, totalValue: d.value });
+    }
+  }
+  return [...map.values()].sort((a, b) => b.totalValue - a.totalValue);
+}
+
 export async function getDropChartData() {
   const drops = await prisma.dropItem.findMany({ orderBy: { date: "asc" } });
   const byDay = new Map<string, number>();
