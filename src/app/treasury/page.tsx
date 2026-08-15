@@ -1,5 +1,4 @@
 import StatCard from "@/components/StatCard";
-import TreasuryChart from "@/components/charts/TreasuryChart";
 import TreasuryPanel from "@/components/admin/TreasuryPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
 import DropsPanel from "@/components/admin/DropsPanel";
@@ -7,11 +6,9 @@ import { getCurrentUser } from "@/lib/auth";
 import {
   getTreasuryTransactions,
   getTreasuryBreakdown,
-  getTreasuryChartData,
   getGuildSettings,
   getAllDrops,
   getDropGoldTotal,
-  getDropChartData,
   getInventory,
   getAllActivities,
   getRegisteredPlayers,
@@ -27,31 +24,18 @@ function daysUntil(date: Date | null) {
 }
 
 export default async function TreasuryPage() {
-  const [
-    user,
-    transactions,
-    treasuryBreakdown,
-    chartData,
-    settings,
-    drops,
-    dropTotal,
-    dropChartData,
-    inventory,
-    activities,
-    players,
-  ] = await Promise.all([
-    getCurrentUser(),
-    getTreasuryTransactions(20),
-    getTreasuryBreakdown(),
-    getTreasuryChartData(),
-    getGuildSettings(),
-    getAllDrops(50),
-    getDropGoldTotal(),
-    getDropChartData(),
-    getInventory(),
-    getAllActivities(),
-    getRegisteredPlayers(),
-  ]);
+  const [user, transactions, treasuryBreakdown, settings, drops, dropTotal, inventory, activities, players] =
+    await Promise.all([
+      getCurrentUser(),
+      getTreasuryTransactions(20),
+      getTreasuryBreakdown(),
+      getGuildSettings(),
+      getAllDrops(50),
+      getDropGoldTotal(),
+      getInventory(),
+      getAllActivities(),
+      getRegisteredPlayers(),
+    ]);
 
   const payoutDays = daysUntil(settings.nextPayoutDate);
   const isAdmin = user?.role === "admin";
@@ -75,17 +59,6 @@ export default async function TreasuryPage() {
           value={payoutDays === null ? "—" : `${payoutDays}`}
           hint="до дня выплат"
         />
-      </div>
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <h2 className="mb-2 text-sm font-semibold">Динамика казны</h2>
-          <TreasuryChart data={chartData} />
-        </div>
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <h2 className="mb-2 text-sm font-semibold">Динамика дропа</h2>
-          <TreasuryChart data={dropChartData} />
-        </div>
       </div>
 
       <InventoryPanel items={inventory} />

@@ -327,21 +327,6 @@ export async function getInventory() {
   return [...map.values()].sort((a, b) => b.totalValue - a.totalValue);
 }
 
-export async function getDropChartData() {
-  const drops = await prisma.dropItem.findMany({ orderBy: { date: "asc" } });
-  const byDay = new Map<string, number>();
-  for (const d of drops) {
-    const key = dayKey(d.date);
-    byDay.set(key, (byDay.get(key) ?? 0) + d.value);
-  }
-  const days = [...byDay.keys()].sort();
-  let running = 0;
-  return days.map((key) => {
-    running += byDay.get(key)!;
-    return { date: shortDateFmt.format(new Date(key)), gold: running };
-  });
-}
-
 export async function getAvgActivityDays() {
   const activities = await prisma.activity.findMany({ orderBy: { date: "asc" }, select: { date: true } });
   if (activities.length < 2) return 0;
