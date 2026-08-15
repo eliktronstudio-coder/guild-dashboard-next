@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 
-const STATUSES = ["Выплачено", "Ожидает", "Отклонено"];
+const STATUSES = ["Ожидает", "Подтверждено", "Выплачено"];
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();

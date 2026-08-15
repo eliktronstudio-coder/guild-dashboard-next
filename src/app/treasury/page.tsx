@@ -1,4 +1,5 @@
 import StatCard from "@/components/StatCard";
+import TreasuryChart from "@/components/charts/TreasuryChart";
 import TreasuryPanel from "@/components/admin/TreasuryPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
 import DropsPanel from "@/components/admin/DropsPanel";
@@ -7,6 +8,7 @@ import { daysUntilNextPayout } from "@/lib/payout";
 import {
   getTreasuryTransactions,
   getTreasuryBreakdown,
+  getTreasuryChartData,
   getAllDrops,
   getDropGoldTotal,
   getInventory,
@@ -19,11 +21,12 @@ const numberFmt = new Intl.NumberFormat("ru-RU");
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 
 export default async function TreasuryPage() {
-  const [user, transactions, treasuryBreakdown, drops, dropTotal, inventory, activities, players, catalog] =
+  const [user, transactions, treasuryBreakdown, treasuryChart, drops, dropTotal, inventory, activities, players, catalog] =
     await Promise.all([
       getCurrentUser(),
       getTreasuryTransactions(20),
       getTreasuryBreakdown(),
+      getTreasuryChartData(),
       getAllDrops(50),
       getDropGoldTotal(),
       getInventory(),
@@ -50,6 +53,14 @@ export default async function TreasuryPage() {
         />
         <StatCard label="Дроп с РБ" value={`${numberFmt.format(dropTotal)} золота`} hint="суммарно из журнала" />
         <StatCard label="Дней до выплаты" value={`${payoutDays}`} hint="выплата 15-го числа" />
+      </div>
+
+      <div className="min-w-0 rounded-lg border border-border bg-surface p-4">
+        <div className="mb-2 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold">Динамика казны</h2>
+          <span className="text-xs text-muted">золото</span>
+        </div>
+        <TreasuryChart data={treasuryChart} />
       </div>
 
       <InventoryPanel items={inventory} />

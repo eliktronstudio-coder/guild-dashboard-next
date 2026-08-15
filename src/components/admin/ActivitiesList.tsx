@@ -6,6 +6,8 @@ import { useRouter, usePathname } from "next/navigation";
 import { Plus, Trash2, X, Search, RotateCcw, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import clsx from "clsx";
 import { ACTIVITY_CATEGORIES, ACTIVITY_MODES, ACTIVITY_DIFFICULTIES, ACTIVITY_STATUSES, statusColor } from "@/lib/activityOptions";
+import StatCard from "@/components/StatCard";
+import EmptyState from "@/components/EmptyState";
 
 type ActivityRow = {
   id: string;
@@ -34,6 +36,14 @@ type Filters = {
   page: number;
 };
 
+type Summary = {
+  total: number;
+  avgAttendance: number;
+  bestAttendance: number;
+  cancelled: number;
+  totalPlayers: number;
+};
+
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -47,6 +57,7 @@ export default function ActivitiesList({
   players,
   catalog,
   isAdmin,
+  summary,
 }: {
   activities: ActivityRow[];
   total: number;
@@ -56,6 +67,7 @@ export default function ActivitiesList({
   players: PlayerOption[];
   catalog: CatalogItem[];
   isAdmin: boolean;
+  summary: Summary;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -215,6 +227,13 @@ export default function ActivitiesList({
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard label="Активностей за период" value={String(summary.total)} hint="в текущей выборке" />
+        <StatCard label="Средняя посещаемость" value={String(summary.avgAttendance)} hint="участников на активность" />
+        <StatCard label="Лучший показатель" value={String(summary.bestAttendance)} hint="максимум участников" />
+        <StatCard label="Отменено" value={String(summary.cancelled)} hint="в текущей выборке" />
+      </div>
+
       <div className="rounded-lg border border-border bg-surface p-4">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <Filter size={15} className="text-accent" /> Фильтры
@@ -551,6 +570,7 @@ export default function ActivitiesList({
                 <th className="px-4 py-3 font-medium">Тип</th>
                 <th className="px-4 py-3 font-medium">Сложность</th>
                 <th className="px-4 py-3 font-medium">Игроков</th>
+                <th className="px-4 py-3 font-medium">Посещаемость</th>
                 <th className="px-4 py-3 font-medium">Статус</th>
                 {isAdmin && <th className="px-4 py-3 font-medium" />}
               </tr>
@@ -582,6 +602,11 @@ export default function ActivitiesList({
                   </td>
                   <td className="px-4 py-3 text-muted">{a.difficulty}</td>
                   <td className="px-4 py-3">{a.participants}</td>
+                  <td className="px-4 py-3 font-mono tabular-nums text-muted">
+                    {summary.totalPlayers > 0
+                      ? `${Math.min(100, Math.round((a.participants / summary.totalPlayers) * 100))}%`
+                      : "—"}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={clsx("rounded-md border px-2 py-0.5 text-xs font-medium", statusColor[a.status])}>
                       {a.status}
@@ -603,8 +628,8 @@ export default function ActivitiesList({
               ))}
               {activities.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 7 : 6} className="px-4 py-6 text-center text-muted">
-                    Ничего не найдено.
+                  <td colSpan={isAdmin ? 8 : 7}>
+                    <EmptyState />
                   </td>
                 </tr>
               )}

@@ -1,61 +1,112 @@
 @import "tailwindcss";
 
+/* XD Guild — dark fantasy command-center theme (default). */
 :root {
-  --background: #0e1410;
-  --surface: #171f1a;
-  --surface-2: #1e2721;
-  --border: #2c372f;
-  --border-strong: #3c4a3f;
-  --foreground: #ece4d3;
-  --muted: #93a08f;
-  --accent: #c9a227;
-  --accent-bright: #e0bb46;
-  --accent-dim: #8a7226;
-  --accent-soft: #c9a22726;
-  --danger: #c1583b;
-  --success: #4fa88c;
+  --background: #090a10;
+  --bg-elevated: #0d0f17;
+  --surface: #11131d;
+  --surface-2: #151725;
+  --surface-hover: #1a1d2b;
+
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.12);
+
+  --foreground: #f3f0ec;
+  --muted: #aaa9b4;
+  --muted-2: #727482;
+
+  --accent: #e9a24a;
+  --accent-bright: #ffb45b;
+  --accent-dim: #b97d34;
+  --accent-soft: rgba(233, 162, 74, 0.12);
+
+  --danger: #d96d68;
+  --success: #79c88a;
+  --info: #7fa7d8;
+  --violet: #6c557d;
+  --ember: #d66b3d;
+
+  --atmosphere-opacity: 0.12;
+  --row-tint: linear-gradient(90deg, rgba(108, 85, 125, 0.13), rgba(214, 107, 61, 0.08));
+  --row-tint-hover: linear-gradient(90deg, rgba(108, 85, 125, 0.16), rgba(233, 162, 74, 0.14));
 }
 
-/* Дневной вариант той же гроссбух-книги: тёплый пергамент вместо чернил. */
+/* XD Guild — light fantasy-landscape theme: its own mood, not an inversion. */
 :root[data-theme="light"] {
-  --background: #ece4d0;
-  --surface: #f5efe0;
-  --surface-2: #e6ddc4;
-  --border: #cabf9f;
-  --border-strong: #a89972;
-  --foreground: #201d14;
-  --muted: #6b6350;
-  --accent: #9c7a1a;
-  --accent-bright: #7a5f16;
-  --accent-dim: #7a5f16;
-  --accent-soft: #9c7a1a1f;
-  --danger: #a1432a;
-  --success: #2f7a63;
+  --background: #f4f1ee;
+  --bg-elevated: #faf7f3;
+  --surface: rgba(255, 255, 255, 0.9);
+  --surface-2: #faf7f3;
+  --surface-hover: #f0ebe3;
+
+  --border: rgba(60, 40, 70, 0.1);
+  --border-strong: rgba(60, 40, 70, 0.18);
+
+  --foreground: #211b2b;
+  --muted: #746d7c;
+  --muted-2: #948da0;
+
+  --accent: #c98a2e;
+  --accent-bright: #e7a23a;
+  --accent-dim: #9c6a20;
+  --accent-soft: rgba(201, 138, 46, 0.12);
+
+  --danger: #b23b36;
+  --success: #2e8b57;
+  --info: #4c74a8;
+  --violet: #8b7a9e;
+  --ember: #c9744a;
+
+  --atmosphere-opacity: 0.08;
+  --row-tint: linear-gradient(90deg, rgba(139, 122, 158, 0.08), rgba(201, 138, 46, 0.05));
+  --row-tint-hover: linear-gradient(90deg, rgba(139, 122, 158, 0.1), rgba(201, 138, 46, 0.12));
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-bg-elevated: var(--bg-elevated);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
+  --color-muted-2: var(--muted-2);
   --color-accent: var(--accent);
   --color-accent-bright: var(--accent-bright);
   --color-accent-dim: var(--accent-dim);
   --color-accent-soft: var(--accent-soft);
   --color-danger: var(--danger);
   --color-success: var(--success);
+  --color-info: var(--info);
+  --color-violet: var(--violet);
+  --color-ember: var(--ember);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-pt-serif);
 }
 
-/* Ledger silhouette: crisp rules over rounded pills. */
+/* Tactical, not toy-like: comfortable but not pill-heavy rounding. */
 @theme {
-  --radius-md: 0.1875rem;
-  --radius-lg: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
+
+* {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 180ms;
+  transition-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 body {
@@ -64,22 +115,21 @@ body {
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
 
-h1 {
-  font-family: var(--font-display), Georgia, serif;
-  font-weight: 700;
-}
-
-/* Ledger tables: double rule under the header row, like a guild account book. */
-table thead tr {
-  border-top: 2px solid var(--border-strong) !important;
-  border-bottom: 2px solid var(--border-strong) !important;
-}
-
-table th {
-  letter-spacing: 0.08em;
-}
-
 table td,
 table th {
   font-variant-numeric: tabular-nums;
 }
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+
+/* Player/ranking row: full-width decorative tint, never behind the nickname alone. */
+.row-tint {
+  background-image: var(--row-tint);
+}
+.row-tint:hover {
+  background-image: var(--row-tint-hover);
+}
+

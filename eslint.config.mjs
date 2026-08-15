@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Stale local build artifact from an earlier, abandoned Vercel deploy attempt.
+    ".vercel/**",
   ]),
 ]);
 

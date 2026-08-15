@@ -3,6 +3,7 @@ import clsx from "clsx";
 import StatCard from "@/components/StatCard";
 import TreasuryChart from "@/components/charts/TreasuryChart";
 import AttendanceChart from "@/components/charts/AttendanceChart";
+import EmptyState from "@/components/EmptyState";
 import { daysUntilNextPayout } from "@/lib/payout";
 import {
   topPlayersByAttendance,
@@ -65,14 +66,14 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-border bg-surface p-4">
+        <div className="min-w-0 rounded-lg border border-border bg-surface p-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-sm font-semibold">Динамика казны</h2>
             <span className="text-xs text-muted">золото</span>
           </div>
           <TreasuryChart data={treasuryChart} />
         </div>
-        <div className="rounded-lg border border-border bg-surface p-4">
+        <div className="min-w-0 rounded-lg border border-border bg-surface p-4">
           <div className="mb-2 flex items-baseline justify-between">
             <h2 className="text-sm font-semibold">Посещаемость</h2>
             <span className="text-xs text-muted">участия / день</span>
@@ -92,34 +93,37 @@ export default async function DashboardPage() {
               </Link>
             </div>
           </div>
-          <ol className="space-y-2">
-            {attendanceTop.map((p, i) => (
-              <li key={p.id}>
-                <Link
-                  href={`/players/${p.id}`}
-                  className="block rounded-md px-2 py-2 text-sm hover:bg-surface-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-3">
-                      <span className="w-4 text-muted">{i + 1}</span>
-                      <span className="font-medium">{p.name}</span>
-                      <span className="text-xs text-muted">{p.role}</span>
-                    </span>
-                    <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePct).text)}>
-                      {p.attendancePct}%
-                    </span>
-                  </div>
-                  <div className="mt-1.5 ml-7 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                    <div
-                      className={clsx("h-full rounded-full", attendanceColor(p.attendancePct).bar)}
-                      style={{ width: `${Math.min(p.attendancePct, 100)}%` }}
-                    />
-                  </div>
-                </Link>
-              </li>
-            ))}
-            {attendanceTop.length === 0 && <p className="px-2 py-2 text-xs text-muted">Пока нет данных.</p>}
-          </ol>
+          {attendanceTop.length === 0 ? (
+            <EmptyState title="Нет данных за выбранный период" />
+          ) : (
+            <ol className="space-y-1">
+              {attendanceTop.map((p, i) => (
+                <li key={p.id}>
+                  <Link
+                    href={`/players/${p.id}`}
+                    className="row-tint block rounded-md px-2 py-2 text-sm transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-3">
+                        <span className="w-4 text-muted">{i + 1}</span>
+                        <span className="font-medium">{p.name}</span>
+                        <span className="text-xs text-muted">{p.role}</span>
+                      </span>
+                      <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePct).text)}>
+                        {p.attendancePct}%
+                      </span>
+                    </div>
+                    <div className="mt-1.5 ml-7 h-1.5 overflow-hidden rounded-full bg-surface-2">
+                      <div
+                        className={clsx("h-full rounded-full", attendanceColor(p.attendancePct).bar)}
+                        style={{ width: `${Math.min(p.attendancePct, 100)}%` }}
+                      />
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
 
         <div className="rounded-lg border border-border bg-surface p-4">
@@ -132,25 +136,29 @@ export default async function DashboardPage() {
               </Link>
             </div>
           </div>
-          <ol className="space-y-1">
-            {xpTop.map((p, i) => (
-              <li key={p.id}>
-                <Link
-                  href={`/players/${p.id}`}
-                  className="flex items-center justify-between rounded-md px-2 py-2 text-sm hover:bg-surface-2"
-                >
-                  <span className="flex items-center gap-3">
-                    <span className="w-4 text-muted">{i + 1}</span>
-                    <span className="font-medium">{p.name}</span>
-                    <span className="text-xs text-muted">{p.role}</span>
-                  </span>
-                  <span className="text-xs text-muted">
-                    {p.level} ур. · {numberFmt.format(p.xp)} XP
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ol>
+          {xpTop.length === 0 ? (
+            <EmptyState title="Нет данных за выбранный период" />
+          ) : (
+            <ol className="space-y-1">
+              {xpTop.map((p, i) => (
+                <li key={p.id}>
+                  <Link
+                    href={`/players/${p.id}`}
+                    className="row-tint flex items-center justify-between rounded-md px-2 py-2 text-sm transition-colors"
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className="w-4 text-muted">{i + 1}</span>
+                      <span className="font-medium">{p.name}</span>
+                      <span className="text-xs text-muted">{p.role}</span>
+                    </span>
+                    <span className="text-xs text-muted">
+                      {p.level} ур. · {numberFmt.format(p.xp)} XP
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ol>
+          )}
         </div>
       </div>
 
@@ -161,22 +169,26 @@ export default async function DashboardPage() {
             Все
           </Link>
         </div>
-        <ul className="divide-y divide-border">
-          {recentActivities.map((a) => (
-            <li key={a.id}>
-              <Link
-                href={`/activities/${a.id}`}
-                className="flex items-center justify-between px-2 py-3 text-sm hover:bg-surface-2"
-              >
-                <span>
-                  <span className="font-medium">{a.name}</span>
-                  <span className="ml-2 text-xs text-muted">{a.participants} участников</span>
-                </span>
-                <span className="text-xs text-muted">{a.date}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        {recentActivities.length === 0 ? (
+          <EmptyState title="Нет данных за выбранный период" />
+        ) : (
+          <ul className="divide-y divide-border">
+            {recentActivities.map((a) => (
+              <li key={a.id}>
+                <Link
+                  href={`/activities/${a.id}`}
+                  className="flex items-center justify-between px-2 py-3 text-sm hover:bg-surface-2"
+                >
+                  <span>
+                    <span className="font-medium">{a.name}</span>
+                    <span className="ml-2 text-xs text-muted">{a.participants} участников</span>
+                  </span>
+                  <span className="text-xs text-muted">{a.date}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

@@ -101,6 +101,35 @@ export async function getPlayerById(id: string) {
   };
 }
 
+export async function getPlayerActivityHistory(playerId: string, limit = 8) {
+  const rows = await prisma.activityParticipant.findMany({
+    where: { playerId },
+    include: { activity: true },
+    orderBy: { activity: { date: "desc" } },
+    take: limit,
+  });
+  return rows.map((r) => ({
+    id: r.activity.id,
+    name: r.activity.name,
+    date: dateFmt.format(r.activity.date),
+    status: r.activity.status,
+  }));
+}
+
+export async function getPlayerPayments(playerId: string, limit = 8) {
+  const rows = await prisma.payment.findMany({
+    where: { playerId },
+    orderBy: { date: "desc" },
+    take: limit,
+  });
+  return rows.map((p) => ({
+    id: p.id,
+    amount: p.amount,
+    status: p.status,
+    date: dateFmt.format(p.date),
+  }));
+}
+
 export async function getRegisteredPlayers() {
   const [players, derived] = await Promise.all([
     prisma.player.findMany({

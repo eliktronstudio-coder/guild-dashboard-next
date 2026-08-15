@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { navSections } from "@/lib/nav";
 import { guild } from "@/lib/config";
+import Logo from "./Logo";
 import type { SessionPayload } from "@/lib/auth";
 
 type SidebarProps = {
@@ -43,7 +44,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
       )}
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-border bg-surface transition-transform lg:static lg:z-auto lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r border-border bg-surface/95 backdrop-blur-xl transition-transform lg:static lg:z-auto lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -52,17 +53,8 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
           onClick={onCloseMobile}
           className="flex items-center gap-2.5 border-b border-border px-5 py-5"
         >
-          <span className="flex h-8 w-8 flex-shrink-0 rotate-45 items-center justify-center border border-accent text-accent-bright">
-            <span className="-rotate-45 font-display text-xs font-bold">{guild.name}</span>
-          </span>
-          <span>
-            <span className="block font-display text-base font-bold leading-tight tracking-tight">
-              Гильдия {guild.name}
-            </span>
-            <span className="block font-mono text-[10px] uppercase tracking-widest text-muted">
-              учётная книга
-            </span>
-          </span>
+          <Logo size={30} />
+          <span className="text-base font-semibold leading-tight tracking-tight">{guild.name} Guild</span>
         </Link>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -71,7 +63,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
             if (items.length === 0) return null;
             return (
             <div key={section.title} className="mb-6">
-              <p className="px-3 pb-2 font-mono text-[10px] font-medium uppercase tracking-widest text-accent-dim">
+              <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-widest text-muted-2">
                 {section.title}
               </p>
               <ul className="space-y-0.5">
@@ -84,11 +76,12 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
                         href={item.href}
                         onClick={onCloseMobile}
                         className={clsx(
-                          "flex items-center gap-3 border-l-2 px-3 py-2 text-sm transition-colors",
+                          "flex items-center gap-3 rounded-md border-l-2 py-2 pl-2.5 pr-3 text-sm transition-colors",
                           active
-                            ? "border-accent bg-accent-soft text-accent-bright"
-                            : "border-transparent text-foreground/80 hover:border-border-strong hover:bg-surface-2 hover:text-foreground"
+                            ? "border-accent bg-surface-2 text-accent-bright"
+                            : "border-transparent text-foreground/80 hover:bg-surface-2 hover:text-foreground"
                         )}
+                        style={active ? { boxShadow: "inset 0 0 24px -12px var(--accent)" } : undefined}
                       >
                         <Icon size={17} strokeWidth={2} />
                         <span>{item.label}</span>

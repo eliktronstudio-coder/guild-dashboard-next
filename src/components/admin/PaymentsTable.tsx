@@ -3,14 +3,18 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, X } from "lucide-react";
+import Modal from "@/components/Modal";
+import EmptyState from "@/components/EmptyState";
+import StatusBadge from "@/components/StatusBadge";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
-const STATUSES = ["Выплачено", "Ожидает", "Отклонено"];
+const STATUSES = ["Ожидает", "Подтверждено", "Выплачено"];
 
-const statusColor: Record<string, string> = {
-  Выплачено: "text-success",
-  Ожидает: "text-accent",
-  Отклонено: "text-danger",
+const statusTone: Record<string, "accent" | "success" | "danger"> = {
+  Ожидает: "accent",
+  Подтверждено: "accent",
+  Выплачено: "success",
+  Отклонено: "danger",
 };
 
 type Payment = {
@@ -40,10 +44,11 @@ export default function PaymentsTable({
   const [adding, setAdding] = useState(false);
   const [playerId, setPlayerId] = useState(players[0]?.id ?? "");
   const [amount, setAmount] = useState("");
-  const [status, setStatus] = useState(STATUSES[1]);
+  const [status, setStatus] = useState(STATUSES[0]);
   const [date, setDate] = useState(todayISO());
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -83,11 +88,13 @@ export default function PaymentsTable({
     router.refresh();
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Удалить выплату?")) return;
+  async function confirmDelete() {
+    if (!confirmDeleteId) return;
+    const id = confirmDeleteId;
     setBusyId(id);
     await fetch(`/api/payments/${id}`, { method: "DELETE" });
     setBusyId(null);
+    setConfirmDeleteId(null);
     router.refresh();
   }
 
@@ -184,66 +191,89 @@ export default function PaymentsTable({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
-              <th className="px-4 py-3 font-medium">Игрок</th>
-              <th className="px-4 py-3 font-medium">Сумма</th>
-              <th className="px-4 py-3 font-medium">Статус</th>
-              <th className="px-4 py-3 font-medium">Дата</th>
-              {isAdmin && <th className="px-4 py-3 font-medium" />}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {payments.map((p) => (
-              <tr key={p.id} className="hover:bg-surface-2">
-                <td className="px-4 py-3 font-medium">{p.player.name}</td>
-                <td className="px-4 py-3">{numberFmt.format(p.amount)} золота</td>
-                <td className="px-4 py-3">
-                  {isAdmin ? (
-                    <select
-                      value={p.status}
-                      disabled={busyId === p.id}
-                      onChange={(e) => handleStatusChange(p.id, e.target.value)}
-                      className={`rounded-md border border-border bg-surface-2 px-2 py-1 text-sm outline-none focus:border-accent disabled:opacity-60 ${statusColor[p.status]}`}
-                    >
-                      {STATUSES.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className={statusColor[p.status]}>{p.status}</span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-muted">{p.date}</td>
-                {isAdmin && (
-                  <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(p.id)}
-                      disabled={busyId === p.id}
-                      aria-label="Удалить"
-                      className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-60"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-            {payments.length === 0 && (
-              <tr>
-                <td colSpan={isAdmin ? 5 : 4} className="px-4 py-6 text-center text-muted">
-                  Пока нет выплат.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="rounded-lg border border-border bg-surface">
+        <div className="border-b border-border p-4">
+          <h2 className="text-sm font-semibold">Журнал выплат</h2>
+        </div>
+        {payments.length === 0 ? (
+          <EmptyState title="Нет данных за выбранный период" hint="Записей о выплатах пока нет." />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
+                  <th className="px-4 py-3 font-medium">Игрок</th>
+                  <th className="px-4 py-3 font-medium">Сумма</th>
+                  <th className="px-4 py-3 font-medium">Статус</th>
+                  <th className="px-4 py-3 font-medium">Дата</th>
+                  {isAdmin && <th className="px-4 py-3 font-medium" />}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {payments.map((p) => (
+                  <tr key={p.id} className="row-tint transition-colors">
+                    <td className="px-4 py-3 font-medium">{p.player.name}</td>
+                    <td className="px-4 py-3 font-mono tabular-nums">{numberFmt.format(p.amount)} золота</td>
+                    <td className="px-4 py-3">
+                      {isAdmin ? (
+                        <select
+                          value={p.status}
+                          disabled={busyId === p.id}
+                          onChange={(e) => handleStatusChange(p.id, e.target.value)}
+                          className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm outline-none focus:border-accent disabled:opacity-60"
+                        >
+                          {STATUSES.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <StatusBadge label={p.status} tone={statusTone[p.status] ?? "accent"} />
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-muted">{p.date}</td>
+                    {isAdmin && (
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(p.id)}
+                          disabled={busyId === p.id}
+                          aria-label="Удалить"
+                          className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-60"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      <Modal open={confirmDeleteId !== null} onClose={() => setConfirmDeleteId(null)} title="Удалить выплату?">
+        <p className="mb-4 text-sm text-muted">Это действие нельзя отменить. Запись о выплате будет удалена без возможности восстановления.</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={confirmDelete}
+            disabled={busyId === confirmDeleteId}
+            className="rounded-md bg-danger px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
+          >
+            Удалить
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmDeleteId(null)}
+            className="rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
+          >
+            Отмена
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
