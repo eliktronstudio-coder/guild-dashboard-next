@@ -6,7 +6,7 @@ import {
   topPlayersByAttendance,
   topPlayersByXp,
   getAllActivities,
-  getTreasuryGold,
+  getTreasuryBreakdown,
   getTreasuryChartData,
   getAttendanceChartData,
   getGuildSettings,
@@ -27,7 +27,7 @@ export default async function DashboardPage() {
     attendanceTop,
     xpTop,
     allActivities,
-    treasuryGold,
+    treasuryBreakdown,
     treasuryChart,
     attendanceChart,
     settings,
@@ -37,7 +37,7 @@ export default async function DashboardPage() {
     topPlayersByAttendance(5),
     topPlayersByXp(5),
     getAllActivities(),
-    getTreasuryGold(),
+    getTreasuryBreakdown(),
     getTreasuryChartData(),
     getAttendanceChartData(),
     getGuildSettings(),
@@ -49,8 +49,17 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Золото в казне" value={`${numberFmt.format(treasuryGold)} золота`} hint="—" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          label="Основная казна"
+          value={`${numberFmt.format(treasuryBreakdown.main)} золота`}
+          hint="70% — фонд ЗП"
+        />
+        <StatCard
+          label="Казна гильдии"
+          value={`${numberFmt.format(treasuryBreakdown.guild)} золота`}
+          hint="30% — резерв гильдии"
+        />
         <StatCard
           label="Дроп с РБ"
           value={`${numberFmt.format(dropGoldTotal)} золота`}

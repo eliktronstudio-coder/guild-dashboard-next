@@ -2,7 +2,7 @@ import StatCard from "@/components/StatCard";
 import TreasuryChart from "@/components/charts/TreasuryChart";
 import TreasuryPanel from "@/components/admin/TreasuryPanel";
 import { getCurrentUser } from "@/lib/auth";
-import { getTreasuryTransactions, getTreasuryGold, getTreasuryChartData, getGuildSettings } from "@/lib/queries";
+import { getTreasuryTransactions, getTreasuryBreakdown, getTreasuryChartData, getGuildSettings } from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
@@ -14,10 +14,10 @@ function daysUntil(date: Date | null) {
 }
 
 export default async function TreasuryPage() {
-  const [user, transactions, treasuryGold, chartData, settings] = await Promise.all([
+  const [user, transactions, treasuryBreakdown, chartData, settings] = await Promise.all([
     getCurrentUser(),
     getTreasuryTransactions(20),
-    getTreasuryGold(),
+    getTreasuryBreakdown(),
     getTreasuryChartData(),
     getGuildSettings(),
   ]);
@@ -26,8 +26,17 @@ export default async function TreasuryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <StatCard label="Золото в казне" value={`${numberFmt.format(treasuryGold)} золота`} hint="—" />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatCard
+          label="Основная казна"
+          value={`${numberFmt.format(treasuryBreakdown.main)} золота`}
+          hint="70% — фонд ЗП"
+        />
+        <StatCard
+          label="Казна гильдии"
+          value={`${numberFmt.format(treasuryBreakdown.guild)} золота`}
+          hint="30% — резерв гильдии"
+        />
         <StatCard
           label="Дней до выплаты"
           value={payoutDays === null ? "—" : `${payoutDays}`}

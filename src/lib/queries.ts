@@ -40,14 +40,14 @@ function gsMultiplier(gearScore: number, tier1: number, tier2: number) {
 }
 
 async function getSalaryMap(attendanceMap: Map<string, number>): Promise<Map<string, number>> {
-  const [players, treasuryGold, dropGoldTotal, settings] = await Promise.all([
+  const [players, treasuryBreakdown, dropGoldTotal, settings] = await Promise.all([
     prisma.player.findMany({ select: { id: true, gearScore: true } }),
-    getTreasuryGold(),
+    getTreasuryBreakdown(),
     getDropGoldTotal(),
     getGuildSettings(),
   ]);
 
-  const pool = treasuryGold + dropGoldTotal;
+  const pool = treasuryBreakdown.main + dropGoldTotal;
   const map = new Map<string, number>();
   if (pool <= 0) {
     for (const p of players) map.set(p.id, 0);
@@ -265,6 +265,16 @@ export async function getTreasuryTransactions(limit?: number) {
 export async function getTreasuryGold() {
   const result = await prisma.treasuryTransaction.aggregate({ _sum: { amount: true } });
   return result._sum.amount ?? 0;
+}
+
+// Казна делится на основную (фонд ЗП) и казну гильдии (резерв) в пропорции 70/30.
+const TREASURY_MAIN_SHARE = 0.7;
+
+export async function getTreasuryBreakdown() {
+  const total = await getTreasuryGold();
+  const main = Math.round(total * TREASURY_MAIN_SHARE);
+  const guild = total - main;
+  return { total, main, guild };
 }
 
 export async function getTreasuryChartData() {
