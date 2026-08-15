@@ -298,8 +298,13 @@ export async function getAllDrops(limit?: number) {
   });
 }
 
+// Считаем только непроданный дроп: проданный уже вычтен отсюда и учтён
+// в казне отдельной операцией (см. PATCH /api/drops/[id]).
 export async function getDropGoldTotal() {
-  const result = await prisma.dropItem.aggregate({ _sum: { value: true } });
+  const result = await prisma.dropItem.aggregate({
+    where: { status: "Не продано" },
+    _sum: { value: true },
+  });
   return result._sum.value ?? 0;
 }
 
