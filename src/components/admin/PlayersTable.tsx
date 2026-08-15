@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, X } from "lucide-react";
+import { Pencil, Trash2, Plus, X, Settings } from "lucide-react";
 import clsx from "clsx";
 import { ROLES } from "@/lib/roles";
 
@@ -14,6 +14,8 @@ type Player = {
   level: number;
   xp: number;
   attendancePct: number;
+  gearScore: number;
+  salary: number;
   userId: string | null;
 };
 
@@ -22,9 +24,15 @@ type FormState = {
   role: string;
   level: string;
   xp: string;
+  gearScore: string;
 };
 
-const emptyForm: FormState = { name: "", role: ROLES[0], level: "1", xp: "0" };
+type SalarySettings = {
+  salaryGsTier1: number;
+  salaryGsTier2: number;
+};
+
+const emptyForm: FormState = { name: "", role: ROLES[0], level: "1", xp: "0", gearScore: "0" };
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -32,10 +40,12 @@ export default function PlayersTable({
   players,
   isAdmin,
   currentUserId,
+  salarySettings,
 }: {
   players: Player[];
   isAdmin: boolean;
   currentUserId: string | null;
+  salarySettings: SalarySettings;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -43,6 +53,11 @@ export default function PlayersTable({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editingSettings, setEditingSettings] = useState(false);
+  const [tier1, setTier1] = useState(String(salarySettings.salaryGsTier1));
+  const [tier2, setTier2] = useState(String(salarySettings.salaryGsTier2));
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsBusy, setSettingsBusy] = useState(false);
 
   function startAdd() {
     setForm(emptyForm);
@@ -57,6 +72,7 @@ export default function PlayersTable({
       role: p.role,
       level: String(p.level),
       xp: String(p.xp),
+      gearScore: String(p.gearScore),
     });
     setError(null);
     setAdding(false);
@@ -79,6 +95,7 @@ export default function PlayersTable({
       role: form.role,
       level: Number(form.level),
       xp: Number(form.xp),
+      gearScore: Number(form.gearScore),
     };
 
     try {
@@ -110,18 +127,101 @@ export default function PlayersTable({
     router.refresh();
   }
 
+  async function handleSaveSalarySettings(e: FormEvent) {
+    e.preventDefault();
+    setSettingsError(null);
+    setSettingsBusy(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ salaryGsTier1: Number(tier1), salaryGsTier2: Number(tier2) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setSettingsError(data.error ?? "Что-то пошло не так.");
+        setSettingsBusy(false);
+        return;
+      }
+      setEditingSettings(false);
+      router.refresh();
+    } catch {
+      setSettingsError("Не удалось связаться с сервером.");
+    } finally {
+      setSettingsBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {isAdmin && (
-        <div>
+        <div className="space-y-3">
           {!adding && !editingId && (
-            <button
-              type="button"
-              onClick={startAdd}
-              className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90"
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={startAdd}
+                className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90"
+              >
+                <Plus size={16} /> Добавить игрока
+              </button>
+              {!editingSettings && (
+                <button
+                  type="button"
+                  onClick={() => setEditingSettings(true)}
+                  className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-foreground/80 hover:bg-surface-2 hover:text-foreground"
+                >
+                  <Settings size={16} /> Настройки ЗП
+                </button>
+              )}
+            </div>
+          )}
+
+          {editingSettings && (
+            <form
+              onSubmit={handleSaveSalarySettings}
+              className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-4"
             >
-              <Plus size={16} /> Добавить игрока
-            </button>
+              <div>
+                <label className="mb-1 block text-xs text-muted">ГС для 50% ЗП</label>
+                <input
+                  type="number"
+                  value={tier1}
+                  onChange={(e) => setTier1(e.target.value)}
+                  min={0}
+                  required
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted">ГС для 100% ЗП</label>
+                <input
+                  type="number"
+                  value={tier2}
+                  onChange={(e) => setTier2(e.target.value)}
+                  min={0}
+                  required
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+              {settingsError && <p className="text-xs text-danger sm:col-span-4">{settingsError}</p>}
+              <div className="flex items-end gap-2 sm:col-span-2">
+                <button
+                  type="submit"
+                  disabled={settingsBusy}
+                  className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-60"
+                >
+                  Сохранить
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingSettings(false)}
+                  className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
+                >
+                  <X size={14} /> Отмена
+                </button>
+              </div>
+            </form>
           )}
 
           {(adding || editingId) && (
@@ -176,6 +276,17 @@ export default function PlayersTable({
                   className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
                 />
               </div>
+              <div>
+                <label className="mb-1 block text-xs text-muted">ГС</label>
+                <input
+                  type="number"
+                  value={form.gearScore}
+                  onChange={(e) => setForm((f) => ({ ...f, gearScore: e.target.value }))}
+                  min={0}
+                  required
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
               {error && <p className="text-xs text-danger lg:col-span-6">{error}</p>}
 
               <div className="flex items-end gap-2 lg:col-span-6">
@@ -209,6 +320,13 @@ export default function PlayersTable({
               <th className="px-4 py-3 font-medium">XP</th>
               <th className="px-4 py-3 font-medium" title="Считается автоматически: доля активностей за всё время, в которых участвовал игрок">
                 Посещаемость
+              </th>
+              <th className="px-4 py-3 font-medium">ГС</th>
+              <th
+                className="px-4 py-3 font-medium"
+                title="Считается автоматически: (казна + дроп с РБ) делится по посещаемости с учётом коэффициента ГС"
+              >
+                Зарплата
               </th>
               {isAdmin && <th className="px-4 py-3 font-medium" />}
             </tr>
@@ -245,6 +363,8 @@ export default function PlayersTable({
                     <span className="text-xs font-medium text-accent">{p.attendancePct}%</span>
                   </div>
                 </td>
+                <td className="px-4 py-3 text-muted">{numberFmt.format(p.gearScore)}</td>
+                <td className="px-4 py-3 font-medium">{numberFmt.format(p.salary)}</td>
                 {isAdmin && (
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -272,7 +392,7 @@ export default function PlayersTable({
             })}
             {players.length === 0 && (
               <tr>
-                <td colSpan={isAdmin ? 6 : 5} className="px-4 py-6 text-center text-muted">
+                <td colSpan={isAdmin ? 8 : 7} className="px-4 py-6 text-center text-muted">
                   Пока никого нет в составе.
                 </td>
               </tr>

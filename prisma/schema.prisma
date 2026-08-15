@@ -29,6 +29,7 @@ model Player {
   level         Int                   @default(1)
   xp            Int                   @default(0)
   attendancePct Int                   @default(0)
+  gearScore     Int                   @default(0)
   createdAt     DateTime              @default(now())
   activities    ActivityParticipant[]
   userId        String?               @unique
@@ -76,6 +77,8 @@ model TreasuryTransaction {
 model GuildSettings {
   id             Int       @id @default(1)
   nextPayoutDate DateTime?
+  salaryGsTier1  Int       @default(10000)
+  salaryGsTier2  Int       @default(20000)
 }
 
 model DropItem {

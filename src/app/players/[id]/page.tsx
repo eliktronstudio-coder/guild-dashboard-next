@@ -25,10 +25,12 @@ export default async function PlayerDetailPage({
         <h2 className="text-lg font-semibold">{player.name}</h2>
         <p className="mt-1 text-xs text-muted">{player.role}</p>
       </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 xl:grid-cols-5">
         <StatCard label="Уровень" value={String(player.level)} hint="текущий уровень" />
         <StatCard label="Опыт" value={`${numberFmt.format(player.xp)} XP`} hint="накоплено" />
-        <StatCard label="Посещаемость" value={`${player.attendancePct}%`} hint="за 30 дней" />
+        <StatCard label="Посещаемость" value={`${player.attendancePct}%`} hint="за всё время" />
+        <StatCard label="ГС" value={numberFmt.format(player.gearScore)} hint="гир-скор" />
+        <StatCard label="Зарплата" value={`${numberFmt.format(player.salary)} золота`} hint="расчётная" />
       </div>
     </div>
   );

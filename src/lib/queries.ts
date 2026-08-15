@@ -30,41 +30,98 @@ async function getAttendanceMap(): Promise<Map<string, number>> {
   return map;
 }
 
-function withAttendance<T extends { id: string }>(players: T[], map: Map<string, number>) {
-  return players.map((p) => ({ ...p, attendancePct: map.get(p.id) ?? 0 }));
+// Зарплата считается динамически: общий фонд (казна + дроп с РБ) делится
+// между игроками пропорционально их посещаемости, скорректированной
+// коэффициентом ГС (0% ниже salaryGsTier1, 50% от salaryGsTier1, 100% от salaryGsTier2).
+function gsMultiplier(gearScore: number, tier1: number, tier2: number) {
+  if (gearScore >= tier2) return 1;
+  if (gearScore >= tier1) return 0.5;
+  return 0;
+}
+
+async function getSalaryMap(attendanceMap: Map<string, number>): Promise<Map<string, number>> {
+  const [players, treasuryGold, dropGoldTotal, settings] = await Promise.all([
+    prisma.player.findMany({ select: { id: true, gearScore: true } }),
+    getTreasuryGold(),
+    getDropGoldTotal(),
+    getGuildSettings(),
+  ]);
+
+  const pool = treasuryGold + dropGoldTotal;
+  const map = new Map<string, number>();
+  if (pool <= 0) {
+    for (const p of players) map.set(p.id, 0);
+    return map;
+  }
+
+  const weights = players.map((p) => ({
+    id: p.id,
+    weight: (attendanceMap.get(p.id) ?? 0) * gsMultiplier(p.gearScore, settings.salaryGsTier1, settings.salaryGsTier2),
+  }));
+  const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
+  if (totalWeight <= 0) {
+    for (const p of players) map.set(p.id, 0);
+    return map;
+  }
+
+  for (const w of weights) {
+    map.set(w.id, Math.round((w.weight / totalWeight) * pool));
+  }
+  return map;
+}
+
+async function getDerivedPlayerMaps() {
+  const attendance = await getAttendanceMap();
+  const salary = await getSalaryMap(attendance);
+  return { attendance, salary };
+}
+
+function withDerived<T extends { id: string }>(
+  players: T[],
+  derived: { attendance: Map<string, number>; salary: Map<string, number> }
+) {
+  return players.map((p) => ({
+    ...p,
+    attendancePct: derived.attendance.get(p.id) ?? 0,
+    salary: derived.salary.get(p.id) ?? 0,
+  }));
 }
 
 export async function getAllPlayers() {
-  const [players, attendanceMap] = await Promise.all([
+  const [players, derived] = await Promise.all([
     prisma.player.findMany({ orderBy: { createdAt: "asc" } }),
-    getAttendanceMap(),
+    getDerivedPlayerMaps(),
   ]);
-  return withAttendance(players, attendanceMap);
+  return withDerived(players, derived);
 }
 
 export async function getPlayerById(id: string) {
-  const [player, attendanceMap] = await Promise.all([
+  const [player, derived] = await Promise.all([
     prisma.player.findUnique({ where: { id } }),
-    getAttendanceMap(),
+    getDerivedPlayerMaps(),
   ]);
   if (!player) return null;
-  return { ...player, attendancePct: attendanceMap.get(player.id) ?? 0 };
+  return {
+    ...player,
+    attendancePct: derived.attendance.get(player.id) ?? 0,
+    salary: derived.salary.get(player.id) ?? 0,
+  };
 }
 
 export async function getRegisteredPlayers() {
-  const [players, attendanceMap] = await Promise.all([
+  const [players, derived] = await Promise.all([
     prisma.player.findMany({
       where: { userId: { not: null } },
       orderBy: { createdAt: "asc" },
     }),
-    getAttendanceMap(),
+    getDerivedPlayerMaps(),
   ]);
-  return withAttendance(players, attendanceMap);
+  return withDerived(players, derived);
 }
 
 export async function topPlayersByAttendance(count = 5) {
-  const [players, attendanceMap] = await Promise.all([prisma.player.findMany(), getAttendanceMap()]);
-  return withAttendance(players, attendanceMap)
+  const [players, derived] = await Promise.all([prisma.player.findMany(), getDerivedPlayerMaps()]);
+  return withDerived(players, derived)
     .sort((a, b) => b.attendancePct - a.attendancePct)
     .slice(0, count);
 }
@@ -227,7 +284,7 @@ export async function getTreasuryChartData() {
 
 export async function getGuildSettings() {
   const settings = await prisma.guildSettings.findUnique({ where: { id: 1 } });
-  return settings ?? { id: 1, nextPayoutDate: null };
+  return settings ?? { id: 1, nextPayoutDate: null, salaryGsTier1: 10000, salaryGsTier2: 20000 };
 }
 
 export async function getAllDrops(limit?: number) {

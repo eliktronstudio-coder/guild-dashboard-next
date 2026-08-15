@@ -13,6 +13,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const role = typeof body?.role === "string" ? body.role : "";
   const level = Number(body?.level);
   const xp = Number(body?.xp);
+  const gearScore = body?.gearScore === undefined ? 0 : Number(body.gearScore);
 
   if (!name || name.length > 40) {
     return NextResponse.json({ error: "Укажите имя игрока (до 40 символов)." }, { status: 400 });
@@ -26,10 +27,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!Number.isFinite(xp) || xp < 0) {
     return NextResponse.json({ error: "Неверный опыт." }, { status: 400 });
   }
+  if (!Number.isFinite(gearScore) || gearScore < 0) {
+    return NextResponse.json({ error: "Неверный ГС." }, { status: 400 });
+  }
 
   const player = await prisma.player.update({
     where: { id },
-    data: { name, role, level, xp },
+    data: { name, role, level, xp, gearScore },
   });
 
   return NextResponse.json(player);
