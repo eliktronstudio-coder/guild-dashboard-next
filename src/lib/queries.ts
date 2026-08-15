@@ -235,6 +235,7 @@ export async function getActivityById(id: string) {
     perAttendanceValue: activity.perAttendanceValue,
     addedByUsername: activity.addedBy?.username ?? null,
     date: dateFmt.format(activity.date),
+    dateIso: activity.date.toISOString().slice(0, 10),
     dropTotal,
     roleCounts,
     roster: activity.participants.map((p) => p.player),

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getActivityById } from "@/lib/queries";
+import { getActivityById, getRegisteredPlayers } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import ActivityDetailPanel from "@/components/admin/ActivityDetailPanel";
 
@@ -10,7 +10,11 @@ export default async function ActivityDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [activity, user] = await Promise.all([getActivityById(id), getCurrentUser()]);
+  const [activity, user, players] = await Promise.all([
+    getActivityById(id),
+    getCurrentUser(),
+    getRegisteredPlayers(),
+  ]);
   if (!activity) notFound();
 
   return (
@@ -20,7 +24,11 @@ export default async function ActivityDetailPage({
           ← Все активности
         </Link>
       </div>
-      <ActivityDetailPanel activity={activity} isAdmin={user?.role === "admin"} />
+      <ActivityDetailPanel
+        activity={activity}
+        players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+        isAdmin={user?.role === "admin"}
+      />
     </div>
   );
 }

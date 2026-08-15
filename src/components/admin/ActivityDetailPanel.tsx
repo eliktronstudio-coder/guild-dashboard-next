@@ -2,9 +2,16 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Check, X, Plus, Trash2, Moon } from "lucide-react";
+import { Pencil, Check, X, Plus, Trash2, Moon, Search } from "lucide-react";
 import clsx from "clsx";
-import { ACTIVITY_STATUSES, statusColor, roleColor } from "@/lib/activityOptions";
+import {
+  ACTIVITY_STATUSES,
+  ACTIVITY_CATEGORIES,
+  ACTIVITY_MODES,
+  ACTIVITY_DIFFICULTIES,
+  statusColor,
+  roleColor,
+} from "@/lib/activityOptions";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -29,13 +36,22 @@ type Activity = {
   perAttendanceValue: number;
   addedByUsername: string | null;
   date: string;
+  dateIso: string;
   dropTotal: number;
   roleCounts: Record<string, number>;
   roster: Player[];
   drops: Drop[];
 };
 
-export default function ActivityDetailPanel({ activity, isAdmin }: { activity: Activity; isAdmin: boolean }) {
+export default function ActivityDetailPanel({
+  activity,
+  players,
+  isAdmin,
+}: {
+  activity: Activity;
+  players: Player[];
+  isAdmin: boolean;
+}) {
   const router = useRouter();
   const [status, setStatus] = useState(activity.status);
   const [editingPerAttendance, setEditingPerAttendance] = useState(false);
@@ -47,6 +63,75 @@ export default function ActivityDetailPanel({ activity, isAdmin }: { activity: A
   const [dropPlayerId, setDropPlayerId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [editingActivity, setEditingActivity] = useState(false);
+  const [editName, setEditName] = useState(activity.name);
+  const [editDate, setEditDate] = useState(activity.dateIso);
+  const [editCategory, setEditCategory] = useState(activity.category);
+  const [editMode, setEditMode] = useState(activity.mode);
+  const [editDifficulty, setEditDifficulty] = useState(activity.difficulty);
+  const [editIsNight, setEditIsNight] = useState(activity.isNight);
+  const [editSelected, setEditSelected] = useState<Set<string>>(new Set(activity.roster.map((p) => p.id)));
+  const [editSearch, setEditSearch] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editBusy, setEditBusy] = useState(false);
+
+  const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(editSearch.trim().toLowerCase()));
+
+  function toggleEditSelected(id: string) {
+    setEditSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function cancelEditActivity() {
+    setEditingActivity(false);
+    setEditName(activity.name);
+    setEditDate(activity.dateIso);
+    setEditCategory(activity.category);
+    setEditMode(activity.mode);
+    setEditDifficulty(activity.difficulty);
+    setEditIsNight(activity.isNight);
+    setEditSelected(new Set(activity.roster.map((p) => p.id)));
+    setEditSearch("");
+    setEditError(null);
+  }
+
+  async function handleSaveActivity(e: FormEvent) {
+    e.preventDefault();
+    setEditError(null);
+    setEditBusy(true);
+    try {
+      const res = await fetch(`/api/activities/${activity.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName,
+          date: editDate,
+          category: editCategory,
+          mode: editMode,
+          difficulty: editDifficulty,
+          isNight: editIsNight,
+          participantIds: [...editSelected],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditError(data.error ?? "Что-то пошло не так.");
+        setEditBusy(false);
+        return;
+      }
+      setEditingActivity(false);
+      router.refresh();
+    } catch {
+      setEditError("Не удалось связаться с сервером.");
+    } finally {
+      setEditBusy(false);
+    }
+  }
 
   async function handleStatusChange(newStatus: string) {
     setStatus(newStatus);
@@ -121,45 +206,196 @@ export default function ActivityDetailPanel({ activity, isAdmin }: { activity: A
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
         <div className="rounded-lg border border-border bg-surface p-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold">{activity.name}</h2>
-            <span className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-muted">
-              {activity.category}
-            </span>
-            <span
-              className={clsx(
-                "rounded-md border px-1.5 py-0.5 text-xs",
-                activity.mode === "PvP" ? "border-danger/40 bg-danger/10 text-danger" : "border-success/40 bg-success/10 text-success"
-              )}
-            >
-              {activity.mode}
-            </span>
-            {isAdmin ? (
-              <select
-                value={status}
-                disabled={busy}
-                onChange={(e) => handleStatusChange(e.target.value)}
+          {!editingActivity && (
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-semibold">{activity.name}</h2>
+              <span className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-muted">
+                {activity.category}
+              </span>
+              <span
                 className={clsx(
-                  "rounded-md border px-1.5 py-0.5 text-xs outline-none disabled:opacity-60",
-                  statusColor[status]
+                  "rounded-md border px-1.5 py-0.5 text-xs",
+                  activity.mode === "PvP" ? "border-danger/40 bg-danger/10 text-danger" : "border-success/40 bg-success/10 text-success"
                 )}
               >
-                {ACTIVITY_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <span className={clsx("rounded-md border px-1.5 py-0.5 text-xs", statusColor[status])}>{status}</span>
-            )}
-            {activity.isNight && (
-              <span className="flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-muted">
-                <Moon size={11} /> Ночь
+                {activity.mode}
               </span>
-            )}
-          </div>
+              {isAdmin ? (
+                <select
+                  value={status}
+                  disabled={busy}
+                  onChange={(e) => handleStatusChange(e.target.value)}
+                  className={clsx(
+                    "rounded-md border px-1.5 py-0.5 text-xs outline-none disabled:opacity-60",
+                    statusColor[status]
+                  )}
+                >
+                  {ACTIVITY_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className={clsx("rounded-md border px-1.5 py-0.5 text-xs", statusColor[status])}>{status}</span>
+              )}
+              {activity.isNight && (
+                <span className="flex items-center gap-1 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-muted">
+                  <Moon size={11} /> Ночь
+                </span>
+              )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => setEditingActivity(true)}
+                  className="ml-auto flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground"
+                >
+                  <Pencil size={13} /> Редактировать
+                </button>
+              )}
+            </div>
+          )}
 
+          {editingActivity && (
+            <form onSubmit={handleSaveActivity} className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs text-muted">Название</label>
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    required
+                    maxLength={60}
+                    className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted">Дата</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    required
+                    className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted">Вид</label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value)}
+                    className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                  >
+                    {ACTIVITY_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted">Режим</label>
+                  <select
+                    value={editMode}
+                    onChange={(e) => setEditMode(e.target.value)}
+                    className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                  >
+                    {ACTIVITY_MODES.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted">Сложность</label>
+                  <select
+                    value={editDifficulty}
+                    onChange={(e) => setEditDifficulty(e.target.value)}
+                    className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                  >
+                    {ACTIVITY_DIFFICULTIES.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-end">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={editIsNight}
+                      onChange={(e) => setEditIsNight(e.target.checked)}
+                      className="accent-accent"
+                    />
+                    Ночная активность
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-xs text-muted">
+                  Состав <span className="text-muted/70">(только зарегистрированные на сайте)</span>
+                </p>
+                <div className="relative mb-2">
+                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                  <input
+                    value={editSearch}
+                    onChange={(e) => setEditSearch(e.target.value)}
+                    placeholder="Поиск по нику…"
+                    className="w-full rounded-md border border-border bg-surface-2 py-2 pl-8 pr-3 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div className="flex max-h-52 flex-wrap gap-2 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
+                  {players.length === 0 && (
+                    <p className="text-xs text-muted">
+                      Пока никто из состава не зарегистрирован на сайте — участников добавить нельзя.
+                    </p>
+                  )}
+                  {players.length > 0 && filteredPlayers.length === 0 && (
+                    <p className="text-xs text-muted">Никого не найдено.</p>
+                  )}
+                  {filteredPlayers.map((p) => (
+                    <label
+                      key={p.id}
+                      className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editSelected.has(p.id)}
+                        onChange={() => toggleEditSelected(p.id)}
+                        className="accent-accent"
+                      />
+                      {p.name} <span className="text-muted">· {p.role}</span>
+                    </label>
+                  ))}
+                </div>
+                {editSelected.size > 0 && <p className="mt-1.5 text-xs text-muted">Выбрано: {editSelected.size}</p>}
+              </div>
+
+              {editError && <p className="text-xs text-danger">{editError}</p>}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={editBusy}
+                  className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-60"
+                >
+                  Сохранить
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelEditActivity}
+                  className="flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
+                >
+                  <X size={14} /> Отмена
+                </button>
+              </div>
+            </form>
+          )}
+
+          {!editingActivity && (
           <div className="mt-4 flex flex-wrap gap-6">
             <div>
               <p className="text-2xl font-semibold">{activity.roster.length}</p>
@@ -211,6 +447,7 @@ export default function ActivityDetailPanel({ activity, isAdmin }: { activity: A
               <p className="text-xs text-muted">с посещения</p>
             </div>
           </div>
+          )}
         </div>
 
         <div className="rounded-lg border border-border bg-surface p-4">

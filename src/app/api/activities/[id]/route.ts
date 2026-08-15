@@ -15,6 +15,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const body = await request.json().catch(() => null);
   const data: Record<string, unknown> = {};
 
+  if (body?.name !== undefined) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > 60) {
+      return NextResponse.json({ error: "Укажите название активности (до 60 символов)." }, { status: 400 });
+    }
+    data.name = name;
+  }
+  if (body?.date !== undefined) {
+    const date = typeof body.date === "string" && body.date ? new Date(body.date) : null;
+    if (!date || Number.isNaN(date.getTime())) {
+      return NextResponse.json({ error: "Неверная дата." }, { status: 400 });
+    }
+    data.date = date;
+  }
   if (body?.status !== undefined) {
     if (!STATUSES.includes(body.status)) return NextResponse.json({ error: "Неверный статус." }, { status: 400 });
     data.status = body.status;
@@ -43,7 +57,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     data.perAttendanceValue = value;
   }
 
-  const activity = await prisma.activity.update({ where: { id }, data });
+  const participantIds: string[] | null = Array.isArray(body?.participantIds)
+    ? body.participantIds.filter((pid: unknown): pid is string => typeof pid === "string")
+    : null;
+
+  const activity = await prisma.$transaction(async (tx) => {
+    if (participantIds !== null) {
+      await tx.activityParticipant.deleteMany({ where: { activityId: id } });
+      await tx.activityParticipant.createMany({
+        data: participantIds.map((playerId: string) => ({ activityId: id, playerId })),
+      });
+    }
+    return tx.activity.update({ where: { id }, data });
+  });
 
   return NextResponse.json(activity);
 }
