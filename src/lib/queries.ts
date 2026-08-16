@@ -366,6 +366,65 @@ export async function getTreasuryChartData() {
   });
 }
 
+async function getTreasuryDailyDeltas(): Promise<Map<string, number>> {
+  const transactions = await prisma.treasuryTransaction.findMany({ select: { date: true, amount: true } });
+  const byDay = new Map<string, number>();
+  for (const t of transactions) {
+    const key = dayKey(t.date);
+    byDay.set(key, (byDay.get(key) ?? 0) + t.amount);
+  }
+  return byDay;
+}
+
+// Приток золота от продажи дропа конкретной категории (Мини-РБ / Прайм) —
+// сумма treasury-операций, порождённых продажей предмета, чья активность
+// принадлежит этой категории. Дата берётся из самой операции (когда
+// золото реально попало в казну), а не из даты записи в журнале дропа.
+async function getCategoryDailyDeltas(category: string): Promise<Map<string, number>> {
+  const soldDrops = await prisma.dropItem.findMany({
+    where: { status: "Продано", treasuryTransactionId: { not: null }, activity: { category } },
+    select: { treasuryTransactionId: true },
+  });
+  const txIds = soldDrops.map((d) => d.treasuryTransactionId).filter((tid): tid is string => Boolean(tid));
+  const byDay = new Map<string, number>();
+  if (txIds.length === 0) return byDay;
+
+  const transactions = await prisma.treasuryTransaction.findMany({
+    where: { id: { in: txIds } },
+    select: { date: true, amount: true },
+  });
+  for (const t of transactions) {
+    const key = dayKey(t.date);
+    byDay.set(key, (byDay.get(key) ?? 0) + t.amount);
+  }
+  return byDay;
+}
+
+// "Динамика казны" для Статистики: общая казна плюс отдельные линии
+// притока золота с Мини-РБ и Прайм, все как накопительный итог по дням.
+export async function getTreasuryChartCombined() {
+  const [total, miniRb, prime] = await Promise.all([
+    getTreasuryDailyDeltas(),
+    getCategoryDailyDeltas("Мини-РБ"),
+    getCategoryDailyDeltas("Прайм"),
+  ]);
+  const days = [...new Set([...total.keys(), ...miniRb.keys(), ...prime.keys()])].sort();
+  let runningTotal = 0;
+  let runningMiniRb = 0;
+  let runningPrime = 0;
+  return days.map((key) => {
+    runningTotal += total.get(key) ?? 0;
+    runningMiniRb += miniRb.get(key) ?? 0;
+    runningPrime += prime.get(key) ?? 0;
+    return {
+      date: shortDateFmt.format(new Date(key)),
+      gold: runningTotal,
+      goldMiniRb: runningMiniRb,
+      goldPrime: runningPrime,
+    };
+  });
+}
+
 export async function getAllDrops(limit?: number) {
   return prisma.dropItem.findMany({
     orderBy: { date: "desc" },
@@ -440,6 +499,18 @@ export async function getInventory() {
     }
   }
   return [...map.values()].sort((a, b) => b.totalValue - a.totalValue);
+}
+
+export async function getAvgAttendanceLast30Days() {
+  const since = new Date();
+  since.setDate(since.getDate() - 30);
+  const activities = await prisma.activity.findMany({
+    where: { date: { gte: since } },
+    include: { _count: { select: { participants: true } } },
+  });
+  if (activities.length === 0) return 0;
+  const total = activities.reduce((sum, a) => sum + a._count.participants, 0);
+  return Math.round(total / activities.length);
 }
 
 export async function getAvgActivityDays() {

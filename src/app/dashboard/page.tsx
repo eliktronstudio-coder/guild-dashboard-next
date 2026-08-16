@@ -16,10 +16,10 @@ import {
   topPlayersByAttendanceCategory,
   getAllActivities,
   getTreasuryBreakdown,
-  getTreasuryChartData,
+  getTreasuryChartCombined,
   getAttendanceChartData,
-  getAvgActivityDays,
-  getDropGoldTotal,
+  getAvgAttendanceLast30Days,
+  getDropGoldTotalByCategory,
 } from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -35,17 +35,27 @@ function CrestIcon({ size }: { size?: number; strokeWidth?: number }) {
 }
 
 export default async function DashboardPage() {
-  const [primeTop, miniRbTop, allActivities, treasuryBreakdown, treasuryChart, attendanceChart, avgActivityDays, dropGoldTotal] =
-    await Promise.all([
-      topPlayersByAttendanceCategory("attendancePctPrime", 5),
-      topPlayersByAttendanceCategory("attendancePctMiniRb", 5),
-      getAllActivities(),
-      getTreasuryBreakdown(),
-      getTreasuryChartData(),
-      getAttendanceChartData(),
-      getAvgActivityDays(),
-      getDropGoldTotal(),
-    ]);
+  const [
+    primeTop,
+    miniRbTop,
+    allActivities,
+    treasuryBreakdown,
+    treasuryChart,
+    attendanceChart,
+    avgAttendance30d,
+    dropGoldMiniRb,
+    dropGoldPrime,
+  ] = await Promise.all([
+    topPlayersByAttendanceCategory("attendancePctPrime", 5),
+    topPlayersByAttendanceCategory("attendancePctMiniRb", 5),
+    getAllActivities(),
+    getTreasuryBreakdown(),
+    getTreasuryChartCombined(),
+    getAttendanceChartData(),
+    getAvgAttendanceLast30Days(),
+    getDropGoldTotalByCategory("Мини-РБ"),
+    getDropGoldTotalByCategory("Прайм"),
+  ]);
   const recentActivities = allActivities.slice(0, 5);
   const payoutDays = daysUntilNextPayout();
 
@@ -54,7 +64,7 @@ export default async function DashboardPage() {
       <div className="relative">
         <DashboardHero />
 
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
           <StatCard
             variant="dashboard"
             label="Основная казна"
@@ -76,8 +86,17 @@ export default async function DashboardPage() {
           />
           <StatCard
             variant="dashboard"
-            label="Дроп с РБ"
-            value={`${numberFmt.format(dropGoldTotal)} золота`}
+            label="Дроп с Мини-РБ"
+            value={`${numberFmt.format(dropGoldMiniRb)} золота`}
+            hint="эквивалент в золоте"
+            icon={Swords}
+            tone="red"
+            goldValue
+          />
+          <StatCard
+            variant="dashboard"
+            label="Дроп с Прайм"
+            value={`${numberFmt.format(dropGoldPrime)} золота`}
             hint="эквивалент в золоте"
             icon={Swords}
             tone="red"
@@ -86,9 +105,9 @@ export default async function DashboardPage() {
           />
           <StatCard
             variant="dashboard"
-            label="Ср. активность"
-            value={avgActivityDays > 0 ? `${avgActivityDays} дней` : "—"}
-            hint="между активностями"
+            label="Ср. посещаемость"
+            value={avgAttendance30d > 0 ? `${avgAttendance30d} чел.` : "—"}
+            hint="за последние 30 дней"
             icon={CrestIcon}
             tone="info"
           />

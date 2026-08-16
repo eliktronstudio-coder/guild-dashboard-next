@@ -3,6 +3,8 @@
 import {
   AreaChart,
   Area,
+  Line,
+  Legend,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -16,12 +18,22 @@ const numberFmt = new Intl.NumberFormat("ru-RU");
 export type TreasuryChartPoint = {
   date: string;
   gold: number;
+  goldMiniRb?: number;
+  goldPrime?: number;
+};
+
+const seriesLabel: Record<string, string> = {
+  gold: "Казна",
+  goldMiniRb: "Мини-РБ",
+  goldPrime: "Прайм",
 };
 
 export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) {
   if (data.length === 0) {
     return <EmptyState />;
   }
+
+  const hasCategories = data[0].goldMiniRb !== undefined || data[0].goldPrime !== undefined;
 
   return (
     <div className="min-w-0">
@@ -57,17 +69,49 @@ export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) 
               fontSize: 12,
             }}
             labelStyle={{ color: "var(--foreground)" }}
-            formatter={(value) => [`${numberFmt.format(Number(value))} золота`, "Золото"]}
+            formatter={(value, name) => [
+              `${numberFmt.format(Number(value))} золота`,
+              seriesLabel[String(name)] ?? String(name),
+            ]}
           />
+          {hasCategories && (
+            <Legend
+              formatter={(value) => seriesLabel[value] ?? value}
+              wrapperStyle={{ fontSize: 11, color: "var(--muted)" }}
+            />
+          )}
           <Area
             type="monotone"
             dataKey="gold"
+            name="gold"
             stroke="var(--accent)"
             strokeWidth={2}
             fill="url(#goldFill)"
             dot={{ r: 3, fill: "var(--accent-bright)", strokeWidth: 0 }}
             activeDot={{ r: 5, fill: "var(--accent-bright)", stroke: "var(--surface)", strokeWidth: 2 }}
           />
+          {hasCategories && (
+            <Line
+              type="monotone"
+              dataKey="goldMiniRb"
+              name="goldMiniRb"
+              stroke="var(--info)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4, fill: "var(--info)", stroke: "var(--surface)", strokeWidth: 2 }}
+            />
+          )}
+          {hasCategories && (
+            <Line
+              type="monotone"
+              dataKey="goldPrime"
+              name="goldPrime"
+              stroke="var(--jade)"
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4, fill: "var(--jade)", stroke: "var(--surface)", strokeWidth: 2 }}
+            />
+          )}
         </AreaChart>
       </ResponsiveContainer>
     </div>
