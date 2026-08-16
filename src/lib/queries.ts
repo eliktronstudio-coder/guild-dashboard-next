@@ -243,6 +243,7 @@ export async function getActivityById(id: string) {
     include: {
       participants: { include: { player: true } },
       drops: { include: { player: true, catalogItem: true }, orderBy: { createdAt: "desc" } },
+      screenshots: { orderBy: { createdAt: "asc" } },
       addedBy: { select: { username: true } },
     },
   });
@@ -277,6 +278,12 @@ export async function getActivityById(id: string) {
       playerName: d.player?.name ?? null,
       imageUrl: d.catalogItem?.imageUrl ?? null,
     })),
+    rosterScreenshots: activity.screenshots
+      .filter((s) => s.kind === "roster")
+      .map((s) => ({ id: s.id, imageUrl: s.imageUrl })),
+    dropScreenshots: activity.screenshots
+      .filter((s) => s.kind === "drop")
+      .map((s) => ({ id: s.id, imageUrl: s.imageUrl })),
   };
 }
 

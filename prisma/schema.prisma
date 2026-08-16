@@ -53,6 +53,16 @@ model Activity {
   createdAt          DateTime              @default(now())
   participants       ActivityParticipant[]
   drops              DropItem[]
+  screenshots        ActivityScreenshot[]
+}
+
+model ActivityScreenshot {
+  id         String   @id @default(cuid())
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  kind       String
+  imageUrl   String
+  createdAt  DateTime @default(now())
 }
 
 model ActivityParticipant {

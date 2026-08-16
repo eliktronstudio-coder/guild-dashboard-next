@@ -1,13 +1,26 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { Plus, Trash2, X, Search, RotateCcw, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import clsx from "clsx";
 import { ACTIVITY_CATEGORIES, ACTIVITY_MODES, ACTIVITY_DIFFICULTIES, ACTIVITY_STATUSES, statusColor } from "@/lib/activityOptions";
 import StatCard from "@/components/StatCard";
 import EmptyState from "@/components/EmptyState";
+
+const MAX_IMAGE_BYTES = 800_000;
+const MAX_SCREENSHOTS = 6;
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
 
 type ActivityRow = {
   id: string;
@@ -92,8 +105,30 @@ export default function ActivitiesList({
   const [search, setSearch] = useState("");
   const [dropSelected, setDropSelected] = useState<Record<string, string>>({});
   const [dropSearch, setDropSearch] = useState("");
+  const [rosterShots, setRosterShots] = useState<string[]>([]);
+  const [dropShots, setDropShots] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function handleShotFiles(e: ChangeEvent<HTMLInputElement>, setShots: (fn: (prev: string[]) => string[]) => void) {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (files.length === 0) return;
+    const urls: string[] = [];
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) {
+        setError("Файл должен быть изображением.");
+        continue;
+      }
+      if (file.size > MAX_IMAGE_BYTES) {
+        setError("Фото слишком большое (до ~600 КБ).");
+        continue;
+      }
+      urls.push(await readFileAsDataUrl(file));
+    }
+    if (urls.length > 0) setError(null);
+    setShots((prev) => [...prev, ...urls].slice(0, MAX_SCREENSHOTS));
+  }
 
   const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
   const filteredCatalog = catalog.filter((c) => c.name.toLowerCase().includes(dropSearch.trim().toLowerCase()));
@@ -150,6 +185,8 @@ export default function ActivitiesList({
     setSearch("");
     setDropSelected({});
     setDropSearch("");
+    setRosterShots([]);
+    setDropShots([]);
     setError(null);
   }
 
@@ -196,6 +233,10 @@ export default function ActivitiesList({
             catalogItemId,
             quantity: Number(quantity) || 1,
           })),
+          screenshots: [
+            ...rosterShots.map((imageUrl) => ({ kind: "roster", imageUrl })),
+            ...dropShots.map((imageUrl) => ({ kind: "drop", imageUrl })),
+          ],
         }),
       });
       const data = await res.json();
@@ -531,6 +572,21 @@ export default function ActivitiesList({
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <ScreenshotPicker
+                  label="Скрины состава"
+                  urls={rosterShots}
+                  onFiles={(e) => handleShotFiles(e, setRosterShots)}
+                  onRemove={(i) => setRosterShots((prev) => prev.filter((_, idx) => idx !== i))}
+                />
+                <ScreenshotPicker
+                  label="Скрины дропа"
+                  urls={dropShots}
+                  onFiles={(e) => handleShotFiles(e, setDropShots)}
+                  onRemove={(i) => setDropShots((prev) => prev.filter((_, idx) => idx !== i))}
+                />
+              </div>
+
               {error && <p className="text-xs text-danger">{error}</p>}
 
               <div className="flex items-center gap-2">
@@ -660,6 +716,58 @@ export default function ActivitiesList({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ScreenshotPicker({
+  label,
+  urls,
+  onFiles,
+  onRemove,
+}: {
+  label: string;
+  urls: string[];
+  onFiles: (e: ChangeEvent<HTMLInputElement>) => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between">
+        <p className="text-xs text-muted">{label}</p>
+        <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground">
+          <Plus size={12} /> Добавить
+          <input type="file" accept="image/*" multiple onChange={onFiles} className="hidden" />
+        </label>
+      </div>
+      {urls.length === 0 ? (
+        <p className="rounded-md border border-dashed border-border bg-surface-2 px-3 py-3 text-center text-xs text-muted">
+          Фото не выбраны
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {urls.map((url, i) => (
+            <div key={i} className="group relative">
+              <Image
+                src={url}
+                alt=""
+                width={56}
+                height={56}
+                unoptimized
+                className="h-14 w-14 rounded-md border border-border object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => onRemove(i)}
+                aria-label="Убрать фото"
+                className="absolute -right-1.5 -top-1.5 rounded-full bg-danger p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+              >
+                <X size={11} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

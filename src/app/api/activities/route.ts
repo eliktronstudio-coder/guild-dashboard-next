@@ -5,6 +5,9 @@ import { requireAdmin } from "@/lib/auth";
 const CATEGORIES = ["Мини-РБ", "Прайм"];
 const MODES = ["PvE", "PvP"];
 const DIFFICULTIES = ["Обычная", "Героическая"];
+const SCREENSHOT_KINDS = ["roster", "drop"];
+const MAX_IMAGE_BYTES = 800_000;
+const MAX_SCREENSHOTS_PER_KIND = 6;
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
@@ -34,6 +37,17 @@ export async function POST(request: NextRequest) {
         }))
         .filter((d: { catalogItemId: string; quantity: number }) => d.catalogItemId)
     : [];
+  const screenshotEntries: { kind: string; imageUrl: string }[] = Array.isArray(body?.screenshots)
+    ? body.screenshots
+        .filter(
+          (s: unknown): s is { kind: unknown; imageUrl: unknown } => typeof s === "object" && s !== null
+        )
+        .map((s: { kind: unknown; imageUrl: unknown }) => ({
+          kind: typeof s.kind === "string" ? s.kind : "",
+          imageUrl: typeof s.imageUrl === "string" ? s.imageUrl : "",
+        }))
+        .filter((s: { kind: string; imageUrl: string }) => SCREENSHOT_KINDS.includes(s.kind) && s.imageUrl)
+    : [];
 
   if (!name || name.length > 60) {
     return NextResponse.json({ error: "Укажите название активности (до 60 символов)." }, { status: 400 });
@@ -45,6 +59,15 @@ export async function POST(request: NextRequest) {
   }
   if (perAttendanceValue < 0) {
     return NextResponse.json({ error: "Сумма за посещение не может быть отрицательной." }, { status: 400 });
+  }
+  for (const kind of SCREENSHOT_KINDS) {
+    const count = screenshotEntries.filter((s) => s.kind === kind).length;
+    if (count > MAX_SCREENSHOTS_PER_KIND) {
+      return NextResponse.json({ error: `Максимум ${MAX_SCREENSHOTS_PER_KIND} скринов на раздел.` }, { status: 400 });
+    }
+  }
+  if (screenshotEntries.some((s) => !s.imageUrl.startsWith("data:image/") || s.imageUrl.length > MAX_IMAGE_BYTES)) {
+    return NextResponse.json({ error: "Скрин слишком большой или неверного формата (до ~600 КБ)." }, { status: 400 });
   }
 
   const catalogItems = dropEntries.length
@@ -78,6 +101,7 @@ export async function POST(request: NextRequest) {
           })
           .filter((d): d is NonNullable<typeof d> => d !== null),
       },
+      screenshots: { create: screenshotEntries },
     },
   });
 

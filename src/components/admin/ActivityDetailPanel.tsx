@@ -13,6 +13,7 @@ import {
   statusColor,
   roleColor,
 } from "@/lib/activityOptions";
+import ScreenshotBanner from "./ScreenshotBanner";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -44,6 +45,8 @@ type Activity = {
   roleCounts: Record<string, number>;
   roster: Player[];
   drops: Drop[];
+  rosterScreenshots: { id: string; imageUrl: string }[];
+  dropScreenshots: { id: string; imageUrl: string }[];
 };
 
 export default function ActivityDetailPanel({
@@ -773,6 +776,22 @@ export default function ActivityDetailPanel({
             {activity.roster.length === 0 && <p className="text-xs text-muted">Нет данных.</p>}
           </div>
         </div>
+
+        <ScreenshotBanner
+          activityId={activity.id}
+          kind="roster"
+          title="Скрин состава"
+          screenshots={activity.rosterScreenshots}
+          isAdmin={isAdmin}
+        />
+
+        <ScreenshotBanner
+          activityId={activity.id}
+          kind="drop"
+          title="Скрин дропа"
+          screenshots={activity.dropScreenshots}
+          isAdmin={isAdmin}
+        />
       </div>
     </div>
   );
