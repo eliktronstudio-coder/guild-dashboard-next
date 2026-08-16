@@ -14,6 +14,7 @@ import {
   getInventory,
   getAllActivities,
   getRegisteredPlayers,
+  getAllPlayers,
   getDropCatalog,
 } from "@/lib/queries";
 
@@ -21,20 +22,37 @@ const numberFmt = new Intl.NumberFormat("ru-RU");
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 
 export default async function TreasuryPage() {
-  const [user, transactions, treasuryBreakdown, treasuryChart, drops, dropTotalMiniRb, dropTotalPrime, inventory, activities, players, catalog] =
-    await Promise.all([
-      getCurrentUser(),
-      getTreasuryTransactions(20),
-      getTreasuryBreakdown(),
-      getTreasuryChartData(),
-      getAllDrops(50),
-      getDropGoldTotalByCategory("Мини-РБ"),
-      getDropGoldTotalByCategory("Прайм"),
-      getInventory(),
-      getAllActivities(),
-      getRegisteredPlayers(),
-      getDropCatalog(),
-    ]);
+  const [
+    user,
+    transactions,
+    treasuryBreakdown,
+    treasuryChart,
+    drops,
+    dropTotalMiniRb,
+    dropTotalPrime,
+    inventory,
+    activities,
+    players,
+    allPlayers,
+    catalog,
+  ] = await Promise.all([
+    getCurrentUser(),
+    getTreasuryTransactions(20),
+    getTreasuryBreakdown(),
+    getTreasuryChartData(),
+    getAllDrops(50),
+    getDropGoldTotalByCategory("Мини-РБ"),
+    getDropGoldTotalByCategory("Прайм"),
+    getInventory(),
+    getAllActivities(),
+    getRegisteredPlayers(),
+    getAllPlayers(),
+    getDropCatalog(),
+  ]);
+
+  const unsoldDropOptions = inventory.flatMap((i) =>
+    i.entries.map((e) => ({ id: e.id, item: i.item, quantity: e.quantity, value: e.value }))
+  );
 
   const payoutDays = daysUntilNextPayout();
   const isAdmin = user?.role === "admin";
@@ -83,6 +101,8 @@ export default async function TreasuryPage() {
 
       <TreasuryPanel
         transactions={transactions.map((t) => ({ ...t, date: dateFmt.format(t.date) }))}
+        drops={unsoldDropOptions}
+        players={allPlayers.map((p) => ({ id: p.id, name: p.name }))}
         isAdmin={isAdmin}
       />
 
