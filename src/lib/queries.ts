@@ -162,6 +162,7 @@ export async function getAllActivities() {
     name: a.name,
     date: dateFmt.format(a.date),
     participants: a._count.participants,
+    status: a.status,
   }));
 }
 

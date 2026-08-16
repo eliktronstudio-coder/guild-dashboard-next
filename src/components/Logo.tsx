@@ -22,11 +22,8 @@ export default function Logo({ size = "md", variant = "full", className }: LogoP
   return (
     <div className={clsx("flex flex-col leading-none", className)}>
       <span
-        className={clsx(
-          markSize[size],
-          "bg-gradient-to-br from-accent-bright via-accent to-ember bg-clip-text font-black italic tracking-tight text-transparent"
-        )}
-        style={{ filter: "drop-shadow(0 0 10px var(--accent-soft))" }}
+        className={clsx(markSize[size], "bg-clip-text font-extrabold tracking-tight text-transparent")}
+        style={{ backgroundImage: "linear-gradient(135deg, #f4c46f, #bc7930)" }}
       >
         XD
       </span>

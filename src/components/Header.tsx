@@ -43,9 +43,11 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
         </button>
         <Logo size="sm" variant="mark" className="lg:hidden" />
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-semibold leading-tight">{label}</h1>
-          <p className="truncate text-xs text-muted">
-            {section.toLowerCase()} / {label.toLowerCase()}
+          <h1 className="truncate font-serif text-lg font-semibold leading-tight sm:text-xl lg:text-[28px]">
+            {label}
+          </h1>
+          <p className="truncate text-[11px] uppercase tracking-[0.08em] text-muted">
+            {section} / {label}
           </p>
         </div>
       </div>
@@ -58,8 +60,10 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
               type="button"
               onClick={() => setLang(code)}
               className={clsx(
-                "rounded px-2.5 py-1 font-medium uppercase transition-colors",
-                lang === code ? "bg-accent text-black" : "text-muted hover:text-foreground"
+                "rounded border px-2.5 py-1 font-medium uppercase transition-colors duration-150",
+                lang === code
+                  ? "border-[rgba(196,72,60,0.45)] bg-[rgba(163,55,46,0.20)] text-[#efad63]"
+                  : "border-transparent text-muted hover:text-foreground"
               )}
             >
               {code}

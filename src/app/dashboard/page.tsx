@@ -1,10 +1,16 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { Crown, ShieldCheck, TrendingUp, Users, CalendarClock } from "lucide-react";
+import { Coins, Archive, Swords, CalendarClock } from "lucide-react";
 import StatCard from "@/components/StatCard";
 import TreasuryChart from "@/components/charts/TreasuryChart";
 import AttendanceChart from "@/components/charts/AttendanceChart";
 import EmptyState from "@/components/EmptyState";
+import DashboardHero from "@/components/dashboard/DashboardHero";
+import DashboardPanel from "@/components/dashboard/DashboardPanel";
+import SectionHeader from "@/components/dashboard/SectionHeader";
+import GuildRankRow from "@/components/dashboard/GuildRankRow";
+import ActivityRow from "@/components/dashboard/ActivityRow";
+import JapaneseCrest from "@/components/dashboard/JapaneseCrest";
 import { daysUntilNextPayout } from "@/lib/payout";
 import {
   topPlayersByAttendance,
@@ -18,10 +24,14 @@ import {
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
-function attendanceColor(pct: number) {
-  if (pct <= 20) return { text: "text-danger", bar: "bg-danger" };
-  if (pct <= 50) return { text: "text-amber-500", bar: "bg-amber-500" };
-  return { text: "text-success", bar: "bg-success" };
+function attendanceTone(pct: number) {
+  if (pct <= 20) return "text-danger";
+  if (pct <= 50) return "text-accent-dim";
+  return "text-accent-bright";
+}
+
+function CrestIcon({ size }: { size?: number; strokeWidth?: number }) {
+  return <JapaneseCrest size={size ?? 16} />;
 }
 
 export default async function DashboardPage() {
@@ -39,62 +49,50 @@ export default async function DashboardPage() {
   const payoutDays = daysUntilNextPayout();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="relative">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute -inset-x-4 -top-6 -z-10 h-[380px] overflow-hidden sm:-inset-x-6"
-        >
-          <div
-            className="absolute inset-0"
-            style={{
-              maskImage: "linear-gradient(to bottom, black 55%, transparent 100%)",
-              WebkitMaskImage: "linear-gradient(to bottom, black 55%, transparent 100%)",
-            }}
-          >
-            <div
-              className="absolute inset-0 bg-cover bg-[position:78%_18%]"
-              style={{
-                backgroundImage: "url(/images/atmosphere.png)",
-                maskImage: "linear-gradient(to left, black 0%, black 42%, transparent 88%)",
-                WebkitMaskImage: "linear-gradient(to left, black 0%, black 42%, transparent 88%)",
-                opacity: 0.55,
-                filter: "saturate(1.05)",
-              }}
-            />
-          </div>
-        </div>
+        <DashboardHero />
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           <StatCard
+            variant="dashboard"
             label="Основная казна"
             value={`${numberFmt.format(treasuryBreakdown.main)} золота`}
             hint="70% — фонд ЗП"
-            icon={Crown}
+            icon={Coins}
             tone="accent"
+            strong
+            goldValue
           />
           <StatCard
+            variant="dashboard"
             label="Казна гильдии"
             value={`${numberFmt.format(treasuryBreakdown.guild)} золота`}
             hint="30% — резерв гильдии"
-            icon={ShieldCheck}
+            icon={Archive}
             tone="violet"
+            goldValue
           />
           <StatCard
+            variant="dashboard"
             label="Дроп с РБ"
             value={`${numberFmt.format(dropGoldTotal)} золота`}
             hint="эквивалент в золоте"
-            icon={TrendingUp}
-            tone="ember"
+            icon={Swords}
+            tone="red"
+            strong
+            goldValue
           />
           <StatCard
+            variant="dashboard"
             label="Ср. активность"
             value={avgActivityDays > 0 ? `${avgActivityDays} дней` : "—"}
             hint="между активностями"
-            icon={Users}
+            icon={CrestIcon}
             tone="info"
           />
           <StatCard
+            variant="dashboard"
             label="Дней до выплаты"
             value={`${payoutDays}`}
             hint="выплата 15-го числа"
@@ -104,95 +102,87 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="min-w-0 rounded-lg border border-border bg-surface p-4">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold">Динамика казны</h2>
-            <span className="text-xs text-muted">золото</span>
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
+        <DashboardPanel className="min-w-0">
+          <SectionHeader title="Динамика казны" right={<span className="text-xs text-muted">золото</span>} />
+          <div className="min-h-[255px] max-h-[320px]">
+            {treasuryChart.length === 0 ? (
+              <EmptyState variant="dashboard" />
+            ) : (
+              <TreasuryChart data={treasuryChart} />
+            )}
           </div>
-          <TreasuryChart data={treasuryChart} />
-        </div>
-        <div className="min-w-0 rounded-lg border border-border bg-surface p-4">
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold">Посещаемость</h2>
-            <span className="text-xs text-muted">участия / день</span>
+        </DashboardPanel>
+        <DashboardPanel className="min-w-0">
+          <SectionHeader title="Посещаемость" right={<span className="text-xs text-muted">участия / день</span>} />
+          <div className="min-h-[255px] max-h-[320px]">
+            {attendanceChart.length === 0 ? (
+              <EmptyState variant="dashboard" />
+            ) : (
+              <AttendanceChart data={attendanceChart} />
+            )}
           </div>
-          <AttendanceChart data={attendanceChart} />
-        </div>
+        </DashboardPanel>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold">Топ по посещаемости</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted">за всё время</span>
-              <Link href="/players" className="text-xs text-accent hover:underline">
-                Состав
-              </Link>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
+        <DashboardPanel>
+          <SectionHeader
+            title="Топ по посещаемости"
+            right={
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted">за всё время</span>
+                <Link href="/players" className="text-xs text-accent hover:underline">
+                  Состав
+                </Link>
+              </div>
+            }
+          />
           {attendanceTop.length === 0 ? (
-            <EmptyState title="Нет данных за выбранный период" />
+            <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
           ) : (
-            <ol className="space-y-1">
+            <div className="space-y-[5px]">
               {attendanceTop.map((p, i) => (
-                <li key={p.id}>
-                  <Link
-                    href={`/players/${p.id}`}
-                    className="row-tint block rounded-md px-2 py-2 text-sm transition-colors"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-3">
-                        <span className="w-4 text-muted">{i + 1}</span>
-                        <span className="font-medium">{p.name}</span>
-                        <span className="text-xs text-muted">{p.role}</span>
-                      </span>
-                      <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePct).text)}>
-                        {p.attendancePct}%
-                      </span>
-                    </div>
-                    <div className="mt-1.5 ml-7 h-1.5 overflow-hidden rounded-full bg-surface-2">
-                      <div
-                        className={clsx("h-full rounded-full", attendanceColor(p.attendancePct).bar)}
-                        style={{ width: `${Math.min(p.attendancePct, 100)}%` }}
-                      />
-                    </div>
-                  </Link>
-                </li>
+                <GuildRankRow
+                  key={p.id}
+                  href={`/players/${p.id}`}
+                  rank={i + 1}
+                  name={p.name}
+                  role={p.role}
+                  valueLabel={`${p.attendancePct}%`}
+                  valueClassName={clsx("font-mono", attendanceTone(p.attendancePct))}
+                />
               ))}
-            </ol>
+            </div>
           )}
-        </div>
+        </DashboardPanel>
 
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold">Последние активности</h2>
-            <Link href="/activities" className="text-xs text-accent hover:underline">
-              Все
-            </Link>
-          </div>
+        <DashboardPanel>
+          <SectionHeader
+            title="Последние активности"
+            right={
+              <Link href="/activities" className="text-xs text-accent hover:underline">
+                Все
+              </Link>
+            }
+          />
           {recentActivities.length === 0 ? (
-            <EmptyState title="Нет данных за выбранный период" />
+            <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
           ) : (
-            <ul className="divide-y divide-border">
+            <div className="space-y-[5px]">
               {recentActivities.map((a) => (
-                <li key={a.id}>
-                  <Link
-                    href={`/activities/${a.id}`}
-                    className="flex items-center justify-between px-2 py-3 text-sm hover:bg-surface-2"
-                  >
-                    <span>
-                      <span className="font-medium">{a.name}</span>
-                      <span className="ml-2 text-xs text-muted">{a.participants} участников</span>
-                    </span>
-                    <span className="text-xs text-muted">{a.date}</span>
-                  </Link>
-                </li>
+                <ActivityRow
+                  key={a.id}
+                  href={`/activities/${a.id}`}
+                  name={a.name}
+                  participants={a.participants}
+                  status={a.status}
+                  date={a.date}
+                />
               ))}
-            </ul>
+            </div>
           )}
-        </div>
+        </DashboardPanel>
       </div>
     </div>
   );

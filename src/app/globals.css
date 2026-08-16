@@ -1,34 +1,42 @@
 @import "tailwindcss";
 
-/* XD Guild — dark fantasy command-center theme (default). */
+/* XD Guild — dark japanese premium theme (default). */
 :root {
-  --background: #090a10;
-  --bg-elevated: #0d0f17;
-  --surface: #11131d;
-  --surface-2: #151725;
-  --surface-hover: #1a1d2b;
+  --background: #080d14;
+  --bg-elevated: #0d141f;
+  --surface: #0d141f;
+  --surface-2: #121b27;
+  --surface-hover: #121b27;
+  --bg-sidebar: #0b111a;
 
-  --border: rgba(255, 255, 255, 0.075);
-  --border-strong: rgba(255, 255, 255, 0.12);
+  --border: rgba(201, 150, 72, 0.2);
+  --border-strong: rgba(218, 161, 72, 0.55);
 
-  --foreground: #f3f0ec;
-  --muted: #aaa9b4;
-  --muted-2: #727482;
+  --foreground: #f2ede4;
+  --muted: #aaa69e;
+  --muted-2: #6f7278;
 
-  --accent: #e9a24a;
-  --accent-bright: #ffb45b;
-  --accent-dim: #b97d34;
-  --accent-soft: rgba(233, 162, 74, 0.12);
+  --accent: #d8a04d;
+  --accent-bright: #f0bd68;
+  --accent-dim: #9f7840;
+  --accent-soft: rgba(216, 160, 77, 0.12);
 
-  --danger: #d96d68;
+  --danger: #c64a3e;
   --success: #79c88a;
   --info: #7fa7d8;
   --violet: #6c557d;
   --ember: #d66b3d;
 
+  --red: #a73832;
+  --red-bright: #c64a3e;
+  --red-dark: #63231f;
+  --jade: #6b9d78;
+  --indigo: #182136;
+
   --atmosphere-opacity: 0.12;
   --row-tint: linear-gradient(90deg, rgba(108, 85, 125, 0.13), rgba(214, 107, 61, 0.08));
   --row-tint-hover: linear-gradient(90deg, rgba(108, 85, 125, 0.16), rgba(233, 162, 74, 0.14));
+  --bg-hero-glow: radial-gradient(circle at 78% 0%, rgba(125, 37, 37, 0.1), transparent 28%);
 }
 
 /* XD Guild — light fantasy-landscape theme: its own mood, not an inversion. */
@@ -60,6 +68,7 @@
   --atmosphere-opacity: 0.08;
   --row-tint: linear-gradient(90deg, rgba(139, 122, 158, 0.08), rgba(201, 138, 46, 0.05));
   --row-tint-hover: linear-gradient(90deg, rgba(139, 122, 158, 0.1), rgba(201, 138, 46, 0.12));
+  --bg-hero-glow: radial-gradient(circle at 50% 0%, transparent, transparent);
 }
 
 @theme inline {
@@ -68,6 +77,7 @@
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-surface-hover: var(--surface-hover);
+  --color-bg-sidebar: var(--bg-sidebar);
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
@@ -82,14 +92,20 @@
   --color-info: var(--info);
   --color-violet: var(--violet);
   --color-ember: var(--ember);
+  --color-red: var(--red);
+  --color-red-bright: var(--red-bright);
+  --color-red-dark: var(--red-dark);
+  --color-jade: var(--jade);
+  --color-indigo: var(--indigo);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-noto-serif);
 }
 
 /* Tactical, not toy-like: comfortable but not pill-heavy rounding. */
 @theme {
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
+  --radius-md: 0.4375rem;
+  --radius-lg: 0.625rem;
 }
 
 * {
@@ -110,7 +126,7 @@
 }
 
 body {
-  background: var(--background);
+  background: var(--bg-hero-glow), linear-gradient(180deg, var(--background) 0%, var(--bg-elevated) 100%);
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif;
 }
@@ -131,5 +147,15 @@ table th {
 }
 .row-tint:hover {
   background-image: var(--row-tint-hover);
+}
+
+/* Short brush-stroke accent under a section heading. */
+.brush-stroke {
+  width: 130px;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(173, 54, 45, 0.8), rgba(173, 54, 45, 0));
+}
+:root[data-theme="light"] .brush-stroke {
+  background: linear-gradient(90deg, rgba(180, 70, 55, 0.55), rgba(180, 70, 55, 0));
 }
 
