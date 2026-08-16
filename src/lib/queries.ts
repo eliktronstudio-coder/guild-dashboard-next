@@ -389,6 +389,16 @@ export async function getDropGoldTotal() {
   return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
 }
 
+// То же самое, но только дроп с активностей указанной категории
+// (Мини-РБ / Прайм) — для раздельной статистики на Казне.
+export async function getDropGoldTotalByCategory(category: string) {
+  const drops = await prisma.dropItem.findMany({
+    where: { status: "Не продано", activity: { category } },
+    select: { value: true, quantity: true },
+  });
+  return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
+}
+
 // Инвентарь: предметы из журнала дропа, которые ещё не выданы конкретному
 // игроку (playerId не указан) и не проданы — то, что сейчас числится за
 // гильдией в виде предметов, а не золота.
