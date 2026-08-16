@@ -47,6 +47,7 @@ type Activity = {
   drops: Drop[];
   rosterScreenshots: { id: string; imageUrl: string }[];
   dropScreenshots: { id: string; imageUrl: string }[];
+  guests: { id: string; name: string }[];
 };
 
 export default function ActivityDetailPanel({
@@ -90,6 +91,45 @@ export default function ActivityDetailPanel({
   const [rosterSearch, setRosterSearch] = useState("");
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [rosterBusy, setRosterBusy] = useState(false);
+
+  const [addingGuest, setAddingGuest] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [guestError, setGuestError] = useState<string | null>(null);
+  const [guestBusy, setGuestBusy] = useState(false);
+
+  async function handleAddGuest(e: FormEvent) {
+    e.preventDefault();
+    setGuestError(null);
+    setGuestBusy(true);
+    try {
+      const res = await fetch(`/api/activities/${activity.id}/guests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: guestName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setGuestError(data.error ?? "Что-то пошло не так.");
+        setGuestBusy(false);
+        return;
+      }
+      setAddingGuest(false);
+      setGuestName("");
+      router.refresh();
+    } catch {
+      setGuestError("Не удалось связаться с сервером.");
+    } finally {
+      setGuestBusy(false);
+    }
+  }
+
+  async function handleDeleteGuest(id: string) {
+    if (!confirm("Убрать незарегистрированного участника?")) return;
+    setGuestBusy(true);
+    await fetch(`/api/activities/${activity.id}/guests/${id}`, { method: "DELETE" });
+    setGuestBusy(false);
+    router.refresh();
+  }
 
   const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(editSearch.trim().toLowerCase()));
   const filteredRosterPlayers = players.filter((p) => p.name.toLowerCase().includes(rosterSearch.trim().toLowerCase()));
@@ -658,15 +698,59 @@ export default function ActivityDetailPanel({
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold">Участники ({activity.roster.length})</h3>
             {isAdmin && !editingRoster && (
-              <button
-                type="button"
-                onClick={() => setEditingRoster(true)}
-                className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground"
-              >
-                <Pencil size={13} /> Редактировать
-              </button>
+              <div className="flex items-center gap-2">
+                {!addingGuest && (
+                  <button
+                    type="button"
+                    onClick={() => setAddingGuest(true)}
+                    className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground"
+                  >
+                    <Plus size={13} /> Незарегистрированный
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setEditingRoster(true)}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground"
+                >
+                  <Pencil size={13} /> Редактировать
+                </button>
+              </div>
             )}
           </div>
+
+          {addingGuest && (
+            <form onSubmit={handleAddGuest} className="mb-3 flex flex-wrap items-center gap-2">
+              <input
+                value={guestName}
+                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="Имя игрока"
+                required
+                maxLength={40}
+                autoFocus
+                className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-3 py-1.5 text-sm outline-none focus:border-accent"
+              />
+              <button
+                type="submit"
+                disabled={guestBusy}
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-black hover:opacity-90 disabled:opacity-60"
+              >
+                Добавить
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAddingGuest(false);
+                  setGuestName("");
+                  setGuestError(null);
+                }}
+                className="flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs text-muted hover:text-foreground"
+              >
+                <X size={13} /> Отмена
+              </button>
+              {guestError && <p className="w-full text-xs text-danger">{guestError}</p>}
+            </form>
+          )}
 
           {editingRoster ? (
             <div>
@@ -727,16 +811,49 @@ export default function ActivityDetailPanel({
               </div>
             </div>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {activity.roster.map((p) => (
-                <span
-                  key={p.id}
-                  className={clsx("rounded-full border px-2.5 py-1 text-xs font-medium", roleColor[p.role] ?? roleColor["Без роли"])}
-                >
-                  {p.name}
-                </span>
-              ))}
-              {activity.roster.length === 0 && <p className="text-xs text-muted">Участники не выбраны.</p>}
+            <div>
+              <div className="flex flex-wrap gap-2">
+                {activity.roster.map((p) => (
+                  <span
+                    key={p.id}
+                    className={clsx("rounded-full border px-2.5 py-1 text-xs font-medium", roleColor[p.role] ?? roleColor["Без роли"])}
+                  >
+                    {p.name}
+                  </span>
+                ))}
+                {activity.roster.length === 0 && activity.guests.length === 0 && (
+                  <p className="text-xs text-muted">Участники не выбраны.</p>
+                )}
+              </div>
+
+              {activity.guests.length > 0 && (
+                <div className="mt-3">
+                  <p className="mb-1.5 text-xs text-muted">
+                    Незарегистрированные <span className="text-muted/70">(не учитываются в статистике)</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {activity.guests.map((g) => (
+                      <span
+                        key={g.id}
+                        className="flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/10 px-2.5 py-1 text-xs font-medium text-danger"
+                      >
+                        {g.name}
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGuest(g.id)}
+                            aria-label={`Убрать ${g.name}`}
+                            disabled={guestBusy}
+                            className="hover:opacity-70 disabled:opacity-40"
+                          >
+                            <X size={11} />
+                          </button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

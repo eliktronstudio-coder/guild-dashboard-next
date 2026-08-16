@@ -107,6 +107,8 @@ export default function ActivitiesList({
   const [dropSearch, setDropSearch] = useState("");
   const [rosterShots, setRosterShots] = useState<string[]>([]);
   const [dropShots, setDropShots] = useState<string[]>([]);
+  const [guestNames, setGuestNames] = useState<string[]>([]);
+  const [guestInput, setGuestInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -187,7 +189,24 @@ export default function ActivitiesList({
     setDropSearch("");
     setRosterShots([]);
     setDropShots([]);
+    setGuestNames([]);
+    setGuestInput("");
     setError(null);
+  }
+
+  function addGuest() {
+    const trimmed = guestInput.trim();
+    if (!trimmed) return;
+    if (trimmed.length > 40) {
+      setError("Имя слишком длинное (до 40 символов).");
+      return;
+    }
+    setGuestNames((prev) => [...prev, trimmed]);
+    setGuestInput("");
+  }
+
+  function removeGuest(index: number) {
+    setGuestNames((prev) => prev.filter((_, i) => i !== index));
   }
 
   function toggleSelected(id: string) {
@@ -237,6 +256,7 @@ export default function ActivitiesList({
             ...rosterShots.map((imageUrl) => ({ kind: "roster", imageUrl })),
             ...dropShots.map((imageUrl) => ({ kind: "drop", imageUrl })),
           ],
+          guestNames,
         }),
       });
       const data = await res.json();
@@ -516,6 +536,55 @@ export default function ActivitiesList({
                   ))}
                 </div>
                 {selected.size > 0 && <p className="mt-1.5 text-xs text-muted">Выбрано: {selected.size}</p>}
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-xs text-muted">
+                  Незарегистрированные участники{" "}
+                  <span className="text-muted/70">(для информации, не учитываются в статистике)</span>
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    value={guestInput}
+                    onChange={(e) => setGuestInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addGuest();
+                      }
+                    }}
+                    placeholder="Имя игрока"
+                    maxLength={40}
+                    className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={addGuest}
+                    className="flex-shrink-0 rounded-md border border-border px-3 py-2 text-sm text-foreground/80 hover:bg-surface-2 hover:text-foreground"
+                  >
+                    Добавить
+                  </button>
+                </div>
+                {guestNames.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {guestNames.map((n, i) => (
+                      <span
+                        key={i}
+                        className="flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger/10 px-2.5 py-1 text-xs font-medium text-danger"
+                      >
+                        {n}
+                        <button
+                          type="button"
+                          onClick={() => removeGuest(i)}
+                          aria-label={`Убрать ${n}`}
+                          className="hover:opacity-70"
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>

@@ -8,6 +8,7 @@ const DIFFICULTIES = ["Обычная", "Героическая"];
 const SCREENSHOT_KINDS = ["roster", "drop"];
 const MAX_IMAGE_BYTES = 800_000;
 const MAX_SCREENSHOTS_PER_KIND = 6;
+const MAX_GUESTS = 30;
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
@@ -48,6 +49,12 @@ export async function POST(request: NextRequest) {
         }))
         .filter((s: { kind: string; imageUrl: string }) => SCREENSHOT_KINDS.includes(s.kind) && s.imageUrl)
     : [];
+  const guestNames: string[] = Array.isArray(body?.guestNames)
+    ? body.guestNames
+        .filter((n: unknown): n is string => typeof n === "string")
+        .map((n: string) => n.trim())
+        .filter((n: string) => n.length > 0 && n.length <= 40)
+    : [];
 
   if (!name || name.length > 60) {
     return NextResponse.json({ error: "Укажите название активности (до 60 символов)." }, { status: 400 });
@@ -68,6 +75,9 @@ export async function POST(request: NextRequest) {
   }
   if (screenshotEntries.some((s) => !s.imageUrl.startsWith("data:image/") || s.imageUrl.length > MAX_IMAGE_BYTES)) {
     return NextResponse.json({ error: "Скрин слишком большой или неверного формата (до ~600 КБ)." }, { status: 400 });
+  }
+  if (guestNames.length > MAX_GUESTS) {
+    return NextResponse.json({ error: `Максимум ${MAX_GUESTS} незарегистрированных участников.` }, { status: 400 });
   }
 
   const catalogItems = dropEntries.length
@@ -102,6 +112,7 @@ export async function POST(request: NextRequest) {
           .filter((d): d is NonNullable<typeof d> => d !== null),
       },
       screenshots: { create: screenshotEntries },
+      guests: { create: guestNames.map((name) => ({ name })) },
     },
   });
 

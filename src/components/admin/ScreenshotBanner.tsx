@@ -126,7 +126,7 @@ export default function ScreenshotBanner({
               <button
                 type="button"
                 onClick={() => setLightbox(s.imageUrl)}
-                className="block w-full overflow-hidden rounded-md border border-border"
+                className="flex h-28 w-full items-center justify-center overflow-hidden rounded-md border border-border bg-surface-2"
               >
                 <Image
                   src={s.imageUrl}
@@ -134,7 +134,7 @@ export default function ScreenshotBanner({
                   width={400}
                   height={160}
                   unoptimized
-                  className="h-32 w-full object-cover transition-opacity hover:opacity-90"
+                  className="h-full w-full object-contain transition-opacity hover:opacity-90"
                 />
               </button>
               {isAdmin && (
