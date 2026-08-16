@@ -383,14 +383,30 @@ export default function PlayersTable({
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
-                        {p.attendancePctPrime}%
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
+                          <div
+                            className={clsx("h-full rounded-full", attendanceColor(p.attendancePctPrime).bar)}
+                            style={{ width: `${Math.min(p.attendancePctPrime, 100)}%` }}
+                          />
+                        </div>
+                        <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
+                          {p.attendancePctPrime}%
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
-                        {p.attendancePctMiniRb}%
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
+                          <div
+                            className={clsx("h-full rounded-full", attendanceColor(p.attendancePctMiniRb).bar)}
+                            style={{ width: `${Math.min(p.attendancePctMiniRb, 100)}%` }}
+                          />
+                        </div>
+                        <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
+                          {p.attendancePctMiniRb}%
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-muted">{coefficientFmt.format(p.salaryCoefficient)}</td>
                     <td className="px-4 py-3 font-medium">{numberFmt.format(p.salary)}</td>
