@@ -12,17 +12,18 @@ export default async function UsersPage() {
       orderBy: { createdAt: "desc" },
       select: { id: true, username: true, role: true, createdAt: true },
     }),
-    prisma.player.findMany({ select: { userId: true } }),
+    prisma.player.findMany({ select: { userId: true, name: true } }),
   ]);
 
-  const linkedUserIds = new Set(players.map((p) => p.userId).filter(Boolean));
+  const playerNameByUserId = new Map(players.filter((p) => p.userId).map((p) => [p.userId as string, p.name]));
 
   return (
     <UsersTable
       users={users.map((u) => ({
         ...u,
         createdAt: u.createdAt.toISOString(),
-        inRoster: linkedUserIds.has(u.id),
+        inRoster: playerNameByUserId.has(u.id),
+        playerName: playerNameByUserId.get(u.id) ?? null,
       }))}
       currentUserId={admin.sub}
     />

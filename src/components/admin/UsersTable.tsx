@@ -10,6 +10,7 @@ type UserRow = {
   role: string;
   createdAt: string;
   inRoster: boolean;
+  playerName: string | null;
 };
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" });
@@ -111,6 +112,7 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
                 <tr className="hover:bg-surface-2">
                   <td className="px-4 py-3 font-medium">
                     {u.username}
+                    {u.playerName && <span className="text-muted"> / {u.playerName}</span>}
                     {u.id === currentUserId && <span className="ml-2 text-xs text-muted">(вы)</span>}
                   </td>
                   <td className="px-4 py-3">
