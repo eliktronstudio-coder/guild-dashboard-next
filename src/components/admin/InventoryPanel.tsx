@@ -124,28 +124,28 @@ export default function InventoryPanel({
         {items.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-muted">Пока нет непроданных предметов.</p>
         ) : (
-          <div className="grid grid-cols-4 gap-3 p-4 sm:grid-cols-6 lg:grid-cols-8">
+          <div className="flex flex-wrap gap-2 p-4">
             {items.map((i) => (
               <button
                 key={i.item}
                 type="button"
                 onClick={() => setOpenItem(i.item)}
                 title={i.item}
-                className="group relative flex aspect-square flex-col items-center justify-center rounded-lg border border-border bg-surface-2 transition-colors hover:border-accent/50 hover:bg-surface-hover"
+                className="group relative flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-md border border-border bg-surface-2 transition-colors hover:border-accent/50 hover:bg-surface-hover"
               >
                 {i.imageUrl ? (
                   <Image
                     src={i.imageUrl}
                     alt={i.item}
-                    width={48}
-                    height={48}
+                    width={20}
+                    height={20}
                     unoptimized
-                    className="h-full w-full rounded-lg object-contain p-2"
+                    className="h-full w-full rounded-md object-contain p-1"
                   />
                 ) : (
-                  <HelpCircle size={22} className="text-muted-2" />
+                  <HelpCircle size={13} className="text-muted-2" />
                 )}
-                <span className="absolute -bottom-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border border-border bg-accent px-1 text-[11px] font-semibold text-black">
+                <span className="absolute -bottom-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-border bg-accent px-0.5 text-[8px] font-semibold text-black">
                   {i.quantity}
                 </span>
               </button>
