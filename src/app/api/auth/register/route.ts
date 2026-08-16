@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hashPassword, setSessionCookie } from "@/lib/auth";
 import { ROLES } from "@/lib/roles";
+import { promoteMatchingGuests } from "@/lib/guests";
 
 const GAME_ROLES = ROLES.filter((r) => r !== "Без роли");
 
@@ -50,7 +51,12 @@ export async function POST(request: NextRequest) {
       passwordHash,
       player: { create: { name: nickname, role, level: 1, xp: 0 } },
     },
+    include: { player: true },
   });
+
+  if (user.player) {
+    await promoteMatchingGuests(user.player.id, user.player.name);
+  }
 
   await setSessionCookie({ sub: user.id, username: user.username, role: user.role });
 

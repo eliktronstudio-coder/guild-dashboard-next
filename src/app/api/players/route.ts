@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { ROLES } from "@/lib/roles";
+import { promoteMatchingGuests } from "@/lib/guests";
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
         where: { id: existing.id },
         data: { userId },
       });
+      await promoteMatchingGuests(linked.id, linked.name);
       return NextResponse.json(linked, { status: 200 });
     }
   }
@@ -46,6 +48,7 @@ export async function POST(request: NextRequest) {
   const player = await prisma.player.create({
     data: { name, role, level, xp, salaryCoefficient, userId },
   });
+  await promoteMatchingGuests(player.id, player.name);
 
   return NextResponse.json(player, { status: 201 });
 }
