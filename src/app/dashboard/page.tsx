@@ -92,6 +92,7 @@ export default async function DashboardPage() {
             icon={Swords}
             tone="red"
             goldValue
+            href="/treasury"
           />
           <StatCard
             variant="dashboard"
@@ -102,6 +103,7 @@ export default async function DashboardPage() {
             tone="red"
             strong
             goldValue
+            href="/treasury"
           />
           <StatCard
             variant="dashboard"
