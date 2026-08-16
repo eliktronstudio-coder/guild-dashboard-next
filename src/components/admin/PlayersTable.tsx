@@ -15,6 +15,8 @@ type Player = {
   name: string;
   role: string;
   attendancePct: number;
+  attendancePctPrime: number;
+  attendancePctMiniRb: number;
   salaryCoefficient: number;
   salary: number;
   userId: string | null;
@@ -313,6 +315,12 @@ export default function PlayersTable({
                 <th className="px-4 py-3 font-medium" title="Считается автоматически: доля активностей за всё время, в которых участвовал игрок">
                   Посещаемость
                 </th>
+                <th className="px-4 py-3 font-medium" title="Доля активностей категории «Прайм», в которых участвовал игрок">
+                  Посещаемость Прайм
+                </th>
+                <th className="px-4 py-3 font-medium" title="Доля активностей категории «Мини-РБ», в которых участвовал игрок">
+                  Посещаемость Мини-РБ
+                </th>
                 <th className="px-4 py-3 font-medium" title="Настраивается админом индивидуально для каждого игрока (0.0–1.25)">
                   Коэффициент
                 </th>
@@ -373,6 +381,16 @@ export default function PlayersTable({
                           {p.attendancePct}%
                         </span>
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
+                        {p.attendancePctPrime}%
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
+                        {p.attendancePctMiniRb}%
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-muted">{coefficientFmt.format(p.salaryCoefficient)}</td>
                     <td className="px-4 py-3 font-medium">{numberFmt.format(p.salary)}</td>

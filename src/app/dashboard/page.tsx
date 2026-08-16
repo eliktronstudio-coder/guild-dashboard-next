@@ -13,7 +13,7 @@ import ActivityRow from "@/components/dashboard/ActivityRow";
 import JapaneseCrest from "@/components/dashboard/JapaneseCrest";
 import { daysUntilNextPayout } from "@/lib/payout";
 import {
-  topPlayersByAttendance,
+  topPlayersByAttendanceCategory,
   getAllActivities,
   getTreasuryBreakdown,
   getTreasuryChartData,
@@ -35,9 +35,10 @@ function CrestIcon({ size }: { size?: number; strokeWidth?: number }) {
 }
 
 export default async function DashboardPage() {
-  const [attendanceTop, allActivities, treasuryBreakdown, treasuryChart, attendanceChart, avgActivityDays, dropGoldTotal] =
+  const [primeTop, miniRbTop, allActivities, treasuryBreakdown, treasuryChart, attendanceChart, avgActivityDays, dropGoldTotal] =
     await Promise.all([
-      topPlayersByAttendance(5),
+      topPlayersByAttendanceCategory("attendancePctPrime", 5),
+      topPlayersByAttendanceCategory("attendancePctMiniRb", 5),
       getAllActivities(),
       getTreasuryBreakdown(),
       getTreasuryChartData(),
@@ -128,7 +129,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
         <DashboardPanel>
           <SectionHeader
-            title="Топ по посещаемости"
+            title="Посещаемость: Прайм"
             right={
               <div className="flex items-center gap-3">
                 <span className="text-xs text-muted">за всё время</span>
@@ -138,19 +139,19 @@ export default async function DashboardPage() {
               </div>
             }
           />
-          {attendanceTop.length === 0 ? (
+          {primeTop.length === 0 ? (
             <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
           ) : (
             <div className="space-y-[5px]">
-              {attendanceTop.map((p, i) => (
+              {primeTop.map((p, i) => (
                 <GuildRankRow
                   key={p.id}
                   href={`/players/${p.id}`}
                   rank={i + 1}
                   name={p.name}
                   role={p.role}
-                  valueLabel={`${p.attendancePct}%`}
-                  valueClassName={clsx("font-mono", attendanceTone(p.attendancePct))}
+                  valueLabel={`${p.attendancePctPrime}%`}
+                  valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
                 />
               ))}
             </div>
@@ -159,31 +160,62 @@ export default async function DashboardPage() {
 
         <DashboardPanel>
           <SectionHeader
-            title="Последние активности"
+            title="Посещаемость: Мини-РБ"
             right={
-              <Link href="/activities" className="text-xs text-accent hover:underline">
-                Все
-              </Link>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted">за всё время</span>
+                <Link href="/players" className="text-xs text-accent hover:underline">
+                  Состав
+                </Link>
+              </div>
             }
           />
-          {recentActivities.length === 0 ? (
+          {miniRbTop.length === 0 ? (
             <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
           ) : (
             <div className="space-y-[5px]">
-              {recentActivities.map((a) => (
-                <ActivityRow
-                  key={a.id}
-                  href={`/activities/${a.id}`}
-                  name={a.name}
-                  participants={a.participants}
-                  status={a.status}
-                  date={a.date}
+              {miniRbTop.map((p, i) => (
+                <GuildRankRow
+                  key={p.id}
+                  href={`/players/${p.id}`}
+                  rank={i + 1}
+                  name={p.name}
+                  role={p.role}
+                  valueLabel={`${p.attendancePctMiniRb}%`}
+                  valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
                 />
               ))}
             </div>
           )}
         </DashboardPanel>
       </div>
+
+      <DashboardPanel>
+        <SectionHeader
+          title="Последние активности"
+          right={
+            <Link href="/activities" className="text-xs text-accent hover:underline">
+              Все
+            </Link>
+          }
+        />
+        {recentActivities.length === 0 ? (
+          <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+        ) : (
+          <div className="space-y-[5px]">
+            {recentActivities.map((a) => (
+              <ActivityRow
+                key={a.id}
+                href={`/activities/${a.id}`}
+                name={a.name}
+                participants={a.participants}
+                status={a.status}
+                date={a.date}
+              />
+            ))}
+          </div>
+        )}
+      </DashboardPanel>
     </div>
   );
 }

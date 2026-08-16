@@ -7,16 +7,16 @@ function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-// Посещаемость считается динамически: доля всех активностей за всё время,
-// в которых игрок реально участвовал.
-async function getAttendanceMap(): Promise<Map<string, number>> {
-  const activities = await prisma.activity.findMany({
-    select: { participants: { select: { playerId: true } } },
-  });
+// Посещаемость считается динамически: доля активностей, в которых игрок
+// реально участвовал. Считается отдельно для всех активностей и отдельно
+// по каждой категории (Прайм / Мини-РБ), чтобы можно было смотреть
+// посещаемость по типу активности, а не только в среднем.
+type ActivityForAttendance = { category: string; participants: { playerId: string }[] };
 
-  const totalActivities = activities.length;
+function buildAttendanceMap(activities: ActivityForAttendance[]): Map<string, number> {
+  const total = activities.length;
   const map = new Map<string, number>();
-  if (totalActivities === 0) return map;
+  if (total === 0) return map;
 
   const counts = new Map<string, number>();
   for (const a of activities) {
@@ -25,9 +25,25 @@ async function getAttendanceMap(): Promise<Map<string, number>> {
     }
   }
   for (const [playerId, count] of counts) {
-    map.set(playerId, Math.round((count / totalActivities) * 100));
+    map.set(playerId, Math.round((count / total) * 100));
   }
   return map;
+}
+
+async function getAttendanceMaps(): Promise<{
+  overall: Map<string, number>;
+  prime: Map<string, number>;
+  miniRb: Map<string, number>;
+}> {
+  const activities = await prisma.activity.findMany({
+    select: { category: true, participants: { select: { playerId: true } } },
+  });
+
+  return {
+    overall: buildAttendanceMap(activities),
+    prime: buildAttendanceMap(activities.filter((a) => a.category === "Прайм")),
+    miniRb: buildAttendanceMap(activities.filter((a) => a.category === "Мини-РБ")),
+  };
 }
 
 // Зарплата считается динамически: основная казна (проданный дроп попадает
@@ -64,18 +80,30 @@ async function getSalaryMap(attendanceMap: Map<string, number>): Promise<Map<str
 }
 
 async function getDerivedPlayerMaps() {
-  const attendance = await getAttendanceMap();
-  const salary = await getSalaryMap(attendance);
-  return { attendance, salary };
+  const attendanceMaps = await getAttendanceMaps();
+  const salary = await getSalaryMap(attendanceMaps.overall);
+  return {
+    attendance: attendanceMaps.overall,
+    attendancePrime: attendanceMaps.prime,
+    attendanceMiniRb: attendanceMaps.miniRb,
+    salary,
+  };
 }
 
 function withDerived<T extends { id: string }>(
   players: T[],
-  derived: { attendance: Map<string, number>; salary: Map<string, number> }
+  derived: {
+    attendance: Map<string, number>;
+    attendancePrime: Map<string, number>;
+    attendanceMiniRb: Map<string, number>;
+    salary: Map<string, number>;
+  }
 ) {
   return players.map((p) => ({
     ...p,
     attendancePct: derived.attendance.get(p.id) ?? 0,
+    attendancePctPrime: derived.attendancePrime.get(p.id) ?? 0,
+    attendancePctMiniRb: derived.attendanceMiniRb.get(p.id) ?? 0,
     salary: derived.salary.get(p.id) ?? 0,
   }));
 }
@@ -97,6 +125,8 @@ export async function getPlayerById(id: string) {
   return {
     ...player,
     attendancePct: derived.attendance.get(player.id) ?? 0,
+    attendancePctPrime: derived.attendancePrime.get(player.id) ?? 0,
+    attendancePctMiniRb: derived.attendanceMiniRb.get(player.id) ?? 0,
     salary: derived.salary.get(player.id) ?? 0,
   };
 }
@@ -145,6 +175,16 @@ export async function topPlayersByAttendance(count = 5) {
   const [players, derived] = await Promise.all([prisma.player.findMany(), getDerivedPlayerMaps()]);
   return withDerived(players, derived)
     .sort((a, b) => b.attendancePct - a.attendancePct)
+    .slice(0, count);
+}
+
+export async function topPlayersByAttendanceCategory(
+  field: "attendancePctPrime" | "attendancePctMiniRb",
+  count = 5
+) {
+  const [players, derived] = await Promise.all([prisma.player.findMany(), getDerivedPlayerMaps()]);
+  return withDerived(players, derived)
+    .sort((a, b) => b[field] - a[field])
     .slice(0, count);
 }
 
