@@ -402,17 +402,41 @@ export async function getDropGoldTotalByCategory(category: string) {
 // Инвентарь: предметы из журнала дропа, которые ещё не выданы конкретному
 // игроку (playerId не указан) и не проданы — то, что сейчас числится за
 // гильдией в виде предметов, а не золота.
+// Инвентарь = весь непроданный дроп из журнала (проданное уже стало
+// золотом в казне и не считается физическим запасом), сгруппированный
+// по названию предмета для отображения иконками с суммарным количеством.
 export async function getInventory() {
-  const drops = await prisma.dropItem.findMany({ where: { playerId: null, status: "Не продано" } });
-  const map = new Map<string, { item: string; quantity: number; totalValue: number }>();
+  const drops = await prisma.dropItem.findMany({
+    where: { status: "Не продано" },
+    include: { catalogItem: { select: { imageUrl: true } }, player: { select: { name: true } } },
+    orderBy: { date: "desc" },
+  });
+
+  type Entry = { id: string; quantity: number; value: number; date: string; playerName: string | null };
+  const map = new Map<string, { item: string; quantity: number; totalValue: number; imageUrl: string | null; entries: Entry[] }>();
   for (const d of drops) {
     const lineValue = d.value * d.quantity;
     const existing = map.get(d.item);
+    const entry: Entry = {
+      id: d.id,
+      quantity: d.quantity,
+      value: d.value,
+      date: dateFmt.format(d.date),
+      playerName: d.player?.name ?? null,
+    };
     if (existing) {
       existing.quantity += d.quantity;
       existing.totalValue += lineValue;
+      existing.entries.push(entry);
+      if (!existing.imageUrl && d.catalogItem?.imageUrl) existing.imageUrl = d.catalogItem.imageUrl;
     } else {
-      map.set(d.item, { item: d.item, quantity: d.quantity, totalValue: lineValue });
+      map.set(d.item, {
+        item: d.item,
+        quantity: d.quantity,
+        totalValue: lineValue,
+        imageUrl: d.catalogItem?.imageUrl ?? null,
+        entries: [entry],
+      });
     }
   }
   return [...map.values()].sort((a, b) => b.totalValue - a.totalValue);

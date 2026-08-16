@@ -73,7 +73,13 @@ export default async function TreasuryPage() {
         <TreasuryChart data={treasuryChart} />
       </div>
 
-      <InventoryPanel items={inventory} />
+      <InventoryPanel
+        items={inventory}
+        activities={activities.map((a) => ({ id: a.id, name: a.name }))}
+        players={players.map((p) => ({ id: p.id, name: p.name }))}
+        catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
+        isAdmin={isAdmin}
+      />
 
       <TreasuryPanel
         transactions={transactions.map((t) => ({ ...t, date: dateFmt.format(t.date) }))}
