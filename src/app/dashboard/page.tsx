@@ -8,7 +8,6 @@ import EmptyState from "@/components/EmptyState";
 import { daysUntilNextPayout } from "@/lib/payout";
 import {
   topPlayersByAttendance,
-  topPlayersByXp,
   getAllActivities,
   getTreasuryBreakdown,
   getTreasuryChartData,
@@ -26,10 +25,9 @@ function attendanceColor(pct: number) {
 }
 
 export default async function DashboardPage() {
-  const [attendanceTop, xpTop, allActivities, treasuryBreakdown, treasuryChart, attendanceChart, avgActivityDays, dropGoldTotal] =
+  const [attendanceTop, allActivities, treasuryBreakdown, treasuryChart, attendanceChart, avgActivityDays, dropGoldTotal] =
     await Promise.all([
       topPlayersByAttendance(5),
-      topPlayersByXp(5),
       getAllActivities(),
       getTreasuryBreakdown(),
       getTreasuryChartData(),
@@ -169,67 +167,32 @@ export default async function DashboardPage() {
 
         <div className="rounded-lg border border-border bg-surface p-4">
           <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold">Топ по достижениям</h2>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted">коллекция</span>
-              <Link href="/players" className="text-xs text-accent hover:underline">
-                Состав
-              </Link>
-            </div>
+            <h2 className="text-sm font-semibold">Последние активности</h2>
+            <Link href="/activities" className="text-xs text-accent hover:underline">
+              Все
+            </Link>
           </div>
-          {xpTop.length === 0 ? (
+          {recentActivities.length === 0 ? (
             <EmptyState title="Нет данных за выбранный период" />
           ) : (
-            <ol className="space-y-1">
-              {xpTop.map((p, i) => (
-                <li key={p.id}>
+            <ul className="divide-y divide-border">
+              {recentActivities.map((a) => (
+                <li key={a.id}>
                   <Link
-                    href={`/players/${p.id}`}
-                    className="row-tint flex items-center justify-between rounded-md px-2 py-2 text-sm transition-colors"
+                    href={`/activities/${a.id}`}
+                    className="flex items-center justify-between px-2 py-3 text-sm hover:bg-surface-2"
                   >
-                    <span className="flex items-center gap-3">
-                      <span className="w-4 text-muted">{i + 1}</span>
-                      <span className="font-medium">{p.name}</span>
-                      <span className="text-xs text-muted">{p.role}</span>
+                    <span>
+                      <span className="font-medium">{a.name}</span>
+                      <span className="ml-2 text-xs text-muted">{a.participants} участников</span>
                     </span>
-                    <span className="text-xs text-muted">
-                      {p.level} ур. · {numberFmt.format(p.xp)} XP
-                    </span>
+                    <span className="text-xs text-muted">{a.date}</span>
                   </Link>
                 </li>
               ))}
-            </ol>
+            </ul>
           )}
         </div>
-      </div>
-
-      <div className="rounded-lg border border-border bg-surface p-4">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold">Последние активности</h2>
-          <Link href="/activities" className="text-xs text-accent hover:underline">
-            Все
-          </Link>
-        </div>
-        {recentActivities.length === 0 ? (
-          <EmptyState title="Нет данных за выбранный период" />
-        ) : (
-          <ul className="divide-y divide-border">
-            {recentActivities.map((a) => (
-              <li key={a.id}>
-                <Link
-                  href={`/activities/${a.id}`}
-                  className="flex items-center justify-between px-2 py-3 text-sm hover:bg-surface-2"
-                >
-                  <span>
-                    <span className="font-medium">{a.name}</span>
-                    <span className="ml-2 text-xs text-muted">{a.participants} участников</span>
-                  </span>
-                  <span className="text-xs text-muted">{a.date}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     </div>
   );
