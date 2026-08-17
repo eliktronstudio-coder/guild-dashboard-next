@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import Image from "next/image";
+import { Plus, Trash2, ImageOff } from "lucide-react";
 import SellDropForm from "./SellDropForm";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -12,6 +13,7 @@ type Transaction = {
   description: string;
   amount: number;
   date: string;
+  imageUrl: string | null;
 };
 
 type DropOption = { id: string; item: string; quantity: number; value: number };
@@ -44,7 +46,7 @@ export default function TreasuryPanel({
     return (
       <div className="rounded-lg border border-border bg-surface">
         <div className="border-b border-border p-4">
-          <h2 className="text-sm font-semibold">Последние операции</h2>
+          <h2 className="text-sm font-semibold">Последняя продажа</h2>
         </div>
         <TransactionList transactions={transactions} />
       </div>
@@ -77,7 +79,7 @@ export default function TreasuryPanel({
 
       <div className="rounded-lg border border-border bg-surface">
         <div className="border-b border-border p-4">
-          <h2 className="text-sm font-semibold">Последние операции</h2>
+          <h2 className="text-sm font-semibold">Последняя продажа</h2>
         </div>
         <TransactionList transactions={transactions} onDelete={handleDelete} busy={busy} />
       </div>
@@ -97,9 +99,25 @@ function TransactionList({
   return (
     <ul className="divide-y divide-border">
       {transactions.map((t) => (
-        <li key={t.id} className="flex items-center justify-between px-4 py-3 text-sm">
-          <span>{t.description}</span>
-          <span className="flex items-center gap-3">
+        <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+          <span className="flex min-w-0 items-center gap-2">
+            {t.imageUrl ? (
+              <Image
+                src={t.imageUrl}
+                alt=""
+                width={24}
+                height={24}
+                unoptimized
+                className="h-6 w-6 flex-shrink-0 rounded border border-border object-cover"
+              />
+            ) : (
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-border bg-surface-2 text-muted">
+                <ImageOff size={10} />
+              </div>
+            )}
+            <span className="truncate">{t.description}</span>
+          </span>
+          <span className="flex flex-shrink-0 items-center gap-3">
             <span className={t.amount >= 0 ? "text-success" : "text-danger"}>
               {t.amount >= 0 ? "+" : ""}
               {numberFmt.format(t.amount)}

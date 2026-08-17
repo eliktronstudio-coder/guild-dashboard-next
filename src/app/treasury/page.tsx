@@ -97,20 +97,26 @@ export default async function TreasuryPage() {
         <TreasuryChart data={treasuryChart} />
       </div>
 
-      <InventoryPanel
-        items={inventory}
-        activities={activities.map((a) => ({ id: a.id, name: a.name }))}
-        players={players.map((p) => ({ id: p.id, name: p.name }))}
-        catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
-        isAdmin={isAdmin}
-      />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="min-w-0 lg:col-span-3">
+          <InventoryPanel
+            items={inventory}
+            activities={activities.map((a) => ({ id: a.id, name: a.name }))}
+            players={players.map((p) => ({ id: p.id, name: p.name }))}
+            catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
+            isAdmin={isAdmin}
+          />
+        </div>
 
-      <TreasuryPanel
-        transactions={transactions.map((t) => ({ ...t, date: dateFmt.format(t.date) }))}
-        drops={unsoldDropOptions}
-        players={allPlayers.map((p) => ({ id: p.id, name: p.name }))}
-        isAdmin={isAdmin}
-      />
+        <div className="min-w-0 lg:col-span-2">
+          <TreasuryPanel
+            transactions={transactions.map((t) => ({ ...t, date: dateFmt.format(t.date) }))}
+            drops={unsoldDropOptions}
+            players={allPlayers.map((p) => ({ id: p.id, name: p.name }))}
+            isAdmin={isAdmin}
+          />
+        </div>
+      </div>
 
       <DropsPanel
         drops={drops.map((d) => ({

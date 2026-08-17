@@ -330,10 +330,21 @@ export async function getActivityById(id: string) {
 }
 
 export async function getTreasuryTransactions(limit?: number) {
-  return prisma.treasuryTransaction.findMany({
+  const transactions = await prisma.treasuryTransaction.findMany({
     orderBy: { date: "desc" },
     take: limit,
   });
+
+  const txIds = transactions.map((t) => t.id);
+  const soldDrops = await prisma.dropItem.findMany({
+    where: { treasuryTransactionId: { in: txIds } },
+    select: { treasuryTransactionId: true, catalogItem: { select: { imageUrl: true } } },
+  });
+  const iconByTxId = new Map(
+    soldDrops.map((d) => [d.treasuryTransactionId as string, d.catalogItem?.imageUrl ?? null])
+  );
+
+  return transactions.map((t) => ({ ...t, imageUrl: iconByTxId.get(t.id) ?? null }));
 }
 
 export async function getTreasuryGold() {
