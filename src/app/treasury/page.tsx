@@ -68,7 +68,7 @@ export default async function TreasuryPage() {
         <StatCard
           label="Казна мини-РБ"
           value={`${numberFmt.format(treasuryBreakdown.miniRb)} золота`}
-          hint="70% — фонд ЗП"
+          hint="100% — фонд ЗП"
         />
         <StatCard
           label="Казна гильдии"

@@ -370,7 +370,8 @@ export async function getTreasuryBreakdown() {
   const main = Math.round(total * TREASURY_MAIN_SHARE);
   const guild = total - main;
   const prime = Math.round(primeGold * TREASURY_MAIN_SHARE);
-  const miniRb = Math.round(miniRbGold * TREASURY_MAIN_SHARE);
+  // Мини-РБ без резерва гильдии — весь доход категории идёт на выплату.
+  const miniRb = miniRbGold;
   return { total, main, guild, prime, miniRb };
 }
 

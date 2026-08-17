@@ -79,7 +79,7 @@ export default async function DashboardPage() {
             variant="dashboard"
             label="Казна мини-РБ"
             value={`${numberFmt.format(treasuryBreakdown.miniRb)} золота`}
-            hint="70% — фонд ЗП"
+            hint="100% — фонд ЗП"
             icon={Landmark}
             tone="ember"
             goldValue
