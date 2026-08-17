@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/auth";
+import { requireActivitiesManager } from "@/lib/auth";
 
 const SCREENSHOT_KINDS = ["roster", "drop"];
 const MAX_IMAGE_BYTES = 800_000;
 const MAX_SCREENSHOTS_PER_KIND = 6;
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const admin = await requireAdmin();
+  const admin = await requireActivitiesManager();
   if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const { id } = await params;

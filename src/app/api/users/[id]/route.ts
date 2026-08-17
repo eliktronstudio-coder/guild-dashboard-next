@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, hashPassword } from "@/lib/auth";
-
-const ROLES = ["admin", "member"];
+import { ACCOUNT_ROLES, isFullAdminRole } from "@/lib/accountRoles";
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireAdmin();
@@ -14,10 +13,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   if (body?.role !== undefined) {
     const role = typeof body.role === "string" ? body.role : "";
-    if (!ROLES.includes(role)) {
+    if (!ACCOUNT_ROLES.includes(role as (typeof ACCOUNT_ROLES)[number])) {
       return NextResponse.json({ error: "Неверная роль." }, { status: 400 });
     }
-    if (id === admin.sub && role !== "admin") {
+    if (id === admin.sub && !isFullAdminRole(role)) {
       return NextResponse.json({ error: "Нельзя снять админку с самого себя." }, { status: 400 });
     }
     data.role = role;

@@ -123,6 +123,8 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
                       className="rounded-md border border-border bg-surface-2 px-2 py-1 text-sm outline-none focus:border-accent disabled:opacity-60"
                     >
                       <option value="admin">Админ</option>
+                      <option value="gm">ГМ</option>
+                      <option value="rl">РЛ</option>
                       <option value="member">Участник</option>
                     </select>
                   </td>

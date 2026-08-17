@@ -4,6 +4,7 @@ import PaymentsTable from "@/components/admin/PaymentsTable";
 import { daysUntilNextPayout, nextPayoutDate } from "@/lib/payout";
 import { getAllPayments, getAllPlayers } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
+import { isFullAdminRole } from "@/lib/accountRoles";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -42,7 +43,7 @@ export default async function PaymentsPage() {
           date: dateFmt.format(p.date),
         }))}
         players={players.map((p) => ({ id: p.id, name: p.name }))}
-        isAdmin={user?.role === "admin"}
+        isAdmin={isFullAdminRole(user?.role)}
       />
     </div>
   );

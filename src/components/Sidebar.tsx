@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { navSections } from "@/lib/nav";
 import { guild } from "@/lib/config";
+import { accountRoleLabel, isFullAdminRole } from "@/lib/accountRoles";
 import Logo from "./Logo";
 import JapaneseWavePattern from "./dashboard/JapaneseWavePattern";
 import JapaneseCrest from "./dashboard/JapaneseCrest";
@@ -16,11 +17,6 @@ type SidebarProps = {
   onCloseMobile: () => void;
   onLoginClick: () => void;
   user: SessionPayload | null;
-};
-
-const roleLabel: Record<string, string> = {
-  admin: "Админ",
-  member: "Участник",
 };
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -64,7 +60,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
 
         <nav className="relative flex-1 overflow-y-auto px-3 py-4">
           {navSections.map((section) => {
-            const items = section.items.filter((item) => !item.adminOnly || user?.role === "admin");
+            const items = section.items.filter((item) => !item.adminOnly || isFullAdminRole(user?.role));
             if (items.length === 0) return null;
             return (
             <div key={section.title} className="mb-6">
@@ -144,7 +140,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{user.username}</p>
-                  <p className="text-xs text-muted">{roleLabel[user.role] ?? user.role}</p>
+                  <p className="text-xs text-muted">{accountRoleLabel[user.role] ?? user.role}</p>
                 </div>
               </div>
               <button

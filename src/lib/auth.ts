@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
+import { isFullAdminRole, canManageActivitiesRole } from "./accountRoles";
 
 const SESSION_COOKIE = "session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
@@ -75,6 +76,13 @@ export async function getCurrentUser(): Promise<SessionPayload | null> {
 
 export async function requireAdmin(): Promise<SessionPayload | null> {
   const user = await getCurrentUser();
-  if (!user || user.role !== "admin") return null;
+  if (!user || !isFullAdminRole(user.role)) return null;
+  return user;
+}
+
+// Админ, ГМ — и дополнительно РЛ, но только для управления активностями.
+export async function requireActivitiesManager(): Promise<SessionPayload | null> {
+  const user = await getCurrentUser();
+  if (!user || !canManageActivitiesRole(user.role)) return null;
   return user;
 }

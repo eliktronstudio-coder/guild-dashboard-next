@@ -55,11 +55,14 @@ export default function ActivityDetailPanel({
   players,
   catalog,
   isAdmin,
+  canManageDrops = isAdmin,
 }: {
   activity: Activity;
   players: Player[];
   catalog: CatalogItem[];
   isAdmin: boolean;
+  /** РЛ управляет активностью (isAdmin), но не дропом/казной — только Админ/ГМ. */
+  canManageDrops?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(activity.status);
@@ -560,7 +563,7 @@ export default function ActivityDetailPanel({
         <div className="rounded-lg border border-border bg-surface p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold">Дроп</h3>
-            {isAdmin && !addingDrop && (
+            {canManageDrops && !addingDrop && (
               <button
                 type="button"
                 onClick={() => setAddingDrop(true)}
@@ -656,7 +659,7 @@ export default function ActivityDetailPanel({
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {activity.drops.map((d) => (
               <div key={d.id} className="relative rounded-md border border-border bg-surface-2 p-3">
-                {isAdmin && (
+                {canManageDrops && (
                   <button
                     type="button"
                     onClick={() => handleDeleteDrop(d.id)}

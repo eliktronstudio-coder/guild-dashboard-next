@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import clsx from "clsx";
 import { allNavItems, navSections } from "@/lib/nav";
+import { accountRoleLabel } from "@/lib/accountRoles";
 import ThemeToggle from "./ThemeToggle";
 import Logo from "./Logo";
 import type { SessionPayload } from "@/lib/auth";
@@ -12,11 +13,6 @@ import type { SessionPayload } from "@/lib/auth";
 type HeaderProps = {
   onMenuClick: () => void;
   user: SessionPayload | null;
-};
-
-const roleLabel: Record<string, string> = {
-  admin: "Админ",
-  member: "Участник",
 };
 
 function useCurrentPage(pathname: string) {
@@ -78,7 +74,7 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
             </span>
             <div className="leading-tight">
               <p className="text-xs font-medium">{user.username}</p>
-              <p className="text-[10px] text-muted">{roleLabel[user.role] ?? user.role}</p>
+              <p className="text-[10px] text-muted">{accountRoleLabel[user.role] ?? user.role}</p>
             </div>
           </div>
         )}

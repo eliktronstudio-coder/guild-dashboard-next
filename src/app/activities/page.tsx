@@ -1,5 +1,6 @@
 import { getFilteredActivities, getDistinctActivityNames, getRegisteredPlayers, getAllPlayers, getDropCatalog } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
+import { canManageActivitiesRole } from "@/lib/accountRoles";
 import ActivitiesList from "@/components/admin/ActivitiesList";
 
 type SearchParams = { [key: string]: string | string[] | undefined };
@@ -44,7 +45,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
       distinctNames={distinctNames}
       players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
       catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
-      isAdmin={user?.role === "admin"}
+      isAdmin={canManageActivitiesRole(user?.role)}
       summary={{
         total: result.total,
         avgAttendance,

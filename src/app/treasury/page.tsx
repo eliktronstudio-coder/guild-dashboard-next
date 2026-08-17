@@ -4,6 +4,7 @@ import TreasuryPanel from "@/components/admin/TreasuryPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
 import DropsPanel from "@/components/admin/DropsPanel";
 import { getCurrentUser } from "@/lib/auth";
+import { isFullAdminRole } from "@/lib/accountRoles";
 import { daysUntilNextPayout } from "@/lib/payout";
 import {
   getTreasuryTransactions,
@@ -55,7 +56,7 @@ export default async function TreasuryPage() {
   );
 
   const payoutDays = daysUntilNextPayout();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = isFullAdminRole(user?.role);
 
   return (
     <div className="space-y-6">
