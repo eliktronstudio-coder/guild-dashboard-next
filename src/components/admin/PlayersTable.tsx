@@ -312,9 +312,6 @@ export default function PlayersTable({
               <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
                 <th className="px-4 py-3 font-medium">Имя</th>
                 <th className="px-4 py-3 font-medium">Роль</th>
-                <th className="px-4 py-3 font-medium" title="Считается автоматически: доля активностей за всё время, в которых участвовал игрок">
-                  Посещаемость
-                </th>
                 <th className="px-4 py-3 font-medium" title="Доля активностей категории «Прайм», в которых участвовал игрок">
                   Посещаемость Прайм
                 </th>
@@ -369,19 +366,6 @@ export default function PlayersTable({
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted">{p.role}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
-                          <div
-                            className={clsx("h-full rounded-full", attendanceColor(p.attendancePct).bar)}
-                            style={{ width: `${Math.min(p.attendancePct, 100)}%` }}
-                          />
-                        </div>
-                        <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePct).text)}>
-                          {p.attendancePct}%
-                        </span>
-                      </div>
-                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
