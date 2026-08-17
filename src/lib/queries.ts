@@ -341,14 +341,37 @@ export async function getTreasuryGold() {
   return result._sum.amount ?? 0;
 }
 
+// Золото, реально попавшее в казну от продажи дропа конкретной категории —
+// та же привязка через DropItem.treasuryTransactionId, что и в графике
+// "Динамика казны". Не включает выплаты и прочие не-дроп операции.
+async function getTreasuryGoldByCategory(category: string): Promise<number> {
+  const soldDrops = await prisma.dropItem.findMany({
+    where: { status: "Продано", treasuryTransactionId: { not: null }, activity: { category } },
+    select: { treasuryTransactionId: true },
+  });
+  const txIds = soldDrops.map((d) => d.treasuryTransactionId).filter((tid): tid is string => Boolean(tid));
+  if (txIds.length === 0) return 0;
+  const result = await prisma.treasuryTransaction.aggregate({
+    where: { id: { in: txIds } },
+    _sum: { amount: true },
+  });
+  return result._sum.amount ?? 0;
+}
+
 // Казна делится на основную (фонд ЗП) и казну гильдии (резерв) в пропорции 70/30.
 const TREASURY_MAIN_SHARE = 0.7;
 
 export async function getTreasuryBreakdown() {
-  const total = await getTreasuryGold();
+  const [total, primeGold, miniRbGold] = await Promise.all([
+    getTreasuryGold(),
+    getTreasuryGoldByCategory("Прайм"),
+    getTreasuryGoldByCategory("Мини-РБ"),
+  ]);
   const main = Math.round(total * TREASURY_MAIN_SHARE);
   const guild = total - main;
-  return { total, main, guild };
+  const prime = Math.round(primeGold * TREASURY_MAIN_SHARE);
+  const miniRb = Math.round(miniRbGold * TREASURY_MAIN_SHARE);
+  return { total, main, guild, prime, miniRb };
 }
 
 export async function getTreasuryChartData() {

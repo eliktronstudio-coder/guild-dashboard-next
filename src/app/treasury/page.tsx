@@ -59,10 +59,15 @@ export default async function TreasuryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <StatCard
-          label="Основная казна"
-          value={`${numberFmt.format(treasuryBreakdown.main)} золота`}
+          label="Казна с Прайма"
+          value={`${numberFmt.format(treasuryBreakdown.prime)} золота`}
+          hint="70% — фонд ЗП"
+        />
+        <StatCard
+          label="Казна мини-РБ"
+          value={`${numberFmt.format(treasuryBreakdown.miniRb)} золота`}
           hint="70% — фонд ЗП"
         />
         <StatCard
