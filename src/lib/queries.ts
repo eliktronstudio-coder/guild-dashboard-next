@@ -379,10 +379,13 @@ export async function getTreasuryBreakdown() {
     getTreasuryGoldByCategory("Мини-РБ"),
   ]);
   const main = Math.round(total * TREASURY_MAIN_SHARE);
-  const guild = total - main;
   const prime = Math.round(primeGold * TREASURY_MAIN_SHARE);
-  // Мини-РБ без резерва гильдии — весь доход категории идёт на выплату.
+  // Мини-РБ без резерва гильдии — весь доход категории идёт на выплату,
+  // поэтому 30%-й резерв гильдии считаем только с дохода Прайма (и прочих
+  // операций вне категорий), а не со всей казны — иначе продажа дропа с
+  // Мини-РБ ошибочно "прибавляла" гильдии 30% с чужих денег.
   const miniRb = miniRbGold;
+  const guild = total - prime - miniRb;
   return { total, main, guild, prime, miniRb };
 }
 
