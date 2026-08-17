@@ -6,8 +6,25 @@ import { X } from "lucide-react";
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const AUCTION = "__auction__";
 
-type DropOption = { item: string; quantity: number; totalValue: number; entryIds: string[] };
+type DropEntry = { id: string; quantity: number; value: number };
+type DropOption = { item: string; quantity: number; totalValue: number; entries: DropEntry[] };
 type PlayerOption = { id: string; name: string };
+
+// Считает стоимость первых qty единиц предмета, "снимая" их по очереди
+// с записей дропа (как их выдаёт сервер — от новых к старым). Должно
+// совпадать с тем, как /api/drops/sell фактически распределяет продажу
+// по записям, иначе показанная сумма разъедется с реально списанной.
+function proportionalTotal(entries: DropEntry[], qty: number): number {
+  let remaining = qty;
+  let total = 0;
+  for (const e of entries) {
+    if (remaining <= 0) break;
+    const take = Math.min(remaining, e.quantity);
+    total += take * e.value;
+    remaining -= take;
+  }
+  return total;
+}
 
 export default function SellDropForm({
   drops,
@@ -21,6 +38,7 @@ export default function SellDropForm({
   onCancel: () => void;
 }) {
   const [item, setItem] = useState("");
+  const [qty, setQty] = useState(1);
   const [buyer, setBuyer] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,13 +46,30 @@ export default function SellDropForm({
 
   const selectedDrop = drops.find((d) => d.item === item) ?? null;
   const isAuction = buyer === AUCTION;
-  const fixedTotal = selectedDrop ? selectedDrop.totalValue : 0;
+  const fixedTotal = selectedDrop ? proportionalTotal(selectedDrop.entries, qty) : 0;
+
+  function handleItemChange(value: string) {
+    setItem(value);
+    const d = drops.find((x) => x.item === value);
+    setQty(d ? d.quantity : 1);
+  }
+
+  function handleQtyChange(value: string) {
+    const max = selectedDrop?.quantity ?? 1;
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n)) return;
+    setQty(Math.min(max, Math.max(1, n)));
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
     if (!selectedDrop) {
       setError("Выберите предмет из инвентаря.");
+      return;
+    }
+    if (qty < 1 || qty > selectedDrop.quantity) {
+      setError("Некорректное количество.");
       return;
     }
     if (!buyer) {
@@ -47,7 +82,8 @@ export default function SellDropForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          entryIds: selectedDrop.entryIds,
+          entryIds: selectedDrop.entries.map((en) => en.id),
+          quantity: qty,
           ...(isAuction ? { amount: Number(amount) } : { playerId: buyer }),
         }),
       });
@@ -73,7 +109,7 @@ export default function SellDropForm({
         <label className="mb-1 block text-xs text-muted">Предмет из инвентаря</label>
         <select
           value={item}
-          onChange={(e) => setItem(e.target.value)}
+          onChange={(e) => handleItemChange(e.target.value)}
           required
           className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
         >
@@ -89,7 +125,23 @@ export default function SellDropForm({
         )}
       </div>
 
-      <div className="sm:col-span-2">
+      <div>
+        <label className="mb-1 block text-xs text-muted">
+          Количество{selectedDrop && <span className="text-muted-2"> (доступно {selectedDrop.quantity})</span>}
+        </label>
+        <input
+          type="number"
+          value={qty}
+          onChange={(e) => handleQtyChange(e.target.value)}
+          min={1}
+          max={selectedDrop?.quantity ?? 1}
+          disabled={!selectedDrop}
+          required
+          className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-60"
+        />
+      </div>
+
+      <div>
         <label className="mb-1 block text-xs text-muted">Кому продажа</label>
         <select
           value={buyer}
@@ -108,14 +160,7 @@ export default function SellDropForm({
       </div>
 
       <div>
-        <label className="mb-1 flex items-center gap-1.5 text-xs text-muted">
-          <span>Сумма (золото)</span>
-          {selectedDrop && (
-            <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
-              ×{selectedDrop.quantity}
-            </span>
-          )}
-        </label>
+        <label className="mb-1 block text-xs text-muted">Сумма (золото)</label>
         {isAuction ? (
           <input
             type="number"

@@ -55,7 +55,7 @@ export default async function TreasuryPage() {
     item: i.item,
     quantity: i.quantity,
     totalValue: i.totalValue,
-    entryIds: i.entries.map((e) => e.id),
+    entries: i.entries.map((e) => ({ id: e.id, quantity: e.quantity, value: e.value })),
   }));
 
   const payoutDays = daysUntilNextPayout();
