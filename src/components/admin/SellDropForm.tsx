@@ -77,7 +77,7 @@ export default function SellDropForm({
           <option value="">— выбрать —</option>
           {drops.map((d) => (
             <option key={d.id} value={d.id}>
-              {d.item} ×{d.quantity} · {numberFmt.format(d.value)}/ед. ({numberFmt.format(d.value * d.quantity)} золота)
+              {d.item}
             </option>
           ))}
         </select>
@@ -118,7 +118,7 @@ export default function SellDropForm({
           />
         ) : (
           <div className="flex h-[38px] items-center rounded-md border border-border bg-surface-2 px-3 text-sm text-muted">
-            {selectedDrop ? `${numberFmt.format(fixedTotal)} золота` : "—"}
+            {selectedDrop ? `×${selectedDrop.quantity} · ${numberFmt.format(fixedTotal)} золота` : "—"}
           </div>
         )}
       </div>
