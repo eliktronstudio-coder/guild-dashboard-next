@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const AUCTION = "__auction__";
 
-type DropOption = { id: string; item: string; quantity: number; value: number };
+type DropOption = { item: string; quantity: number; totalValue: number; entryIds: string[] };
 type PlayerOption = { id: string; name: string };
 
 export default function SellDropForm({
@@ -20,20 +20,20 @@ export default function SellDropForm({
   onSuccess: () => void;
   onCancel: () => void;
 }) {
-  const [dropId, setDropId] = useState("");
+  const [item, setItem] = useState("");
   const [buyer, setBuyer] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const selectedDrop = drops.find((d) => d.id === dropId) ?? null;
+  const selectedDrop = drops.find((d) => d.item === item) ?? null;
   const isAuction = buyer === AUCTION;
-  const fixedTotal = selectedDrop ? selectedDrop.value * selectedDrop.quantity : 0;
+  const fixedTotal = selectedDrop ? selectedDrop.totalValue : 0;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!dropId) {
+    if (!selectedDrop) {
       setError("Выберите предмет из инвентаря.");
       return;
     }
@@ -43,10 +43,13 @@ export default function SellDropForm({
     }
     setBusy(true);
     try {
-      const res = await fetch(`/api/drops/${dropId}/sell`, {
+      const res = await fetch("/api/drops/sell", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isAuction ? { amount: Number(amount) } : { playerId: buyer }),
+        body: JSON.stringify({
+          entryIds: selectedDrop.entryIds,
+          ...(isAuction ? { amount: Number(amount) } : { playerId: buyer }),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -69,14 +72,14 @@ export default function SellDropForm({
       <div className="sm:col-span-3">
         <label className="mb-1 block text-xs text-muted">Предмет из инвентаря</label>
         <select
-          value={dropId}
-          onChange={(e) => setDropId(e.target.value)}
+          value={item}
+          onChange={(e) => setItem(e.target.value)}
           required
           className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
         >
           <option value="">— выбрать —</option>
           {drops.map((d) => (
-            <option key={d.id} value={d.id}>
+            <option key={d.item} value={d.item}>
               {d.item}
             </option>
           ))}
@@ -105,7 +108,14 @@ export default function SellDropForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-xs text-muted">Сумма (золото)</label>
+        <label className="mb-1 flex items-center gap-1.5 text-xs text-muted">
+          <span>Сумма (золото)</span>
+          {selectedDrop && (
+            <span className="rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-foreground">
+              ×{selectedDrop.quantity}
+            </span>
+          )}
+        </label>
         {isAuction ? (
           <input
             type="number"
@@ -118,7 +128,7 @@ export default function SellDropForm({
           />
         ) : (
           <div className="flex h-[38px] items-center rounded-md border border-border bg-surface-2 px-3 text-sm text-muted">
-            {selectedDrop ? `×${selectedDrop.quantity} · ${numberFmt.format(fixedTotal)} золота` : "—"}
+            {selectedDrop ? `${numberFmt.format(fixedTotal)} золота` : "—"}
           </div>
         )}
       </div>

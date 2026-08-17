@@ -16,7 +16,7 @@ type Transaction = {
   imageUrl: string | null;
 };
 
-type DropOption = { id: string; item: string; quantity: number; value: number };
+type DropOption = { item: string; quantity: number; totalValue: number; entryIds: string[] };
 type PlayerOption = { id: string; name: string };
 
 export default function TreasuryPanel({

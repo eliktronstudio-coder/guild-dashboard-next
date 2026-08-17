@@ -51,9 +51,12 @@ export default async function TreasuryPage() {
     getDropCatalog(),
   ]);
 
-  const unsoldDropOptions = inventory.flatMap((i) =>
-    i.entries.map((e) => ({ id: e.id, item: i.item, quantity: e.quantity, value: e.value }))
-  );
+  const unsoldDropOptions = inventory.map((i) => ({
+    item: i.item,
+    quantity: i.quantity,
+    totalValue: i.totalValue,
+    entryIds: i.entries.map((e) => e.id),
+  }));
 
   const payoutDays = daysUntilNextPayout();
   const isAdmin = isFullAdminRole(user?.role);

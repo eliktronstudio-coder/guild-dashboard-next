@@ -8,7 +8,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
 
   const { id } = await params;
 
-  // Если эта операция была продажей дропа (см. /api/drops/[id]/sell и
+  // Если эта операция была продажей дропа (см. /api/drops/sell и
   // статус-тоггл в /api/drops/[id]), отменяем продажу и возвращаем
   // предмет в инвентарь — иначе он навсегда "теряется" со статусом
   // "Продано", ссылаясь на уже удалённую операцию.
