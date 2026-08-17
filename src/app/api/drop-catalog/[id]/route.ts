@@ -29,10 +29,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json({ error: "Такой предмет уже есть в реестре." }, { status: 409 });
   }
 
-  const item = await prisma.dropCatalogItem.update({
-    where: { id },
-    data: { name, price, ...(imageUrl !== undefined ? { imageUrl } : {}) },
-  });
+  // Каскадом обновляем название/цену везде, где этот предмет ещё числится
+  // непроданным (инвентарь, журнал дропа, страницы активностей) — но не
+  // трогаем уже проданные записи, это исторические данные, привязанные
+  // к реальной операции в казне на момент продажи.
+  const [item] = await prisma.$transaction([
+    prisma.dropCatalogItem.update({
+      where: { id },
+      data: { name, price, ...(imageUrl !== undefined ? { imageUrl } : {}) },
+    }),
+    prisma.dropItem.updateMany({
+      where: { catalogItemId: id, status: "Не продано" },
+      data: { item: name, value: price },
+    }),
+  ]);
 
   return NextResponse.json(item);
 }
