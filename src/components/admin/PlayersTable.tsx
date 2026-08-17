@@ -312,11 +312,11 @@ export default function PlayersTable({
               <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
                 <th className="px-4 py-3 font-medium">Имя</th>
                 <th className="px-4 py-3 font-medium">Роль</th>
-                <th className="px-4 py-3 font-medium" title="Доля активностей категории «Прайм», в которых участвовал игрок">
-                  Посещаемость Прайм
-                </th>
-                <th className="px-4 py-3 font-medium" title="Доля активностей категории «Мини-РБ», в которых участвовал игрок">
-                  Посещаемость Мини-РБ
+                <th
+                  className="px-4 py-3 font-medium"
+                  title="П — доля активностей категории «Прайм», М — доля активностей категории «Мини-РБ», в которых участвовал игрок"
+                >
+                  Посещаемость
                 </th>
                 <th className="px-4 py-3 font-medium" title="Настраивается админом индивидуально для каждого игрока (0.0–1.25)">
                   Коэффициент
@@ -367,29 +367,35 @@ export default function PlayersTable({
                     </td>
                     <td className="px-4 py-3 text-muted">{p.role}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
-                          <div
-                            className={clsx("h-full rounded-full", attendanceColor(p.attendancePctPrime).bar)}
-                            style={{ width: `${Math.min(p.attendancePctPrime, 100)}%` }}
-                          />
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
+                            П
+                          </span>
+                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
+                            <div
+                              className={clsx("h-full rounded-full", attendanceColor(p.attendancePctPrime).bar)}
+                              style={{ width: `${Math.min(p.attendancePctPrime, 100)}%` }}
+                            />
+                          </div>
+                          <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
+                            {p.attendancePctPrime}%
+                          </span>
                         </div>
-                        <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
-                          {p.attendancePctPrime}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="h-1.5 w-20 overflow-hidden rounded-full bg-surface-2">
-                          <div
-                            className={clsx("h-full rounded-full", attendanceColor(p.attendancePctMiniRb).bar)}
-                            style={{ width: `${Math.min(p.attendancePctMiniRb, 100)}%` }}
-                          />
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
+                            М
+                          </span>
+                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
+                            <div
+                              className={clsx("h-full rounded-full", attendanceColor(p.attendancePctMiniRb).bar)}
+                              style={{ width: `${Math.min(p.attendancePctMiniRb, 100)}%` }}
+                            />
+                          </div>
+                          <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
+                            {p.attendancePctMiniRb}%
+                          </span>
                         </div>
-                        <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
-                          {p.attendancePctMiniRb}%
-                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted">{coefficientFmt.format(p.salaryCoefficient)}</td>
