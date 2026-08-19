@@ -1,14 +1,25 @@
 import JapaneseWavePattern from "./JapaneseWavePattern";
 
 /**
- * Minimal line-art hero for the dashboard header band: a red sun disc, a Fuji
- * outline, and a sparse sakura sprig. Pure SVG/CSS — no photographic assets.
+ * Dashboard header band. Dark theme shows the painted samurai/torii key art
+ * (public/images/hero-guild.png); light theme keeps the original line-art
+ * Fuji/sun sprig so the "fantasy landscape" mood isn't broken by a night scene.
+ * Both are always in the DOM and toggled by the `data-theme` CSS rule below
+ * (see globals.css) to avoid a hydration/theme flash.
  */
 export default function DashboardHero() {
   return (
-    <div aria-hidden="true" className="pointer-events-none absolute -inset-x-4 -top-6 -z-10 h-[300px] overflow-hidden sm:-inset-x-6">
+    <div aria-hidden="true" className="pointer-events-none absolute -inset-x-4 -top-6 -z-10 h-[300px] overflow-hidden rounded-lg sm:-inset-x-6 sm:h-[340px]">
+      <div
+        className="hero-art absolute inset-0 bg-[url(/images/hero-guild.png)] bg-cover bg-center"
+      >
+        <div className="absolute inset-0 bg-[linear-gradient(to_top,var(--background)_0%,transparent_38%)]" />
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-background/70" />
+        <div className="absolute inset-0 bg-background/10" />
+      </div>
+
       <svg
-        className="absolute right-0 top-0 h-full w-full"
+        className="hero-art-light absolute right-0 top-0 h-full w-full"
         viewBox="0 0 900 300"
         preserveAspectRatio="xMidYMin slice"
       >
@@ -34,7 +45,7 @@ export default function DashboardHero() {
         </g>
       </svg>
 
-      <JapaneseWavePattern className="bottom-0 left-0 right-0 h-24 text-accent" opacity={0.05} />
+      <JapaneseWavePattern className="hero-art-light bottom-0 left-0 right-0 h-24 text-accent" opacity={0.05} />
     </div>
   );
 }

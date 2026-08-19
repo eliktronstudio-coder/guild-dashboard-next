@@ -159,3 +159,14 @@ table th {
   background: linear-gradient(90deg, rgba(180, 70, 55, 0.55), rgba(180, 70, 55, 0));
 }
 
+/* Dashboard hero art: painted night key-art in dark theme, line-art sprig in light theme. */
+.hero-art-light {
+  display: none;
+}
+:root[data-theme="light"] .hero-art {
+  display: none;
+}
+:root[data-theme="light"] .hero-art-light {
+  display: block;
+}
+
