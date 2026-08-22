@@ -6,6 +6,7 @@ import { Plus, Trash2, X } from "lucide-react";
 import Modal from "@/components/Modal";
 import EmptyState from "@/components/EmptyState";
 import StatusBadge from "@/components/StatusBadge";
+import BlurValue from "@/components/BlurValue";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const STATUSES = ["Ожидает", "Подтверждено", "Выплачено"];
@@ -35,10 +36,12 @@ export default function PaymentsTable({
   payments,
   players,
   isAdmin,
+  isRandom = false,
 }: {
   payments: Payment[];
   players: PlayerOption[];
   isAdmin: boolean;
+  isRandom?: boolean;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -213,7 +216,9 @@ export default function PaymentsTable({
                 {payments.map((p) => (
                   <tr key={p.id} className="row-tint transition-colors">
                     <td className="px-4 py-3 font-medium">{p.player.name}</td>
-                    <td className="px-4 py-3 font-mono tabular-nums">{numberFmt.format(p.amount)} золота</td>
+                    <td className="px-4 py-3 font-mono tabular-nums">
+                      <BlurValue blurred={isRandom}>{numberFmt.format(p.amount)} золота</BlurValue>
+                    </td>
                     <td className="px-4 py-3">
                       {isAdmin ? (
                         <select

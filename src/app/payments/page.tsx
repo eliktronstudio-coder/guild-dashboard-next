@@ -1,6 +1,7 @@
 import StatCard from "@/components/StatCard";
 import PayoutSummaryTable from "@/components/admin/PayoutSummaryTable";
 import PaymentsTable from "@/components/admin/PaymentsTable";
+import BlurValue from "@/components/BlurValue";
 import { daysUntilNextPayout, nextPayoutDate } from "@/lib/payout";
 import { getAllPayments, getAllPlayers } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
@@ -14,12 +15,15 @@ export default async function PaymentsPage() {
 
   const totalPayout = players.reduce((sum, p) => sum + p.salary, 0);
   const recipients = players.filter((p) => p.salary > 0).length;
+  const isRandom = user?.role === "random";
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Следующая выплата" value={dateFmt.format(nextPayoutDate())} hint={`через ${daysUntilNextPayout()} дн.`} />
-        <StatCard label="Сумма к выплате" value={`${numberFmt.format(totalPayout)} золота`} hint="расчётная сумма" />
+        <BlurValue blurred={isRandom}>
+          <StatCard label="Сумма к выплате" value={`${numberFmt.format(totalPayout)} золота`} hint="расчётная сумма" />
+        </BlurValue>
         <StatCard label="Получателей" value={String(recipients)} hint="игроков с ненулевой долей" />
       </div>
 
@@ -32,6 +36,7 @@ export default async function PaymentsPage() {
           salary: p.salary,
         }))}
         totalPayout={totalPayout}
+        isRandom={isRandom}
       />
 
       <PaymentsTable
@@ -44,6 +49,7 @@ export default async function PaymentsPage() {
         }))}
         players={players.map((p) => ({ id: p.id, name: p.name }))}
         isAdmin={isFullAdminRole(user?.role)}
+        isRandom={isRandom}
       />
     </div>
   );

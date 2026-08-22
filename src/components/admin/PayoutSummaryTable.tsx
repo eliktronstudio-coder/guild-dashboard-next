@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import EmptyState from "@/components/EmptyState";
+import BlurValue from "@/components/BlurValue";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -17,7 +18,15 @@ function attendanceColor(pct: number) {
   return "text-success";
 }
 
-export default function PayoutSummaryTable({ players, totalPayout }: { players: PlayerShare[]; totalPayout: number }) {
+export default function PayoutSummaryTable({
+  players,
+  totalPayout,
+  isRandom = false,
+}: {
+  players: PlayerShare[];
+  totalPayout: number;
+  isRandom?: boolean;
+}) {
   const rows = [...players].sort((a, b) => b.salary - a.salary);
 
   return (
@@ -54,7 +63,9 @@ export default function PayoutSummaryTable({ players, totalPayout }: { players: 
                   <td className="px-4 py-3 font-mono tabular-nums text-muted">
                     {totalPayout > 0 ? `${((p.salary / totalPayout) * 100).toFixed(1)}%` : "—"}
                   </td>
-                  <td className="px-4 py-3 font-mono font-medium tabular-nums">{numberFmt.format(p.salary)}</td>
+                  <td className="px-4 py-3 font-mono font-medium tabular-nums">
+                    <BlurValue blurred={isRandom}>{numberFmt.format(p.salary)}</BlurValue>
+                  </td>
                 </tr>
               ))}
             </tbody>

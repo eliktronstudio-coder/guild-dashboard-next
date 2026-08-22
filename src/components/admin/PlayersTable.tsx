@@ -9,6 +9,7 @@ import { ROLES } from "@/lib/roles";
 import Drawer from "@/components/Drawer";
 import EmptyState from "@/components/EmptyState";
 import StatusBadge from "@/components/StatusBadge";
+import BlurValue from "@/components/BlurValue";
 
 type Player = {
   id: string;
@@ -66,10 +67,12 @@ export default function PlayersTable({
   players,
   isAdmin,
   currentUserId,
+  isRandom = false,
 }: {
   players: Player[];
   isAdmin: boolean;
   currentUserId: string | null;
+  isRandom?: boolean;
 }) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -369,53 +372,57 @@ export default function PlayersTable({
                     </td>
                     <td className="px-4 py-3 text-muted">{p.role}</td>
                     <td className="px-4 py-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
-                            П
-                          </span>
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
-                            <div
-                              className={clsx("h-full rounded-full", attendanceColor(p.attendancePctPrime).bar)}
-                              style={{ width: `${Math.min(p.attendancePctPrime, 100)}%` }}
-                            />
+                      <BlurValue blurred={isRandom}>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
+                              П
+                            </span>
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
+                              <div
+                                className={clsx("h-full rounded-full", attendanceColor(p.attendancePctPrime).bar)}
+                                style={{ width: `${Math.min(p.attendancePctPrime, 100)}%` }}
+                              />
+                            </div>
+                            <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
+                              {p.attendancePctPrime}%
+                            </span>
                           </div>
-                          <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
-                            {p.attendancePctPrime}%
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
-                            М
-                          </span>
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
-                            <div
-                              className={clsx("h-full rounded-full", attendanceColor(p.attendancePctMiniRb).bar)}
-                              style={{ width: `${Math.min(p.attendancePctMiniRb, 100)}%` }}
-                            />
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
+                              М
+                            </span>
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
+                              <div
+                                className={clsx("h-full rounded-full", attendanceColor(p.attendancePctMiniRb).bar)}
+                                style={{ width: `${Math.min(p.attendancePctMiniRb, 100)}%` }}
+                              />
+                            </div>
+                            <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
+                              {p.attendancePctMiniRb}%
+                            </span>
                           </div>
-                          <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
-                            {p.attendancePctMiniRb}%
-                          </span>
                         </div>
-                      </div>
+                      </BlurValue>
                     </td>
                     <td className="px-4 py-3 text-muted">{coefficientFmt.format(p.salaryCoefficient)}</td>
                     <td className="px-4 py-3">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
-                            П
-                          </span>
-                          <span className="font-medium tabular-nums">{numberFmt.format(p.salaryPrime)}</span>
+                      <BlurValue blurred={isRandom}>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
+                              П
+                            </span>
+                            <span className="font-medium tabular-nums">{numberFmt.format(p.salaryPrime)}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
+                              М
+                            </span>
+                            <span className="font-medium tabular-nums">{numberFmt.format(p.salaryMiniRb)}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
-                            М
-                          </span>
-                          <span className="font-medium tabular-nums">{numberFmt.format(p.salaryMiniRb)}</span>
-                        </div>
-                      </div>
+                      </BlurValue>
                     </td>
                     {isAdmin && (
                       <td className="px-4 py-3">
@@ -477,21 +484,29 @@ export default function PlayersTable({
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg border border-border bg-surface-2 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted">Посещаемость</p>
-                <p className={clsx("mt-1 text-lg font-semibold", attendanceColor(detail.player.attendancePct).text)}>
-                  {detail.player.attendancePct}%
-                </p>
+                <BlurValue blurred={isRandom}>
+                  <p className={clsx("mt-1 text-lg font-semibold", attendanceColor(detail.player.attendancePct).text)}>
+                    {detail.player.attendancePct}%
+                  </p>
+                </BlurValue>
               </div>
               <div className="rounded-lg border border-border bg-surface-2 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата</p>
-                <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salary)}</p>
+                <BlurValue blurred={isRandom}>
+                  <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salary)}</p>
+                </BlurValue>
               </div>
               <div className="rounded-lg border border-border bg-surface-2 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата: Прайм</p>
-                <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salaryPrime)}</p>
+                <BlurValue blurred={isRandom}>
+                  <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salaryPrime)}</p>
+                </BlurValue>
               </div>
               <div className="rounded-lg border border-border bg-surface-2 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата: Мини-РБ</p>
-                <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salaryMiniRb)}</p>
+                <BlurValue blurred={isRandom}>
+                  <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salaryMiniRb)}</p>
+                </BlurValue>
               </div>
               <div className="rounded-lg border border-border bg-surface-2 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted">Достижения</p>

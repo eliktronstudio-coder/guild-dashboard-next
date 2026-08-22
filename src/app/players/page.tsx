@@ -7,6 +7,11 @@ export default async function PlayersPage() {
   const [players, user] = await Promise.all([getAllPlayers(), getCurrentUser()]);
 
   return (
-    <PlayersTable players={players} isAdmin={isFullAdminRole(user?.role)} currentUserId={user?.sub ?? null} />
+    <PlayersTable
+      players={players}
+      isAdmin={isFullAdminRole(user?.role)}
+      currentUserId={user?.sub ?? null}
+      isRandom={user?.role === "random"}
+    />
   );
 }

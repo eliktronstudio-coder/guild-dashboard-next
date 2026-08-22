@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPlayerById, getPlayerActivityHistory, getPlayerPayments } from "@/lib/queries";
+import { getCurrentUser } from "@/lib/auth";
 import StatCard from "@/components/StatCard";
 import StatusBadge from "@/components/StatusBadge";
 import EmptyState from "@/components/EmptyState";
+import BlurValue from "@/components/BlurValue";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -27,12 +29,14 @@ export default async function PlayerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [player, activities, payments] = await Promise.all([
+  const [player, activities, payments, user] = await Promise.all([
     getPlayerById(id),
     getPlayerActivityHistory(id, 20),
     getPlayerPayments(id, 20),
+    getCurrentUser(),
   ]);
   if (!player) notFound();
+  const isRandom = user?.role === "random";
 
   return (
     <div className="space-y-4">
@@ -53,12 +57,24 @@ export default async function PlayerDetailPage({
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Посещаемость" value={`${player.attendancePct}%`} hint="за всё время" />
-        <StatCard label="Посещаемость: Прайм" value={`${player.attendancePctPrime}%`} hint="за всё время" />
-        <StatCard label="Посещаемость: Мини-РБ" value={`${player.attendancePctMiniRb}%`} hint="за всё время" />
-        <StatCard label="Зарплата" value={`${numberFmt.format(player.salary)} золота`} hint="расчётная" />
-        <StatCard label="Зарплата: Прайм" value={`${numberFmt.format(player.salaryPrime)} золота`} hint="расчётная" />
-        <StatCard label="Зарплата: Мини-РБ" value={`${numberFmt.format(player.salaryMiniRb)} золота`} hint="расчётная" />
+        <BlurValue blurred={isRandom}>
+          <StatCard label="Посещаемость" value={`${player.attendancePct}%`} hint="за всё время" />
+        </BlurValue>
+        <BlurValue blurred={isRandom}>
+          <StatCard label="Посещаемость: Прайм" value={`${player.attendancePctPrime}%`} hint="за всё время" />
+        </BlurValue>
+        <BlurValue blurred={isRandom}>
+          <StatCard label="Посещаемость: Мини-РБ" value={`${player.attendancePctMiniRb}%`} hint="за всё время" />
+        </BlurValue>
+        <BlurValue blurred={isRandom}>
+          <StatCard label="Зарплата" value={`${numberFmt.format(player.salary)} золота`} hint="расчётная" />
+        </BlurValue>
+        <BlurValue blurred={isRandom}>
+          <StatCard label="Зарплата: Прайм" value={`${numberFmt.format(player.salaryPrime)} золота`} hint="расчётная" />
+        </BlurValue>
+        <BlurValue blurred={isRandom}>
+          <StatCard label="Зарплата: Мини-РБ" value={`${numberFmt.format(player.salaryMiniRb)} золота`} hint="расчётная" />
+        </BlurValue>
         <StatCard label="Уровень" value={String(player.level)} hint="текущий уровень" />
         <StatCard label="Опыт" value={`${numberFmt.format(player.xp)} XP`} hint="накоплено" />
         <StatCard label="Коэффициент" value={coefficientFmt.format(player.salaryCoefficient)} hint="настраивает админ" />
@@ -93,7 +109,9 @@ export default async function PlayerDetailPage({
               {payments.map((p) => (
                 <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
                   <div>
-                    <p className="font-mono font-medium tabular-nums">{numberFmt.format(p.amount)} золота</p>
+                    <BlurValue blurred={isRandom}>
+                      <p className="font-mono font-medium tabular-nums">{numberFmt.format(p.amount)} золота</p>
+                    </BlurValue>
                     <p className="text-xs text-muted">{p.date}</p>
                   </div>
                   <StatusBadge label={p.status} tone={paymentStatusTone[p.status] ?? "muted"} />
