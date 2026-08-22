@@ -16,6 +16,9 @@ import {
   getRegisteredPlayers,
   getAllPlayers,
   getDropCatalog,
+  getDropGoldGeneralAuto,
+  getDropGoldPrimeManual,
+  getDropGoldMiniRb,
 } from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -33,6 +36,9 @@ export default async function TreasuryPage() {
     players,
     allPlayers,
     catalog,
+    dropGoldGeneralAuto,
+    dropGoldPrimeManual,
+    dropGoldMiniRb,
   ] = await Promise.all([
     getCurrentUser(),
     getTreasuryTransactions(20),
@@ -44,6 +50,9 @@ export default async function TreasuryPage() {
     getRegisteredPlayers(),
     getAllPlayers(),
     getDropCatalog(),
+    getDropGoldGeneralAuto(),
+    getDropGoldPrimeManual(),
+    getDropGoldMiniRb(),
   ]);
 
   // Продажа идёт только со склада ХД — см. решение при переходе на 3 склада.
@@ -53,12 +62,6 @@ export default async function TreasuryPage() {
     totalValue: i.totalValue,
     entries: i.entries.map((e) => ({ id: e.id, quantity: e.quantity, value: e.value })),
   }));
-
-  // Дроп с Мини-РБ = непроданный остаток на складе ХД (туда падает весь
-  // Мини-РБ дроп), Дроп с Прайм = непроданный остаток в Общем инвентаре
-  // (куда падает Прайм-дроп, пока его не разобрали по ХД/НТ).
-  const dropTotalMiniRb = inventory.hd.reduce((sum, i) => sum + i.totalValue, 0);
-  const dropTotalPrime = inventory.general.reduce((sum, i) => sum + i.totalValue, 0);
 
   const payoutDays = daysUntilNextPayout();
   const isAdmin = isFullAdminRole(user?.role);
@@ -82,13 +85,13 @@ export default async function TreasuryPage() {
           hint="30% — резерв гильдии"
         />
         <StatCard
-          label="Дроп с Мини-РБ"
-          value={`${numberFmt.format(dropTotalMiniRb)} золота`}
-          hint="суммарно из журнала"
+          label="Дроп с Мини-РБ / Дроп с Прайм"
+          value={`${numberFmt.format(dropGoldMiniRb)} / ${numberFmt.format(dropGoldPrimeManual)} золота`}
+          hint="склад ХД / ручной дроп"
         />
         <StatCard
-          label="Дроп с Прайм"
-          value={`${numberFmt.format(dropTotalPrime)} золота`}
+          label="Дроп общего инвентаря"
+          value={`${numberFmt.format(dropGoldGeneralAuto)} золота`}
           hint="суммарно из журнала"
         />
         <StatCard label="Дней до выплаты" value={`${payoutDays}`} hint="выплата 15-го числа" />
@@ -127,6 +130,9 @@ export default async function TreasuryPage() {
             players={players.map((p) => ({ id: p.id, name: p.name }))}
             catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
             isAdmin={isAdmin}
+            showAddButton
+            addWarehouse="ХД"
+            addCategoryPicker
           />
         </div>
 

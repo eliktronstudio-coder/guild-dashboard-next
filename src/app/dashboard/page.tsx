@@ -19,7 +19,9 @@ import {
   getTreasuryChartCombined,
   getAttendanceChartData,
   getAvgAttendanceLast30Days,
-  getDropGoldByWarehouse,
+  getDropGoldGeneralAuto,
+  getDropGoldPrimeManual,
+  getDropGoldMiniRb,
 } from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -43,8 +45,9 @@ export default async function DashboardPage() {
     treasuryChart,
     attendanceChart,
     avgAttendance30d,
+    dropGoldGeneralAuto,
+    dropGoldPrimeManual,
     dropGoldMiniRb,
-    dropGoldPrime,
   ] = await Promise.all([
     topPlayersByAttendanceCategory("attendancePctPrime", 5),
     topPlayersByAttendanceCategory("attendancePctMiniRb", 5),
@@ -53,8 +56,9 @@ export default async function DashboardPage() {
     getTreasuryChartCombined(),
     getAttendanceChartData(),
     getAvgAttendanceLast30Days(),
-    getDropGoldByWarehouse("ХД"),
-    getDropGoldByWarehouse("Общий"),
+    getDropGoldGeneralAuto(),
+    getDropGoldPrimeManual(),
+    getDropGoldMiniRb(),
   ]);
   const recentActivities = allActivities.slice(0, 5);
   const payoutDays = daysUntilNextPayout();
@@ -95,9 +99,9 @@ export default async function DashboardPage() {
           />
           <StatCard
             variant="dashboard"
-            label="Дроп с Мини-РБ"
-            value={`${numberFmt.format(dropGoldMiniRb)} золота`}
-            hint="эквивалент в золоте"
+            label="Дроп с Мини-РБ / Дроп с Прайм"
+            value={`${numberFmt.format(dropGoldMiniRb)} / ${numberFmt.format(dropGoldPrimeManual)} золота`}
+            hint="склад ХД / ручной дроп"
             icon={Swords}
             tone="red"
             goldValue
@@ -105,8 +109,8 @@ export default async function DashboardPage() {
           />
           <StatCard
             variant="dashboard"
-            label="Дроп с Прайм"
-            value={`${numberFmt.format(dropGoldPrime)} золота`}
+            label="Дроп общего инвентаря"
+            value={`${numberFmt.format(dropGoldGeneralAuto)} золота`}
             hint="эквивалент в золоте"
             icon={Swords}
             tone="red"

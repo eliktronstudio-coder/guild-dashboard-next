@@ -486,16 +486,51 @@ export async function getDropGoldTotal() {
   return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
 }
 
-// То же самое, но только дроп, физически лежащий на конкретном складе —
-// "Дроп с Мини-РБ" = склад ХД (весь дроп с Мини-РБ активностей падает
-// туда), "Дроп с Прайм" = Общий инвентарь (куда падает Прайм-дроп по
-// умолчанию, пока его не разобрали по ХД/НТ).
-export async function getDropGoldByWarehouse(warehouse: string) {
+function sumGold(drops: { value: number; quantity: number }[]) {
+  return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
+}
+
+// "Дроп общего инвентаря" — только то, что попало в Общий инвентарь
+// автоматически (с Прайм-активности, category проставлена по ней).
+// Ручные добавления без активности сюда не входят — они считаются
+// отдельно, в "Дроп с Прайм" (см. getDropGoldPrimeManual).
+export async function getDropGoldGeneralAuto() {
   const drops = await prisma.dropItem.findMany({
-    where: { status: "Не продано", warehouse },
+    where: { status: "Не продано", warehouse: "Общий", category: "Прайм" },
     select: { value: true, quantity: true },
   });
-  return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
+  return sumGold(drops);
+}
+
+// "Дроп с Прайм" (правая половина объединённой ячейки) — вручную
+// добавленный дроп в Общем инвентаре (без привязки к активности) плюс
+// дроп, вручную добавленный сразу на склад ХД с категорией "Прайм".
+export async function getDropGoldPrimeManual() {
+  const drops = await prisma.dropItem.findMany({
+    where: {
+      status: "Не продано",
+      OR: [
+        { warehouse: "Общий", category: null },
+        { warehouse: "ХД", category: "Прайм" },
+      ],
+    },
+    select: { value: true, quantity: true },
+  });
+  return sumGold(drops);
+}
+
+// "Дроп с Мини-РБ" (левая половина объединённой ячейки) — весь остаток
+// на складе ХД, кроме вручную помеченного как "Прайм".
+export async function getDropGoldMiniRb() {
+  const drops = await prisma.dropItem.findMany({
+    where: {
+      status: "Не продано",
+      warehouse: "ХД",
+      OR: [{ category: "Мини-РБ" }, { category: null }],
+    },
+    select: { value: true, quantity: true },
+  });
+  return sumGold(drops);
 }
 
 // Инвентарь разложен по трём складам: Общий (сюда падает дроп с Прайм-

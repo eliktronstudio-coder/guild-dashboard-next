@@ -98,6 +98,8 @@ export async function POST(request: NextRequest) {
           catalogItemId: original.catalogItemId,
           playerId,
           treasuryTransactionId: transaction.id,
+          warehouse: original.warehouse,
+          category: original.category,
         },
       });
     }

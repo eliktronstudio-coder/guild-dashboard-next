@@ -17,12 +17,18 @@ export default function AddDropForm({
   activities,
   players,
   catalog,
+  forceWarehouse,
+  showCategoryPicker = false,
   onSuccess,
   onCancel,
 }: {
   activities: ActivityOption[];
   players: PlayerOption[];
   catalog: CatalogItem[];
+  /** Принудительно записать дроп на этот склад (в обход авто-маршрута по активности). */
+  forceWarehouse?: string;
+  /** Показать выбор категории (Прайм/Мини-РБ) — для добавления сразу на склад ХД. */
+  showCategoryPicker?: boolean;
   onSuccess: () => void;
   onCancel: () => void;
 }) {
@@ -33,6 +39,7 @@ export default function AddDropForm({
   const [date, setDate] = useState(todayISO());
   const [activityId, setActivityId] = useState("");
   const [playerId, setPlayerId] = useState("");
+  const [category, setCategory] = useState("Прайм");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -61,6 +68,8 @@ export default function AddDropForm({
           activityId: activityId || null,
           playerId: playerId || null,
           catalogItemId: catalogId || null,
+          ...(forceWarehouse ? { warehouse: forceWarehouse } : {}),
+          ...(showCategoryPicker ? { category } : {}),
         }),
       });
       const data = await res.json();
@@ -141,6 +150,19 @@ export default function AddDropForm({
           className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
         />
       </div>
+      {showCategoryPicker && (
+        <div>
+          <label className="mb-1 block text-xs text-muted">Категория</label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+          >
+            <option value="Прайм">Прайм</option>
+            <option value="Мини-РБ">Мини-РБ</option>
+          </select>
+        </div>
+      )}
       <div>
         <label className="mb-1 block text-xs text-muted">Активность</label>
         <select

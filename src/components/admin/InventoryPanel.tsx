@@ -33,6 +33,8 @@ export default function InventoryPanel({
   isAdmin,
   showAddButton = false,
   transferTargets = [],
+  addWarehouse,
+  addCategoryPicker = false,
 }: {
   title: string;
   items: InventoryItem[];
@@ -42,6 +44,10 @@ export default function InventoryPanel({
   isAdmin: boolean;
   showAddButton?: boolean;
   transferTargets?: TransferTarget[];
+  /** Склад, куда принудительно попадёт добавленный здесь дроп (в обход авто-маршрута по активности). */
+  addWarehouse?: string;
+  /** Показывать ли выбор категории (Прайм/Мини-РБ) в форме добавления. */
+  addCategoryPicker?: boolean;
 }) {
   const router = useRouter();
   const totalValue = items.reduce((sum, i) => sum + i.totalValue, 0);
@@ -155,6 +161,8 @@ export default function InventoryPanel({
               activities={activities}
               players={players}
               catalog={catalog}
+              forceWarehouse={addWarehouse}
+              showCategoryPicker={addCategoryPicker}
               onSuccess={() => {
                 setAdding(false);
                 router.refresh();

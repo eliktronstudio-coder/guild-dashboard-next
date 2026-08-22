@@ -108,6 +108,7 @@ model DropItem {
   value                 Int
   status                String           @default("Не продано")
   warehouse             String           @default("Общий")
+  category              String?
   treasuryTransactionId String?
   date                  DateTime         @default(now())
   createdAt             DateTime         @default(now())

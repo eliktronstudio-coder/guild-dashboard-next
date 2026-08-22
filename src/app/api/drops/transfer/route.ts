@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
           activityId: original.activityId,
           catalogItemId: original.catalogItemId,
           playerId: original.playerId,
+          category: original.category,
         },
       });
     }

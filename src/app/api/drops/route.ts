@@ -14,6 +14,10 @@ export async function POST(request: NextRequest) {
   const activityId = typeof body?.activityId === "string" && body.activityId ? body.activityId : null;
   const playerId = typeof body?.playerId === "string" && body.playerId ? body.playerId : null;
   const catalogItemId = typeof body?.catalogItemId === "string" && body.catalogItemId ? body.catalogItemId : null;
+  // Ручной выбор склада/категории (форма "Добавить дроп" на складе ХД) —
+  // переопределяет авто-маршрут по активности, если задан явно.
+  const forcedWarehouse = ["ХД", "НТ", "Общий"].includes(body?.warehouse) ? (body.warehouse as string) : null;
+  const forcedCategory = ["Прайм", "Мини-РБ"].includes(body?.category) ? (body.category as string) : null;
 
   if (!item || item.length > 60) {
     return NextResponse.json({ error: "Укажите название предмета (до 60 символов)." }, { status: 400 });
@@ -33,11 +37,16 @@ export async function POST(request: NextRequest) {
   // Куда падает дроп: с Мини-РБ активности — сразу на склад ХД, со всего
   // остального (Прайм или без активности) — в Общий инвентарь, откуда
   // админ вручную распределяет его по ХД/НТ (см. /api/drops/transfer).
-  let warehouse = "Общий";
+  // Категория запоминается отдельно от склада — нужна, чтобы разделять
+  // "Дроп с Мини-РБ / Дроп с Прайм", когда предмет добавлен вручную
+  // (без активности) или сразу на конкретный склад с явным выбором.
+  let warehouse = forcedWarehouse ?? "Общий";
+  let category = forcedCategory;
   if (activityId) {
     const activity = await prisma.activity.findUnique({ where: { id: activityId } });
     if (!activity) return NextResponse.json({ error: "Активность не найдена." }, { status: 404 });
-    if (activity.category === "Мини-РБ") warehouse = "ХД";
+    if (!forcedWarehouse && activity.category === "Мини-РБ") warehouse = "ХД";
+    if (!category) category = activity.category;
   }
   if (playerId) {
     const player = await prisma.player.findUnique({ where: { id: playerId } });
@@ -45,7 +54,7 @@ export async function POST(request: NextRequest) {
   }
 
   const drop = await prisma.dropItem.create({
-    data: { item, value, quantity, date, activityId, playerId, catalogItemId, warehouse },
+    data: { item, value, quantity, date, activityId, playerId, catalogItemId, warehouse, category },
     include: { activity: true, player: true },
   });
 
