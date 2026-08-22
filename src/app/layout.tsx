@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Serif } from "next/font/google";
 import AppShell from "@/components/AppShell";
+import PendingApproval from "@/components/PendingApproval";
 import { guild } from "@/lib/config";
 import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
@@ -40,7 +41,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <AppShell user={user}>{children}</AppShell>
+        {user?.role === "random" ? (
+          <PendingApproval user={user} />
+        ) : (
+          <AppShell user={user}>{children}</AppShell>
+        )}
       </body>
     </html>
   );

@@ -1,12 +1,16 @@
 // Роли учётной записи (права доступа) — не путать с игровой ролью/классом
 // игрока (Танк/Хил/... из lib/roles.ts).
-export const ACCOUNT_ROLES = ["admin", "gm", "rl", "member"] as const;
+// "random" — стартовая роль новой самостоятельной регистрации: аккаунт
+// существует, но не видит сайт вообще, пока админ вручную не назначит
+// нормальную роль (см. RootLayout).
+export const ACCOUNT_ROLES = ["admin", "gm", "rl", "member", "random"] as const;
 
 export const accountRoleLabel: Record<string, string> = {
   admin: "Админ",
   gm: "ГМ",
   rl: "РЛ",
   member: "Участник",
+  random: "Рандом",
 };
 
 // Админ и ГМ — полные права на всё.

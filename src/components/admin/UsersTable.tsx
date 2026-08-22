@@ -144,6 +144,7 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
                       <option value="gm">ГМ</option>
                       <option value="rl">РЛ</option>
                       <option value="member">Участник</option>
+                      <option value="random">Рандом</option>
                     </select>
                   </td>
                   <td className="px-4 py-3 text-muted">{dateFmt.format(new Date(u.createdAt))}</td>

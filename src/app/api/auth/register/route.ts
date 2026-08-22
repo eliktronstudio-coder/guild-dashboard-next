@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     data: {
       username,
       passwordHash,
+      role: "random",
       player: { create: { name: nickname, role, level: 1, xp: 0 } },
     },
     include: { player: true },
