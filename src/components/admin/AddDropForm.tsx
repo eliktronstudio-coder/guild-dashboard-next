@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { X } from "lucide-react";
+import SearchableSelect from "./SearchableSelect";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -92,18 +93,17 @@ export default function AddDropForm({
     >
       <div className="sm:col-span-2 lg:col-span-6">
         <label className="mb-1 block text-xs text-muted">Из реестра дропа</label>
-        <select
+        <SearchableSelect
           value={catalogId}
-          onChange={(e) => handleCatalogSelect(e.target.value)}
-          className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">— выбрать или ввести вручную ниже —</option>
-          {catalog.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name} · {numberFmt.format(c.price)}/ед.
-            </option>
-          ))}
-        </select>
+          onChange={handleCatalogSelect}
+          options={catalog.map((c) => ({
+            value: c.id,
+            label: `${c.name} · ${numberFmt.format(c.price)}/ед.`,
+            searchText: c.name,
+          }))}
+          placeholder="— выбрать или ввести вручную ниже —"
+          searchPlaceholder="Поиск по названию…"
+        />
       </div>
       <div className="lg:col-span-2">
         <label className="mb-1 block text-xs text-muted">Предмет</label>
@@ -165,33 +165,21 @@ export default function AddDropForm({
       )}
       <div>
         <label className="mb-1 block text-xs text-muted">Активность</label>
-        <select
+        <SearchableSelect
           value={activityId}
-          onChange={(e) => setActivityId(e.target.value)}
-          className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">—</option>
-          {activities.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
+          onChange={setActivityId}
+          options={activities.map((a) => ({ value: a.id, label: a.name }))}
+          searchPlaceholder="Поиск по активности…"
+        />
       </div>
       <div>
         <label className="mb-1 block text-xs text-muted">Получил</label>
-        <select
+        <SearchableSelect
           value={playerId}
-          onChange={(e) => setPlayerId(e.target.value)}
-          className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">—</option>
-          {players.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+          onChange={setPlayerId}
+          options={players.map((p) => ({ value: p.id, label: p.name }))}
+          searchPlaceholder="Поиск по нику…"
+        />
       </div>
 
       {error && <p className="text-xs text-danger lg:col-span-6">{error}</p>}

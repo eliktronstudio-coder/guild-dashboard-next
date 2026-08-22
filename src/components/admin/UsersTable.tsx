@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useState, type FormEvent } from "react";
+import { Fragment, useState, useMemo, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2, UserPlus, KeyRound, X } from "lucide-react";
+import { Trash2, UserPlus, KeyRound, X, Search } from "lucide-react";
 
 type UserRow = {
   id: string;
@@ -22,6 +22,15 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return users;
+    return users.filter(
+      (u) => u.username.toLowerCase().includes(q) || (u.playerName?.toLowerCase().includes(q) ?? false)
+    );
+  }, [users, search]);
 
   async function handleRoleChange(id: string, role: string) {
     setBusyId(id);
@@ -96,6 +105,15 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
   return (
     <div className="space-y-3">
       {error && <p className="text-xs text-danger">{error}</p>}
+      <div className="relative">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск по логину или нику…"
+          className="w-full rounded-md border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
+        />
+      </div>
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full text-sm">
           <thead>
@@ -107,7 +125,7 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {users.map((u) => (
+            {filteredUsers.map((u) => (
               <Fragment key={u.id}>
                 <tr className="hover:bg-surface-2">
                   <td className="px-4 py-3 font-medium">
@@ -201,10 +219,10 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
                 )}
               </Fragment>
             ))}
-            {users.length === 0 && (
+            {filteredUsers.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-6 text-center text-muted">
-                  Пока никто не зарегистрировался.
+                  {users.length === 0 ? "Пока никто не зарегистрировался." : "Ничего не найдено."}
                 </td>
               </tr>
             )}

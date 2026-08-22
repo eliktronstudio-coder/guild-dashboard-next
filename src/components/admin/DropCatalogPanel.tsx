@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, useMemo, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Plus, Trash2, Pencil, X, ImageOff } from "lucide-react";
+import { Plus, Trash2, Pencil, X, ImageOff, Search } from "lucide-react";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const MAX_IMAGE_BYTES = 800_000;
@@ -39,6 +39,12 @@ export default function DropCatalogPanel({ items }: { items: CatalogItem[] }) {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items;
+  }, [items, search]);
 
   function startAdd() {
     setForm(emptyForm);
@@ -207,6 +213,16 @@ export default function DropCatalogPanel({ items }: { items: CatalogItem[] }) {
         )}
       </div>
 
+      <div className="relative">
+        <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск по названию…"
+          className="w-full rounded-md border border-border bg-surface-2 py-2 pl-9 pr-3 text-sm outline-none focus:border-accent"
+        />
+      </div>
+
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="w-full text-sm">
           <thead>
@@ -218,7 +234,7 @@ export default function DropCatalogPanel({ items }: { items: CatalogItem[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {items.map((item) => (
+            {filteredItems.map((item) => (
               <tr key={item.id} className="hover:bg-surface-2">
                 <td className="px-4 py-3">
                   {item.imageUrl ? (
@@ -260,10 +276,10 @@ export default function DropCatalogPanel({ items }: { items: CatalogItem[] }) {
                 </td>
               </tr>
             ))}
-            {items.length === 0 && (
+            {filteredItems.length === 0 && (
               <tr>
                 <td colSpan={4} className="px-4 py-6 text-center text-muted">
-                  Реестр пока пуст.
+                  {items.length === 0 ? "Реестр пока пуст." : "Ничего не найдено."}
                 </td>
               </tr>
             )}

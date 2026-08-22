@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { X } from "lucide-react";
+import SearchableSelect from "./SearchableSelect";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const AUCTION = "__auction__";
@@ -112,19 +113,13 @@ export default function SellDropForm({
     >
       <div className="sm:col-span-3">
         <label className="mb-1 block text-xs text-muted">Предмет из Инвентаря ХД</label>
-        <select
+        <SearchableSelect
           value={item}
-          onChange={(e) => handleItemChange(e.target.value)}
+          onChange={handleItemChange}
+          options={drops.map((d) => ({ value: d.item, label: d.item }))}
+          searchPlaceholder="Поиск по дропу…"
           required
-          className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">— выбрать —</option>
-          {drops.map((d) => (
-            <option key={d.item} value={d.item}>
-              {d.item}
-            </option>
-          ))}
-        </select>
+        />
         {drops.length === 0 && (
           <p className="mt-1 text-xs text-muted">В Инвентаре ХД нет непроданных предметов.</p>
         )}
@@ -154,20 +149,14 @@ export default function SellDropForm({
 
       <div>
         <label className="mb-1 block text-xs text-muted">Кому продажа</label>
-        <select
+        <SearchableSelect
           value={buyer}
-          onChange={(e) => setBuyer(e.target.value)}
+          onChange={setBuyer}
+          options={[{ value: AUCTION, label: "Аукцион" }, ...players.map((p) => ({ value: p.id, label: p.name }))]}
+          pinnedValues={[AUCTION]}
+          searchPlaceholder="Поиск по нику…"
           required
-          className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
-        >
-          <option value="">— выбрать —</option>
-          <option value={AUCTION}>Аукцион</option>
-          {players.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       <div>
