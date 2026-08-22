@@ -4,6 +4,7 @@ import { getActivityById, getRegisteredPlayers, getDropCatalog } from "@/lib/que
 import { getCurrentUser } from "@/lib/auth";
 import { canManageActivitiesRole, isFullAdminRole } from "@/lib/accountRoles";
 import ActivityDetailPanel from "@/components/admin/ActivityDetailPanel";
+import BlurGate from "@/components/BlurGate";
 
 export default async function ActivityDetailPage({
   params,
@@ -26,13 +27,15 @@ export default async function ActivityDetailPage({
           ← Все активности
         </Link>
       </div>
-      <ActivityDetailPanel
-        activity={activity}
-        players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
-        catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price, imageUrl: c.imageUrl }))}
-        isAdmin={canManageActivitiesRole(user?.role)}
-        canManageDrops={isFullAdminRole(user?.role)}
-      />
+      <BlurGate blurred={user?.role === "random"}>
+        <ActivityDetailPanel
+          activity={activity}
+          players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+          catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price, imageUrl: c.imageUrl }))}
+          isAdmin={canManageActivitiesRole(user?.role)}
+          canManageDrops={isFullAdminRole(user?.role)}
+        />
+      </BlurGate>
     </div>
   );
 }

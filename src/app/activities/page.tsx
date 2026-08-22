@@ -2,6 +2,7 @@ import { getFilteredActivities, getDistinctActivityNames, getRegisteredPlayers, 
 import { getCurrentUser } from "@/lib/auth";
 import { canManageActivitiesRole } from "@/lib/accountRoles";
 import ActivitiesList from "@/components/admin/ActivitiesList";
+import BlurGate from "@/components/BlurGate";
 
 type SearchParams = { [key: string]: string | string[] | undefined };
 
@@ -37,22 +38,24 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
   const cancelled = result.activities.filter((a) => a.status === "Отменено").length;
 
   return (
-    <ActivitiesList
-      activities={result.activities}
-      total={result.total}
-      totalPages={result.totalPages}
-      filters={filters}
-      distinctNames={distinctNames}
-      players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
-      catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
-      isAdmin={canManageActivitiesRole(user?.role)}
-      summary={{
-        total: result.total,
-        avgAttendance,
-        bestAttendance,
-        cancelled,
-        totalPlayers: allPlayers.length,
-      }}
-    />
+    <BlurGate blurred={user?.role === "random"}>
+      <ActivitiesList
+        activities={result.activities}
+        total={result.total}
+        totalPages={result.totalPages}
+        filters={filters}
+        distinctNames={distinctNames}
+        players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
+        catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
+        isAdmin={canManageActivitiesRole(user?.role)}
+        summary={{
+          total: result.total,
+          avgAttendance,
+          bestAttendance,
+          cancelled,
+          totalPlayers: allPlayers.length,
+        }}
+      />
+    </BlurGate>
   );
 }

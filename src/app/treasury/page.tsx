@@ -3,6 +3,7 @@ import TreasuryChart from "@/components/charts/TreasuryChart";
 import TreasuryPanel from "@/components/admin/TreasuryPanel";
 import InventoryPanel from "@/components/admin/InventoryPanel";
 import DropsPanel from "@/components/admin/DropsPanel";
+import BlurGate from "@/components/BlurGate";
 import { getCurrentUser } from "@/lib/auth";
 import { isFullAdminRole } from "@/lib/accountRoles";
 import { daysUntilNextPayout } from "@/lib/payout";
@@ -65,8 +66,10 @@ export default async function TreasuryPage() {
 
   const payoutDays = daysUntilNextPayout();
   const isAdmin = isFullAdminRole(user?.role);
+  const isRandom = user?.role === "random";
 
   return (
+    <BlurGate blurred={isRandom}>
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <StatCard
@@ -174,5 +177,6 @@ export default async function TreasuryPage() {
         isAdmin={isAdmin}
       />
     </div>
+    </BlurGate>
   );
 }

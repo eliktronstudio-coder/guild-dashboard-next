@@ -11,7 +11,9 @@ import SectionHeader from "@/components/dashboard/SectionHeader";
 import GuildRankRow from "@/components/dashboard/GuildRankRow";
 import ActivityRow from "@/components/dashboard/ActivityRow";
 import JapaneseCrest from "@/components/dashboard/JapaneseCrest";
+import BlurGate from "@/components/BlurGate";
 import { daysUntilNextPayout } from "@/lib/payout";
+import { getCurrentUser } from "@/lib/auth";
 import {
   topPlayersByAttendanceCategory,
   getAllActivities,
@@ -38,6 +40,7 @@ function CrestIcon({ size }: { size?: number; strokeWidth?: number }) {
 
 export default async function DashboardPage() {
   const [
+    user,
     primeTop,
     miniRbTop,
     allActivities,
@@ -49,6 +52,7 @@ export default async function DashboardPage() {
     dropGoldPrimeManual,
     dropGoldMiniRb,
   ] = await Promise.all([
+    getCurrentUser(),
     topPlayersByAttendanceCategory("attendancePctPrime", 5),
     topPlayersByAttendanceCategory("attendancePctMiniRb", 5),
     getAllActivities(),
@@ -62,8 +66,10 @@ export default async function DashboardPage() {
   ]);
   const recentActivities = allActivities.slice(0, 5);
   const payoutDays = daysUntilNextPayout();
+  const isRandom = user?.role === "random";
 
   return (
+    <BlurGate blurred={isRandom}>
     <div className="space-y-4">
       <div className="relative">
         <DashboardHero />
@@ -251,5 +257,6 @@ export default async function DashboardPage() {
         )}
       </DashboardPanel>
     </div>
+    </BlurGate>
   );
 }
