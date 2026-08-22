@@ -30,9 +30,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Неверная дата." }, { status: 400 });
   }
 
+  // Куда падает дроп: с Мини-РБ активности — сразу на склад ХД, со всего
+  // остального (Прайм или без активности) — в Общий инвентарь, откуда
+  // админ вручную распределяет его по ХД/НТ (см. /api/drops/transfer).
+  let warehouse = "Общий";
   if (activityId) {
     const activity = await prisma.activity.findUnique({ where: { id: activityId } });
     if (!activity) return NextResponse.json({ error: "Активность не найдена." }, { status: 404 });
+    if (activity.category === "Мини-РБ") warehouse = "ХД";
   }
   if (playerId) {
     const player = await prisma.player.findUnique({ where: { id: playerId } });
@@ -40,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
 
   const drop = await prisma.dropItem.create({
-    data: { item, value, quantity, date, activityId, playerId, catalogItemId },
+    data: { item, value, quantity, date, activityId, playerId, catalogItemId, warehouse },
     include: { activity: true, player: true },
   });
 

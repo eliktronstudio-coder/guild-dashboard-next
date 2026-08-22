@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Plus, Pencil, Check, X, Trash2, HelpCircle } from "lucide-react";
+import { Plus, Pencil, Check, X, Trash2, HelpCircle, ArrowRightLeft } from "lucide-react";
 import clsx from "clsx";
 import Drawer from "@/components/Drawer";
 import AddDropForm from "./AddDropForm";
@@ -22,19 +22,26 @@ type InventoryItem = {
 type ActivityOption = { id: string; name: string };
 type PlayerOption = { id: string; name: string };
 type CatalogItem = { id: string; name: string; price: number };
+type TransferTarget = { value: string; label: string };
 
 export default function InventoryPanel({
+  title,
   items,
   activities,
   players,
   catalog,
   isAdmin,
+  showAddButton = false,
+  transferTargets = [],
 }: {
+  title: string;
   items: InventoryItem[];
   activities: ActivityOption[];
   players: PlayerOption[];
   catalog: CatalogItem[];
   isAdmin: boolean;
+  showAddButton?: boolean;
+  transferTargets?: TransferTarget[];
 }) {
   const router = useRouter();
   const totalValue = items.reduce((sum, i) => sum + i.totalValue, 0);
@@ -45,6 +52,7 @@ export default function InventoryPanel({
   const [editQty, setEditQty] = useState("");
   const [editValue, setEditValue] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [transferring, setTransferring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const active = items.find((i) => i.item === openItem) ?? null;
@@ -87,14 +95,33 @@ export default function InventoryPanel({
     router.refresh();
   }
 
+  async function handleTransfer(warehouse: string) {
+    if (!active) return;
+    setTransferring(true);
+    setError(null);
+    const res = await fetch("/api/drops/transfer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entryIds: active.entries.map((e) => e.id), warehouse }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setTransferring(false);
+    if (!res.ok) {
+      setError(data.error ?? "Что-то пошло не так.");
+      return;
+    }
+    setOpenItem(null);
+    router.refresh();
+  }
+
   return (
     <div className="space-y-3">
       <div className="rounded-lg border border-border bg-surface">
         <div className="flex items-center justify-between border-b border-border p-4">
-          <h2 className="text-sm font-semibold">Инвентарь</h2>
+          <h2 className="text-sm font-semibold">{title}</h2>
           <div className="flex items-center gap-3">
             <span className="text-xs text-muted">{numberFmt.format(totalValue)} золота нераспределено</span>
-            {isAdmin && !adding && (
+            {isAdmin && showAddButton && !adding && (
               <button
                 type="button"
                 onClick={() => setAdding(true)}
@@ -106,7 +133,7 @@ export default function InventoryPanel({
           </div>
         </div>
 
-        {isAdmin && adding && (
+        {isAdmin && showAddButton && adding && (
           <div className="p-4">
             <AddDropForm
               activities={activities}
@@ -179,6 +206,25 @@ export default function InventoryPanel({
                 <p className="text-xs text-accent">{numberFmt.format(active.totalValue)} золота</p>
               </div>
             </div>
+
+            {isAdmin && transferTargets.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex items-center gap-1 text-xs text-muted">
+                  <ArrowRightLeft size={13} /> Перенести:
+                </span>
+                {transferTargets.map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => handleTransfer(t.value)}
+                    disabled={transferring}
+                    className="rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {error && <p className="text-xs text-danger">{error}</p>}
 

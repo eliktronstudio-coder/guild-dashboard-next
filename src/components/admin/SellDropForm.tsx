@@ -106,7 +106,7 @@ export default function SellDropForm({
       className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3"
     >
       <div className="sm:col-span-3">
-        <label className="mb-1 block text-xs text-muted">Предмет из инвентаря</label>
+        <label className="mb-1 block text-xs text-muted">Предмет из Инвентаря ХД</label>
         <select
           value={item}
           onChange={(e) => handleItemChange(e.target.value)}
@@ -121,7 +121,7 @@ export default function SellDropForm({
           ))}
         </select>
         {drops.length === 0 && (
-          <p className="mt-1 text-xs text-muted">В инвентаре нет непроданных предметов.</p>
+          <p className="mt-1 text-xs text-muted">В Инвентаре ХД нет непроданных предметов.</p>
         )}
       </div>
 

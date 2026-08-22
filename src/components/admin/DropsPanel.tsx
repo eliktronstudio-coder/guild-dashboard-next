@@ -50,18 +50,6 @@ export default function DropsPanel({
     router.refresh();
   }
 
-  async function handleToggleStatus(id: string, currentStatus: string) {
-    const nextStatus = currentStatus === "Продано" ? "Не продано" : "Продано";
-    setBusyId(id);
-    await fetch(`/api/drops/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
-    });
-    setBusyId(null);
-    router.refresh();
-  }
-
   return (
     <div className="space-y-4">
       {isAdmin && (
@@ -126,30 +114,14 @@ export default function DropsPanel({
               <span className="flex items-center gap-3">
                 <span className="text-accent">{numberFmt.format(d.value * d.quantity)} золота</span>
                 <span className="text-xs text-muted">{d.date}</span>
-                {isAdmin ? (
-                  <button
-                    type="button"
-                    onClick={() => handleToggleStatus(d.id, d.status)}
-                    disabled={busyId === d.id}
-                    className={clsx(
-                      "rounded-full border px-2 py-0.5 text-[11px] font-medium disabled:opacity-60",
-                      d.status === "Продано"
-                        ? "border-success/40 text-success hover:bg-success/10"
-                        : "border-border text-muted hover:bg-surface-2 hover:text-foreground"
-                    )}
-                  >
-                    {d.status}
-                  </button>
-                ) : (
-                  <span
-                    className={clsx(
-                      "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                      d.status === "Продано" ? "border-success/40 text-success" : "border-border text-muted"
-                    )}
-                  >
-                    {d.status}
-                  </span>
-                )}
+                <span
+                  className={clsx(
+                    "rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                    d.status === "Продано" ? "border-success/40 text-success" : "border-border text-muted"
+                  )}
+                >
+                  {d.status}
+                </span>
                 {isAdmin && (
                   <button
                     type="button"

@@ -496,25 +496,33 @@ export async function getDropGoldTotalByCategory(category: string) {
   return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
 }
 
-// Инвентарь: предметы из журнала дропа, которые ещё не выданы конкретному
-// игроку (playerId не указан) и не проданы — то, что сейчас числится за
-// гильдией в виде предметов, а не золота.
-// Инвентарь = весь непроданный дроп из журнала (проданное уже стало
-// золотом в казне и не считается физическим запасом), сгруппированный
-// по названию предмета для отображения иконками с суммарным количеством.
-export async function getInventory() {
+// Инвентарь разложен по трём складам: Общий (сюда падает дроп с Прайм-
+// активностей и всё, что добавлено без активности), ХД (сюда падает дроп
+// с Мини-РБ активностей, и отсюда идёт продажа) и НТ (только вручную,
+// переносом из Общего). Внутри склада — предметы из журнала дропа,
+// которые ещё не проданы, сгруппированные по названию для отображения
+// иконками с суммарным количеством.
+type InventoryEntry = { id: string; quantity: number; value: number; date: string; playerName: string | null };
+type InventoryItem = { item: string; quantity: number; totalValue: number; imageUrl: string | null; entries: InventoryEntry[] };
+
+export async function getInventory(): Promise<{ hd: InventoryItem[]; nt: InventoryItem[]; general: InventoryItem[] }> {
   const drops = await prisma.dropItem.findMany({
     where: { status: "Не продано" },
     include: { catalogItem: { select: { imageUrl: true } }, player: { select: { name: true } } },
     orderBy: { date: "desc" },
   });
 
-  type Entry = { id: string; quantity: number; value: number; date: string; playerName: string | null };
-  const map = new Map<string, { item: string; quantity: number; totalValue: number; imageUrl: string | null; entries: Entry[] }>();
+  const maps: Record<string, Map<string, InventoryItem>> = {
+    ХД: new Map(),
+    НТ: new Map(),
+    Общий: new Map(),
+  };
+
   for (const d of drops) {
+    const map = maps[d.warehouse] ?? maps["Общий"];
     const lineValue = d.value * d.quantity;
     const existing = map.get(d.item);
-    const entry: Entry = {
+    const entry: InventoryEntry = {
       id: d.id,
       quantity: d.quantity,
       value: d.value,
@@ -536,7 +544,13 @@ export async function getInventory() {
       });
     }
   }
-  return [...map.values()].sort((a, b) => b.totalValue - a.totalValue);
+
+  const sortByValue = (items: InventoryItem[]) => items.sort((a, b) => b.totalValue - a.totalValue);
+  return {
+    hd: sortByValue([...maps["ХД"].values()]),
+    nt: sortByValue([...maps["НТ"].values()]),
+    general: sortByValue([...maps["Общий"].values()]),
+  };
 }
 
 export async function getAvgAttendanceLast30Days() {

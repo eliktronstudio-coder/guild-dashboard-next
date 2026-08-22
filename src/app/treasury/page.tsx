@@ -51,7 +51,8 @@ export default async function TreasuryPage() {
     getDropCatalog(),
   ]);
 
-  const unsoldDropOptions = inventory.map((i) => ({
+  // Продажа идёт только со склада ХД — см. решение при переходе на 3 склада.
+  const unsoldDropOptions = inventory.hd.map((i) => ({
     item: i.item,
     quantity: i.quantity,
     totalValue: i.totalValue,
@@ -100,10 +101,27 @@ export default async function TreasuryPage() {
         <TreasuryChart data={treasuryChart} />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <div className="min-w-0 lg:col-span-3">
+      <div className="min-w-0">
+        <InventoryPanel
+          title="Общий Инвентарь"
+          items={inventory.general}
+          activities={activities.map((a) => ({ id: a.id, name: a.name }))}
+          players={players.map((p) => ({ id: p.id, name: p.name }))}
+          catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
+          isAdmin={isAdmin}
+          showAddButton
+          transferTargets={[
+            { value: "ХД", label: "Инвентарь ХД" },
+            { value: "НТ", label: "Инвентарь НТ" },
+          ]}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="min-w-0">
           <InventoryPanel
-            items={inventory}
+            title="Инвентарь ХД"
+            items={inventory.hd}
             activities={activities.map((a) => ({ id: a.id, name: a.name }))}
             players={players.map((p) => ({ id: p.id, name: p.name }))}
             catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
@@ -111,7 +129,18 @@ export default async function TreasuryPage() {
           />
         </div>
 
-        <div className="min-w-0 lg:col-span-2">
+        <div className="min-w-0">
+          <InventoryPanel
+            title="Инвентарь НТ"
+            items={inventory.nt}
+            activities={activities.map((a) => ({ id: a.id, name: a.name }))}
+            players={players.map((p) => ({ id: p.id, name: p.name }))}
+            catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
+            isAdmin={isAdmin}
+          />
+        </div>
+
+        <div className="min-w-0">
           <TreasuryPanel
             transactions={transactions.map((t) => ({ ...t, date: dateFmt.format(t.date) }))}
             drops={unsoldDropOptions}
