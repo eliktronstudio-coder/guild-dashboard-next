@@ -352,31 +352,66 @@ export async function getTreasuryGold() {
   return result._sum.amount ?? 0;
 }
 
-// Золото, реально попавшее в казну от продажи дропа конкретной категории —
-// та же привязка через DropItem.treasuryTransactionId, что и в графике
-// "Динамика казны". Не включает выплаты и прочие не-дроп операции.
-async function getTreasuryGoldByCategory(category: string): Promise<number> {
-  const soldDrops = await prisma.dropItem.findMany({
-    where: { status: "Продано", treasuryTransactionId: { not: null }, activity: { category } },
-    select: { treasuryTransactionId: true },
+// Золото, реально попавшее в казну от продажи дропа, разложенное по
+// категории (Прайм / Мини-РБ) — БЕЗ дублирования. Одна операция в казне
+// может включать предметы разных категорий (объединённая продажа по
+// названию предмета, см. /api/drops/sell): если считать "эта операция
+// затронула категорию X → вся сумма операции идёт в X" для каждой
+// категории по отдельности, при смешанных продажах сумма операции
+// засчитывается в обе категории сразу — отсюда "Казна с Прайма" и
+// "Казна мини-РБ" вместе превышали реальную казну, а "Казна гильдии"
+// (остаток) уходила в минус. Вместо этого делим сумму каждой операции
+// пропорционально номинальной стоимости (value*quantity) проданных в
+// ней позиций по категориям — так сумма операции учитывается ровно
+// один раз. Позиции без категории (ручное добавление в Общий без
+// активности) считаются как Прайм — тот же порядок, что и в "Дроп с
+// Мини-РБ / Дроп с Прайм".
+async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: number }> {
+  const sold = await prisma.dropItem.findMany({
+    where: { status: "Продано", treasuryTransactionId: { not: null } },
+    select: { treasuryTransactionId: true, category: true, value: true, quantity: true },
   });
-  const txIds = soldDrops.map((d) => d.treasuryTransactionId).filter((tid): tid is string => Boolean(tid));
-  if (txIds.length === 0) return 0;
-  const result = await prisma.treasuryTransaction.aggregate({
+  if (sold.length === 0) return { prime: 0, miniRb: 0 };
+
+  const txIds = [...new Set(sold.map((d) => d.treasuryTransactionId as string))];
+  const transactions = await prisma.treasuryTransaction.findMany({
     where: { id: { in: txIds } },
-    _sum: { amount: true },
+    select: { id: true, amount: true },
   });
-  return result._sum.amount ?? 0;
+  const amountByTx = new Map(transactions.map((t) => [t.id, t.amount]));
+
+  const byTx = new Map<string, { prime: number; miniRb: number; nominalTotal: number }>();
+  for (const d of sold) {
+    const txId = d.treasuryTransactionId as string;
+    const line = d.value * d.quantity;
+    const bucket = byTx.get(txId) ?? { prime: 0, miniRb: 0, nominalTotal: 0 };
+    bucket.nominalTotal += line;
+    if (d.category === "Мини-РБ") bucket.miniRb += line;
+    else bucket.prime += line;
+    byTx.set(txId, bucket);
+  }
+
+  let prime = 0;
+  let miniRb = 0;
+  for (const [txId, bucket] of byTx) {
+    const amount = amountByTx.get(txId) ?? 0;
+    if (bucket.nominalTotal <= 0) {
+      prime += amount;
+      continue;
+    }
+    prime += amount * (bucket.prime / bucket.nominalTotal);
+    miniRb += amount * (bucket.miniRb / bucket.nominalTotal);
+  }
+  return { prime: Math.round(prime), miniRb: Math.round(miniRb) };
 }
 
 // Казна делится на основную (фонд ЗП) и казну гильдии (резерв) в пропорции 70/30.
 const TREASURY_MAIN_SHARE = 0.7;
 
 export async function getTreasuryBreakdown() {
-  const [total, primeGold, miniRbGold] = await Promise.all([
+  const [total, { prime: primeGold, miniRb: miniRbGold }] = await Promise.all([
     getTreasuryGold(),
-    getTreasuryGoldByCategory("Прайм"),
-    getTreasuryGoldByCategory("Мини-РБ"),
+    getTreasurySplitByCategory(),
   ]);
   const main = Math.round(total * TREASURY_MAIN_SHARE);
   const prime = Math.round(primeGold * TREASURY_MAIN_SHARE);
