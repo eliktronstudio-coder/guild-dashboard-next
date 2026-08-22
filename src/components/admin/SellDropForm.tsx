@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { X } from "lucide-react";
-import SearchableSelect from "./SearchableSelect";
+import AutocompleteInput from "./AutocompleteInput";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const AUCTION = "__auction__";
@@ -113,12 +113,11 @@ export default function SellDropForm({
     >
       <div className="sm:col-span-3">
         <label className="mb-1 block text-xs text-muted">Предмет из Инвентаря ХД</label>
-        <SearchableSelect
+        <AutocompleteInput
           value={item}
           onChange={handleItemChange}
           options={drops.map((d) => ({ value: d.item, label: d.item }))}
-          searchPlaceholder="Поиск по дропу…"
-          required
+          placeholder="Поиск по дропу…"
         />
         {drops.length === 0 && (
           <p className="mt-1 text-xs text-muted">В Инвентаре ХД нет непроданных предметов.</p>
@@ -149,13 +148,12 @@ export default function SellDropForm({
 
       <div>
         <label className="mb-1 block text-xs text-muted">Кому продажа</label>
-        <SearchableSelect
+        <AutocompleteInput
           value={buyer}
           onChange={setBuyer}
           options={[{ value: AUCTION, label: "Аукцион" }, ...players.map((p) => ({ value: p.id, label: p.name }))]}
           pinnedValues={[AUCTION]}
-          searchPlaceholder="Поиск по нику…"
-          required
+          placeholder="Поиск по нику…"
         />
       </div>
 
