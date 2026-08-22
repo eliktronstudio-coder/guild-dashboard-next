@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import SearchableSelect from "./SearchableSelect";
+import AutocompleteInput from "./AutocompleteInput";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -96,7 +97,7 @@ export default function AddDropForm({
     >
       <div className="sm:col-span-2 lg:col-span-6">
         <label className="mb-1 block text-xs text-muted">Из реестра дропа</label>
-        <SearchableSelect
+        <AutocompleteInput
           value={catalogId}
           onChange={handleCatalogSelect}
           options={catalog.map((c) => ({
@@ -105,7 +106,6 @@ export default function AddDropForm({
             searchText: c.name,
           }))}
           placeholder="— выбрать или ввести вручную ниже —"
-          searchPlaceholder="Поиск по названию…"
         />
       </div>
       <div className="lg:col-span-2">
