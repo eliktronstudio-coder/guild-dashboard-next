@@ -76,6 +76,11 @@ export default function SellDropForm({
       setError("Выберите, кому продажа.");
       return;
     }
+    const buyerLabel = isAuction ? "аукцион" : (players.find((p) => p.id === buyer)?.name ?? buyer);
+    const totalLabel = isAuction ? (amount ? `${numberFmt.format(Number(amount))} золота` : "сумма не указана") : `${numberFmt.format(fixedTotal)} золота`;
+    if (!confirm(`Продать ×${qty} «${selectedDrop.item}» — ${buyerLabel}, ${totalLabel}?`)) {
+      return;
+    }
     setBusy(true);
     try {
       const res = await fetch("/api/drops/sell", {
@@ -127,7 +132,13 @@ export default function SellDropForm({
 
       <div>
         <label className="mb-1 block text-xs text-muted">
-          Количество{selectedDrop && <span className="text-muted-2"> (доступно {selectedDrop.quantity})</span>}
+          Количество
+          {selectedDrop && (
+            <span className="text-muted-2">
+              {" "}
+              (доступно {selectedDrop.quantity}, записей: {selectedDrop.entries.length})
+            </span>
+          )}
         </label>
         <input
           type="number"
