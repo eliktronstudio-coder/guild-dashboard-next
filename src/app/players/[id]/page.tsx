@@ -57,6 +57,8 @@ export default async function PlayerDetailPage({
         <StatCard label="Посещаемость: Прайм" value={`${player.attendancePctPrime}%`} hint="за всё время" />
         <StatCard label="Посещаемость: Мини-РБ" value={`${player.attendancePctMiniRb}%`} hint="за всё время" />
         <StatCard label="Зарплата" value={`${numberFmt.format(player.salary)} золота`} hint="расчётная" />
+        <StatCard label="Зарплата: Прайм" value={`${numberFmt.format(player.salaryPrime)} золота`} hint="расчётная" />
+        <StatCard label="Зарплата: Мини-РБ" value={`${numberFmt.format(player.salaryMiniRb)} золота`} hint="расчётная" />
         <StatCard label="Уровень" value={String(player.level)} hint="текущий уровень" />
         <StatCard label="Опыт" value={`${numberFmt.format(player.xp)} XP`} hint="накоплено" />
         <StatCard label="Коэффициент" value={coefficientFmt.format(player.salaryCoefficient)} hint="настраивает админ" />

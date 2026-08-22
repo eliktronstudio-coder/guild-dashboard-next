@@ -19,6 +19,8 @@ type Player = {
   attendancePctMiniRb: number;
   salaryCoefficient: number;
   salary: number;
+  salaryPrime: number;
+  salaryMiniRb: number;
   userId: string | null;
 };
 
@@ -323,7 +325,7 @@ export default function PlayersTable({
                 </th>
                 <th
                   className="px-4 py-3 font-medium"
-                  title="Считается автоматически: (казна + дроп с РБ) делится по посещаемости с учётом коэффициента"
+                  title="П — доля Казны с Прайма, М — доля Казны мини-РБ, делится по посещаемости соответствующей категории с учётом коэффициента. Посещаемость ниже 20% по категории исключает из расчёта зарплаты за неё."
                 >
                   Зарплата
                 </th>
@@ -399,7 +401,22 @@ export default function PlayersTable({
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted">{coefficientFmt.format(p.salaryCoefficient)}</td>
-                    <td className="px-4 py-3 font-medium">{numberFmt.format(p.salary)}</td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
+                            П
+                          </span>
+                          <span className="font-medium tabular-nums">{numberFmt.format(p.salaryPrime)}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
+                            М
+                          </span>
+                          <span className="font-medium tabular-nums">{numberFmt.format(p.salaryMiniRb)}</span>
+                        </div>
+                      </div>
+                    </td>
                     {isAdmin && (
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
@@ -467,6 +484,14 @@ export default function PlayersTable({
               <div className="rounded-lg border border-border bg-surface-2 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата</p>
                 <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salary)}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-surface-2 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата: Прайм</p>
+                <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salaryPrime)}</p>
+              </div>
+              <div className="rounded-lg border border-border bg-surface-2 p-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата: Мини-РБ</p>
+                <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salaryMiniRb)}</p>
               </div>
               <div className="rounded-lg border border-border bg-surface-2 p-3">
                 <p className="text-[11px] uppercase tracking-wide text-muted">Достижения</p>

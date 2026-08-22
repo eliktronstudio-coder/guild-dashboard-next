@@ -46,27 +46,30 @@ async function getAttendanceMaps(): Promise<{
   };
 }
 
-// Зарплата считается динамически: основная казна (проданный дроп попадает
-// туда отдельной операцией) делится между игроками пропорционально их
-// посещаемости, скорректированной индивидуальным коэффициентом (0.0–1.25),
-// который настраивает админ.
-async function getSalaryMap(attendanceMap: Map<string, number>): Promise<Map<string, number>> {
-  const [players, treasuryBreakdown] = await Promise.all([
-    prisma.player.findMany({ select: { id: true, salaryCoefficient: true } }),
-    getTreasuryBreakdown(),
-  ]);
+// Зарплата считается динамически и отдельно по каждой казне — Прайм
+// (70% с продаж категории Прайм) и Мини-РБ (100% с продаж категории
+// Мини-РБ) — и делится между игроками пропорционально ИХ посещаемости
+// той же категории, скорректированной индивидуальным коэффициентом
+// (0.0–1.25). Игрок с посещаемостью по категории ниже
+// SALARY_MIN_ATTENDANCE_PCT в расчёте зарплаты за эту категорию не
+// участвует вовсе (не платит и не получает) — его доля пропорционально
+// перераспределяется между остальными.
+const SALARY_MIN_ATTENDANCE_PCT = 20;
 
-  const pool = treasuryBreakdown.main;
+async function getSalaryMapForPool(attendanceMap: Map<string, number>, pool: number): Promise<Map<string, number>> {
+  const players = await prisma.player.findMany({ select: { id: true, salaryCoefficient: true } });
+
   const map = new Map<string, number>();
   if (pool <= 0) {
     for (const p of players) map.set(p.id, 0);
     return map;
   }
 
-  const weights = players.map((p) => ({
-    id: p.id,
-    weight: (attendanceMap.get(p.id) ?? 0) * p.salaryCoefficient,
-  }));
+  const weights = players.map((p) => {
+    const pct = attendanceMap.get(p.id) ?? 0;
+    const eligible = pct >= SALARY_MIN_ATTENDANCE_PCT;
+    return { id: p.id, weight: eligible ? pct * p.salaryCoefficient : 0 };
+  });
   const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
   if (totalWeight <= 0) {
     for (const p of players) map.set(p.id, 0);
@@ -80,13 +83,17 @@ async function getSalaryMap(attendanceMap: Map<string, number>): Promise<Map<str
 }
 
 async function getDerivedPlayerMaps() {
-  const attendanceMaps = await getAttendanceMaps();
-  const salary = await getSalaryMap(attendanceMaps.overall);
+  const [attendanceMaps, treasuryBreakdown] = await Promise.all([getAttendanceMaps(), getTreasuryBreakdown()]);
+  const [salaryPrime, salaryMiniRb] = await Promise.all([
+    getSalaryMapForPool(attendanceMaps.prime, treasuryBreakdown.prime),
+    getSalaryMapForPool(attendanceMaps.miniRb, treasuryBreakdown.miniRb),
+  ]);
   return {
     attendance: attendanceMaps.overall,
     attendancePrime: attendanceMaps.prime,
     attendanceMiniRb: attendanceMaps.miniRb,
-    salary,
+    salaryPrime,
+    salaryMiniRb,
   };
 }
 
@@ -96,16 +103,23 @@ function withDerived<T extends { id: string }>(
     attendance: Map<string, number>;
     attendancePrime: Map<string, number>;
     attendanceMiniRb: Map<string, number>;
-    salary: Map<string, number>;
+    salaryPrime: Map<string, number>;
+    salaryMiniRb: Map<string, number>;
   }
 ) {
-  return players.map((p) => ({
-    ...p,
-    attendancePct: derived.attendance.get(p.id) ?? 0,
-    attendancePctPrime: derived.attendancePrime.get(p.id) ?? 0,
-    attendancePctMiniRb: derived.attendanceMiniRb.get(p.id) ?? 0,
-    salary: derived.salary.get(p.id) ?? 0,
-  }));
+  return players.map((p) => {
+    const salaryPrime = derived.salaryPrime.get(p.id) ?? 0;
+    const salaryMiniRb = derived.salaryMiniRb.get(p.id) ?? 0;
+    return {
+      ...p,
+      attendancePct: derived.attendance.get(p.id) ?? 0,
+      attendancePctPrime: derived.attendancePrime.get(p.id) ?? 0,
+      attendancePctMiniRb: derived.attendanceMiniRb.get(p.id) ?? 0,
+      salaryPrime,
+      salaryMiniRb,
+      salary: salaryPrime + salaryMiniRb,
+    };
+  });
 }
 
 export async function getAllPlayers() {
@@ -122,13 +136,7 @@ export async function getPlayerById(id: string) {
     getDerivedPlayerMaps(),
   ]);
   if (!player) return null;
-  return {
-    ...player,
-    attendancePct: derived.attendance.get(player.id) ?? 0,
-    attendancePctPrime: derived.attendancePrime.get(player.id) ?? 0,
-    attendancePctMiniRb: derived.attendanceMiniRb.get(player.id) ?? 0,
-    salary: derived.salary.get(player.id) ?? 0,
-  };
+  return withDerived([player], derived)[0];
 }
 
 export async function getPlayerActivityHistory(playerId: string, limit = 8) {
