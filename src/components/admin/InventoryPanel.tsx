@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Plus, Pencil, Check, X, Trash2, HelpCircle, ArrowRightLeft, Undo2 } from "lucide-react";
+import { Plus, Pencil, Check, X, Trash2, HelpCircle, ArrowRightLeft, Undo2, Search } from "lucide-react";
 import clsx from "clsx";
 import Drawer from "@/components/Drawer";
 import AddDropForm from "./AddDropForm";
@@ -61,9 +61,15 @@ export default function InventoryPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [transferring, setTransferring] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const active = items.find((i) => i.item === openItem) ?? null;
   const isGeneral = transferTargets.length > 0;
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? items.filter((i) => i.item.toLowerCase().includes(q)) : items;
+  }, [items, search]);
 
   function openDrawer(i: InventoryItem) {
     setOpenItem(i.item);
@@ -176,33 +182,50 @@ export default function InventoryPanel({
         {items.length === 0 ? (
           <p className="px-4 py-6 text-center text-sm text-muted">Пока нет непроданных предметов.</p>
         ) : (
-          <div className="flex flex-wrap gap-2 p-4">
-            {items.map((i) => (
-              <button
-                key={i.item}
-                type="button"
-                onClick={() => openDrawer(i)}
-                title={i.item}
-                className="group relative flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-md border border-border bg-surface-2 transition-colors hover:border-accent/50 hover:bg-surface-hover"
-              >
-                {i.imageUrl ? (
-                  <Image
-                    src={i.imageUrl}
-                    alt={i.item}
-                    width={20}
-                    height={20}
-                    unoptimized
-                    className="h-full w-full rounded-md object-contain p-1"
-                  />
-                ) : (
-                  <HelpCircle size={13} className="text-muted-2" />
-                )}
-                <span className="absolute -bottom-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-border bg-accent px-0.5 text-[8px] font-semibold text-black">
-                  {i.quantity}
-                </span>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="border-b border-border p-3">
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Поиск по названию…"
+                  className="w-full rounded-md border border-border bg-surface-2 py-1.5 pl-8 pr-3 text-sm outline-none focus:border-accent"
+                />
+              </div>
+            </div>
+            {filteredItems.length === 0 ? (
+              <p className="px-4 py-6 text-center text-sm text-muted">Ничего не найдено.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2 p-4">
+                {filteredItems.map((i) => (
+                  <button
+                    key={i.item}
+                    type="button"
+                    onClick={() => openDrawer(i)}
+                    title={i.item}
+                    className="group relative flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-md border border-border bg-surface-2 transition-colors hover:border-accent/50 hover:bg-surface-hover"
+                  >
+                    {i.imageUrl ? (
+                      <Image
+                        src={i.imageUrl}
+                        alt={i.item}
+                        width={20}
+                        height={20}
+                        unoptimized
+                        className="h-full w-full rounded-md object-contain p-1"
+                      />
+                    ) : (
+                      <HelpCircle size={13} className="text-muted-2" />
+                    )}
+                    <span className="absolute -bottom-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-border bg-accent px-0.5 text-[8px] font-semibold text-black">
+                      {i.quantity}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
