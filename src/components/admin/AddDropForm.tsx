@@ -20,6 +20,7 @@ export default function AddDropForm({
   catalog,
   forceWarehouse,
   showCategoryPicker = false,
+  showActivityAndPlayer = true,
   onSuccess,
   onCancel,
 }: {
@@ -30,6 +31,8 @@ export default function AddDropForm({
   forceWarehouse?: string;
   /** Показать выбор категории (Прайм/Мини-РБ) — для добавления сразу на склад ХД. */
   showCategoryPicker?: boolean;
+  /** Показать выбор активности и получателя — не нужны при добавлении прямо из инвентаря. */
+  showActivityAndPlayer?: boolean;
   onSuccess: () => void;
   onCancel: () => void;
 }) {
@@ -163,24 +166,28 @@ export default function AddDropForm({
           </select>
         </div>
       )}
-      <div>
-        <label className="mb-1 block text-xs text-muted">Активность</label>
-        <SearchableSelect
-          value={activityId}
-          onChange={setActivityId}
-          options={activities.map((a) => ({ value: a.id, label: a.name }))}
-          searchPlaceholder="Поиск по активности…"
-        />
-      </div>
-      <div>
-        <label className="mb-1 block text-xs text-muted">Получил</label>
-        <SearchableSelect
-          value={playerId}
-          onChange={setPlayerId}
-          options={players.map((p) => ({ value: p.id, label: p.name }))}
-          searchPlaceholder="Поиск по нику…"
-        />
-      </div>
+      {showActivityAndPlayer && (
+        <>
+          <div>
+            <label className="mb-1 block text-xs text-muted">Активность</label>
+            <SearchableSelect
+              value={activityId}
+              onChange={setActivityId}
+              options={activities.map((a) => ({ value: a.id, label: a.name }))}
+              searchPlaceholder="Поиск по активности…"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs text-muted">Получил</label>
+            <SearchableSelect
+              value={playerId}
+              onChange={setPlayerId}
+              options={players.map((p) => ({ value: p.id, label: p.name }))}
+              searchPlaceholder="Поиск по нику…"
+            />
+          </div>
+        </>
+      )}
 
       {error && <p className="text-xs text-danger lg:col-span-6">{error}</p>}
 

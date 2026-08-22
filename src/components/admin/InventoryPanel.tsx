@@ -163,6 +163,7 @@ export default function InventoryPanel({
               catalog={catalog}
               forceWarehouse={addWarehouse}
               showCategoryPicker={addCategoryPicker}
+              showActivityAndPlayer={false}
               onSuccess={() => {
                 setAdding(false);
                 router.refresh();
