@@ -32,8 +32,11 @@ export default async function PaymentsPage() {
           id: p.id,
           name: p.name,
           role: p.role,
-          attendancePct: p.attendancePct,
+          attendancePctPrime: p.attendancePctPrime,
+          attendancePctMiniRb: p.attendancePctMiniRb,
           salary: p.salary,
+          salaryPrime: p.salaryPrime,
+          salaryMiniRb: p.salaryMiniRb,
         }))}
         totalPayout={totalPayout}
         isRandom={isRandom}
