@@ -49,6 +49,8 @@ export default async function PaymentsPage() {
           amount: p.amount,
           status: p.status,
           date: dateFmt.format(p.date),
+          dateISO: p.date.toISOString().slice(0, 10),
+          source: p.source,
         }))}
         players={players.map((p) => ({ id: p.id, name: p.name }))}
         isAdmin={isFullAdminRole(user?.role)}

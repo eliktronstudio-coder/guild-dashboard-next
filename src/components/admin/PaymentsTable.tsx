@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, X } from "lucide-react";
+import { Archive, Pencil, Plus, Trash2, X } from "lucide-react";
 import Modal from "@/components/Modal";
 import EmptyState from "@/components/EmptyState";
 import StatusBadge from "@/components/StatusBadge";
@@ -24,6 +24,8 @@ type Payment = {
   amount: number;
   status: string;
   date: string;
+  dateISO: string;
+  source: string;
 };
 
 type PlayerOption = { id: string; name: string };
@@ -52,6 +54,13 @@ export default function PaymentsTable({
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Payment | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editStatus, setEditStatus] = useState(STATUSES[0]);
+  const [editDate, setEditDate] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [archiving, setArchiving] = useState(false);
+  const [archiveMessage, setArchiveMessage] = useState<string | null>(null);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -101,18 +110,83 @@ export default function PaymentsTable({
     router.refresh();
   }
 
+  function openEdit(p: Payment) {
+    setEditing(p);
+    setEditAmount(String(p.amount));
+    setEditStatus(p.status);
+    setEditDate(p.dateISO);
+    setEditError(null);
+  }
+
+  async function handleEditSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
+    setEditError(null);
+    setBusyId(editing.id);
+    try {
+      const res = await fetch(`/api/payments/${editing.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: Number(editAmount), status: editStatus, date: editDate }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setEditError(data.error ?? "Что-то пошло не так.");
+        return;
+      }
+      setEditing(null);
+      router.refresh();
+    } catch {
+      setEditError("Не удалось связаться с сервером.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleArchive() {
+    setArchiving(true);
+    setArchiveMessage(null);
+    try {
+      const res = await fetch("/api/payments/archive", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setArchiveMessage(data.error ?? "Что-то пошло не так.");
+        return;
+      }
+      setArchiveMessage(
+        data.created > 0 ? `Создан архив выплат за ${data.archiveMonth}: ${data.created} записей.` : data.message
+      );
+      router.refresh();
+    } catch {
+      setArchiveMessage("Не удалось связаться с сервером.");
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   return (
     <div className="space-y-4">
       {isAdmin && (
         <div>
           {!adding && (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90"
-            >
-              <Plus size={16} /> Добавить выплату
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90"
+              >
+                <Plus size={16} /> Добавить выплату
+              </button>
+              <button
+                type="button"
+                onClick={handleArchive}
+                disabled={archiving}
+                className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground disabled:opacity-60"
+              >
+                <Archive size={16} /> Создать архив за месяц
+              </button>
+              {archiveMessage && <span className="text-xs text-muted">{archiveMessage}</span>}
+            </div>
           )}
 
           {adding && (
@@ -237,18 +311,38 @@ export default function PaymentsTable({
                         <StatusBadge label={p.status} tone={statusTone[p.status] ?? "accent"} />
                       )}
                     </td>
-                    <td className="px-4 py-3 text-muted">{p.date}</td>
+                    <td className="px-4 py-3 text-muted">
+                      <div className="flex items-center gap-2">
+                        <span>{p.date}</span>
+                        {p.source === "archive" && (
+                          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-muted">
+                            Архив
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     {isAdmin && (
                       <td className="px-4 py-3">
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteId(p.id)}
-                          disabled={busyId === p.id}
-                          aria-label="Удалить"
-                          className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-60"
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEdit(p)}
+                            disabled={busyId === p.id}
+                            aria-label="Редактировать"
+                            className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(p.id)}
+                            disabled={busyId === p.id}
+                            aria-label="Удалить"
+                            className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-60"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -278,6 +372,68 @@ export default function PaymentsTable({
             Отмена
           </button>
         </div>
+      </Modal>
+
+      <Modal open={editing !== null} onClose={() => setEditing(null)} title="Редактировать выплату">
+        {editing && (
+          <form onSubmit={handleEditSubmit} className="space-y-3">
+            <p className="text-xs text-muted">{editing.player.name}</p>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Сумма</label>
+              <input
+                type="number"
+                value={editAmount}
+                onChange={(e) => setEditAmount(e.target.value)}
+                min={1}
+                required
+                className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Статус</label>
+              <select
+                value={editStatus}
+                onChange={(e) => setEditStatus(e.target.value)}
+                className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted">Дата</label>
+              <input
+                type="date"
+                value={editDate}
+                onChange={(e) => setEditDate(e.target.value)}
+                required
+                className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+            </div>
+
+            {editError && <p className="text-xs text-danger">{editError}</p>}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={busyId === editing.id}
+                className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-black hover:opacity-90 disabled:opacity-60"
+              >
+                Сохранить
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
+              >
+                Отмена
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

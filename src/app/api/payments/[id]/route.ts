@@ -10,15 +10,39 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { id } = await params;
   const body = await request.json().catch(() => null);
-  const status = typeof body?.status === "string" ? body.status : "";
 
-  if (!STATUSES.includes(status)) {
-    return NextResponse.json({ error: "Неверный статус." }, { status: 400 });
+  const data: { status?: string; amount?: number; date?: Date } = {};
+
+  if (body?.status !== undefined) {
+    if (!STATUSES.includes(body.status)) {
+      return NextResponse.json({ error: "Неверный статус." }, { status: 400 });
+    }
+    data.status = body.status;
+  }
+
+  if (body?.amount !== undefined) {
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: "Укажите положительную сумму." }, { status: 400 });
+    }
+    data.amount = amount;
+  }
+
+  if (body?.date !== undefined) {
+    const date = new Date(body.date);
+    if (Number.isNaN(date.getTime())) {
+      return NextResponse.json({ error: "Неверная дата." }, { status: 400 });
+    }
+    data.date = date;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "Нечего обновлять." }, { status: 400 });
   }
 
   const payment = await prisma.payment.update({
     where: { id },
-    data: { status },
+    data,
     include: { player: true },
   });
 
