@@ -486,11 +486,13 @@ export async function getDropGoldTotal() {
   return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
 }
 
-// То же самое, но только дроп с активностей указанной категории
-// (Мини-РБ / Прайм) — для раздельной статистики на Казне.
-export async function getDropGoldTotalByCategory(category: string) {
+// То же самое, но только дроп, физически лежащий на конкретном складе —
+// "Дроп с Мини-РБ" = склад ХД (весь дроп с Мини-РБ активностей падает
+// туда), "Дроп с Прайм" = Общий инвентарь (куда падает Прайм-дроп по
+// умолчанию, пока его не разобрали по ХД/НТ).
+export async function getDropGoldByWarehouse(warehouse: string) {
   const drops = await prisma.dropItem.findMany({
-    where: { status: "Не продано", activity: { category } },
+    where: { status: "Не продано", warehouse },
     select: { value: true, quantity: true },
   });
   return drops.reduce((sum, d) => sum + d.value * d.quantity, 0);

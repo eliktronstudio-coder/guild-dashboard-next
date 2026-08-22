@@ -11,7 +11,6 @@ import {
   getTreasuryBreakdown,
   getTreasuryChartData,
   getAllDrops,
-  getDropGoldTotalByCategory,
   getInventory,
   getAllActivities,
   getRegisteredPlayers,
@@ -29,8 +28,6 @@ export default async function TreasuryPage() {
     treasuryBreakdown,
     treasuryChart,
     drops,
-    dropTotalMiniRb,
-    dropTotalPrime,
     inventory,
     activities,
     players,
@@ -42,8 +39,6 @@ export default async function TreasuryPage() {
     getTreasuryBreakdown(),
     getTreasuryChartData(),
     getAllDrops(50),
-    getDropGoldTotalByCategory("Мини-РБ"),
-    getDropGoldTotalByCategory("Прайм"),
     getInventory(),
     getAllActivities(),
     getRegisteredPlayers(),
@@ -58,6 +53,12 @@ export default async function TreasuryPage() {
     totalValue: i.totalValue,
     entries: i.entries.map((e) => ({ id: e.id, quantity: e.quantity, value: e.value })),
   }));
+
+  // Дроп с Мини-РБ = непроданный остаток на складе ХД (туда падает весь
+  // Мини-РБ дроп), Дроп с Прайм = непроданный остаток в Общем инвентаре
+  // (куда падает Прайм-дроп, пока его не разобрали по ХД/НТ).
+  const dropTotalMiniRb = inventory.hd.reduce((sum, i) => sum + i.totalValue, 0);
+  const dropTotalPrime = inventory.general.reduce((sum, i) => sum + i.totalValue, 0);
 
   const payoutDays = daysUntilNextPayout();
   const isAdmin = isFullAdminRole(user?.role);
@@ -156,7 +157,6 @@ export default async function TreasuryPage() {
           item: d.item,
           value: d.value,
           quantity: d.quantity,
-          status: d.status,
           date: dateFmt.format(d.date),
           activityName: d.activity?.name ?? null,
           playerName: d.player?.name ?? null,

@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Plus, Trash2, ImageOff } from "lucide-react";
-import clsx from "clsx";
 import AddDropForm from "./AddDropForm";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -14,7 +13,6 @@ type Drop = {
   item: string;
   value: number;
   quantity: number;
-  status: string;
   date: string;
   activityName: string | null;
   playerName: string | null;
@@ -114,14 +112,6 @@ export default function DropsPanel({
               <span className="flex items-center gap-3">
                 <span className="text-accent">{numberFmt.format(d.value * d.quantity)} золота</span>
                 <span className="text-xs text-muted">{d.date}</span>
-                <span
-                  className={clsx(
-                    "rounded-full border px-2 py-0.5 text-[11px] font-medium",
-                    d.status === "Продано" ? "border-success/40 text-success" : "border-border text-muted"
-                  )}
-                >
-                  {d.status}
-                </span>
                 {isAdmin && (
                   <button
                     type="button"

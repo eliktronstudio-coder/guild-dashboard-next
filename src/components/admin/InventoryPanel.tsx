@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Plus, Pencil, Check, X, Trash2, HelpCircle, ArrowRightLeft } from "lucide-react";
+import { Plus, Pencil, Check, X, Trash2, HelpCircle, ArrowRightLeft, Undo2 } from "lucide-react";
 import clsx from "clsx";
 import Drawer from "@/components/Drawer";
 import AddDropForm from "./AddDropForm";
@@ -48,6 +48,7 @@ export default function InventoryPanel({
 
   const [adding, setAdding] = useState(false);
   const [openItem, setOpenItem] = useState<string | null>(null);
+  const [transferQty, setTransferQty] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState("");
   const [editValue, setEditValue] = useState("");
@@ -56,6 +57,13 @@ export default function InventoryPanel({
   const [error, setError] = useState<string | null>(null);
 
   const active = items.find((i) => i.item === openItem) ?? null;
+  const isGeneral = transferTargets.length > 0;
+
+  function openDrawer(i: InventoryItem) {
+    setOpenItem(i.item);
+    setTransferQty(i.quantity);
+    setError(null);
+  }
 
   function startEdit(e: Entry) {
     setEditingId(e.id);
@@ -88,11 +96,19 @@ export default function InventoryPanel({
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Удалить запись?")) return;
+    const message = isGeneral ? "Удалить запись?" : "Вернуть предмет в Общий инвентарь?";
+    if (!confirm(message)) return;
     setBusyId(id);
     await fetch(`/api/drops/${id}`, { method: "DELETE" });
     setBusyId(null);
     router.refresh();
+  }
+
+  function handleTransferQtyChange(value: string) {
+    const max = active?.quantity ?? 1;
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n)) return;
+    setTransferQty(Math.min(max, Math.max(1, n)));
   }
 
   async function handleTransfer(warehouse: string) {
@@ -102,7 +118,7 @@ export default function InventoryPanel({
     const res = await fetch("/api/drops/transfer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ entryIds: active.entries.map((e) => e.id), warehouse }),
+      body: JSON.stringify({ entryIds: active.entries.map((e) => e.id), warehouse, quantity: transferQty }),
     });
     const data = await res.json().catch(() => ({}));
     setTransferring(false);
@@ -156,7 +172,7 @@ export default function InventoryPanel({
               <button
                 key={i.item}
                 type="button"
-                onClick={() => setOpenItem(i.item)}
+                onClick={() => openDrawer(i)}
                 title={i.item}
                 className="group relative flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-md border border-border bg-surface-2 transition-colors hover:border-accent/50 hover:bg-surface-hover"
               >
@@ -208,21 +224,35 @@ export default function InventoryPanel({
             </div>
 
             {isAdmin && transferTargets.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="flex items-center gap-1 text-xs text-muted">
-                  <ArrowRightLeft size={13} /> Перенести:
-                </span>
-                {transferTargets.map((t) => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => handleTransfer(t.value)}
+              <div className="space-y-2 rounded-md border border-border p-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1 text-xs text-muted">
+                    <ArrowRightLeft size={13} /> Перенести
+                  </span>
+                  <input
+                    type="number"
+                    value={transferQty}
+                    onChange={(e) => handleTransferQtyChange(e.target.value)}
+                    min={1}
+                    max={active.quantity}
                     disabled={transferring}
-                    className="rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                    className="w-16 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs outline-none focus:border-accent disabled:opacity-60"
+                  />
+                  <span className="text-xs text-muted">из {active.quantity} шт. в:</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {transferTargets.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => handleTransfer(t.value)}
+                      disabled={transferring}
+                      className="rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -296,10 +326,10 @@ export default function InventoryPanel({
                             type="button"
                             onClick={() => handleDelete(e.id)}
                             disabled={busyId === e.id}
-                            aria-label="Удалить"
+                            aria-label={isGeneral ? "Удалить" : "Вернуть в Общий инвентарь"}
                             className="rounded p-1.5 text-muted hover:bg-surface hover:text-danger"
                           >
-                            <Trash2 size={14} />
+                            {isGeneral ? <Trash2 size={14} /> : <Undo2 size={14} />}
                           </button>
                         </div>
                       )}

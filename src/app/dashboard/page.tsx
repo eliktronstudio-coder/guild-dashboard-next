@@ -19,7 +19,7 @@ import {
   getTreasuryChartCombined,
   getAttendanceChartData,
   getAvgAttendanceLast30Days,
-  getDropGoldTotalByCategory,
+  getDropGoldByWarehouse,
 } from "@/lib/queries";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -53,8 +53,8 @@ export default async function DashboardPage() {
     getTreasuryChartCombined(),
     getAttendanceChartData(),
     getAvgAttendanceLast30Days(),
-    getDropGoldTotalByCategory("Мини-РБ"),
-    getDropGoldTotalByCategory("Прайм"),
+    getDropGoldByWarehouse("ХД"),
+    getDropGoldByWarehouse("Общий"),
   ]);
   const recentActivities = allActivities.slice(0, 5);
   const payoutDays = daysUntilNextPayout();
