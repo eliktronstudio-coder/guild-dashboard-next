@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import GearRankCalculator from "@/components/GearRankCalculator";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -27,6 +28,7 @@ export default function CalculatorPage() {
   }, [currentXp, xpPerKill, kills]);
 
   return (
+    <div className="space-y-4">
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
       <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold">Калькулятор РБ опыта</h2>
@@ -86,6 +88,9 @@ export default function CalculatorPage() {
           Формула приблизительная — уточним под реальные значения игры позже.
         </p>
       </div>
+    </div>
+
+    <GearRankCalculator />
     </div>
   );
 }
