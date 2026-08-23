@@ -9,6 +9,7 @@ export default function GearRankCalculator() {
   const [itemIndex, setItemIndex] = useState(0);
   const [currentRank, setCurrentRank] = useState(0);
   const [targetRank, setTargetRank] = useState(RANK_LABELS.length - 1);
+  const [pricePer1000, setPricePer1000] = useState(100);
   const [showTable, setShowTable] = useState(false);
 
   const item = RB_GEAR_ROWS[itemIndex];
@@ -22,8 +23,9 @@ export default function GearRankCalculator() {
       total += cost;
       steps.push({ rank: RANK_LABELS[i], cost });
     }
-    return { total, steps };
-  }, [item, currentRank, targetRank]);
+    const gold = (total / 1000) * pricePer1000;
+    return { total, steps, gold };
+  }, [item, currentRank, targetRank, pricePer1000]);
 
   return (
     <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
@@ -77,6 +79,17 @@ export default function GearRankCalculator() {
               </select>
             </label>
           </div>
+
+          <label className="block text-xs text-muted">
+            Цена РБ опыта, золота за 1000 ед.
+            <input
+              type="number"
+              min={0}
+              value={pricePer1000}
+              onChange={(e) => setPricePer1000(Number(e.target.value))}
+              className="mt-1 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+            />
+          </label>
         </div>
 
         <div className="space-y-3">
@@ -87,6 +100,12 @@ export default function GearRankCalculator() {
               <div className="flex items-baseline justify-between rounded-md bg-surface-2 px-3 py-2.5">
                 <span className="text-xs text-muted">Итого опыта нужно</span>
                 <span className="font-mono text-lg font-semibold text-accent">{numberFmt.format(result.total)} XP</span>
+              </div>
+              <div className="flex items-baseline justify-between rounded-md bg-surface-2 px-3 py-2.5">
+                <span className="text-xs text-muted">Стоимость в золоте</span>
+                <span className="font-mono text-lg font-semibold text-accent-bright">
+                  {numberFmt.format(Math.round(result.gold))} золота
+                </span>
               </div>
               <div className="max-h-[180px] space-y-1 overflow-y-auto text-sm">
                 {result.steps.map((step) => (
