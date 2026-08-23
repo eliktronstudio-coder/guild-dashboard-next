@@ -14,6 +14,7 @@ type Transaction = {
   amount: number;
   date: string;
   imageUrl: string | null;
+  quantity: number;
 };
 
 type DropEntry = { id: string; quantity: number; value: number };
@@ -117,6 +118,9 @@ function TransactionList({
               </div>
             )}
             <span className="truncate">{t.description}</span>
+            {t.quantity > 0 && (
+              <span className="flex-shrink-0 text-xs text-muted">×{numberFmt.format(t.quantity)}</span>
+            )}
           </span>
           <span className="flex flex-shrink-0 items-center gap-3">
             <span className={t.amount >= 0 ? "text-success" : "text-danger"}>

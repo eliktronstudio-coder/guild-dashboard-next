@@ -346,13 +346,21 @@ export async function getTreasuryTransactions(limit?: number) {
   const txIds = transactions.map((t) => t.id);
   const soldDrops = await prisma.dropItem.findMany({
     where: { treasuryTransactionId: { in: txIds } },
-    select: { treasuryTransactionId: true, catalogItem: { select: { imageUrl: true } } },
+    select: { treasuryTransactionId: true, quantity: true, catalogItem: { select: { imageUrl: true } } },
   });
-  const iconByTxId = new Map(
-    soldDrops.map((d) => [d.treasuryTransactionId as string, d.catalogItem?.imageUrl ?? null])
-  );
+  const iconByTxId = new Map<string, string | null>();
+  const quantityByTxId = new Map<string, number>();
+  for (const d of soldDrops) {
+    const txId = d.treasuryTransactionId as string;
+    if (!iconByTxId.has(txId)) iconByTxId.set(txId, d.catalogItem?.imageUrl ?? null);
+    quantityByTxId.set(txId, (quantityByTxId.get(txId) ?? 0) + d.quantity);
+  }
 
-  return transactions.map((t) => ({ ...t, imageUrl: iconByTxId.get(t.id) ?? null }));
+  return transactions.map((t) => ({
+    ...t,
+    imageUrl: iconByTxId.get(t.id) ?? null,
+    quantity: quantityByTxId.get(t.id) ?? 0,
+  }));
 }
 
 export async function getTreasuryGold() {
