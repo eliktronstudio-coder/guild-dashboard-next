@@ -58,7 +58,7 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
               className={clsx(
                 "rounded border px-2.5 py-1 font-medium uppercase transition-colors duration-150",
                 lang === code
-                  ? "border-[rgba(196,72,60,0.45)] bg-[rgba(163,55,46,0.20)] text-[#efad63]"
+                  ? "border-accent/30 bg-accent text-background"
                   : "border-transparent text-muted hover:text-foreground"
               )}
             >

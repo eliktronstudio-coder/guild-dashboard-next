@@ -41,7 +41,7 @@ export const navSections: NavSection[] = [
   {
     title: "Инструменты",
     items: [
-      { href: "/calculator", label: "Калькулятор РБ опыта", icon: Calculator },
+      { href: "/calculator", label: "Калькуляторы", icon: Calculator },
     ],
   },
   {
