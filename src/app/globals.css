@@ -1,31 +1,31 @@
 @import "tailwindcss";
 
-/* XD Guild — dark japanese premium theme (default). */
+/* XD Guild — dark samurai theme (default), per Figma "guild-dashboard-desktop". */
 :root {
-  --background: #080d14;
-  --bg-elevated: #0d141f;
-  --surface: #0d141f;
-  --surface-2: #121b27;
-  --surface-hover: #121b27;
-  --bg-sidebar: #0b111a;
+  --background: #0a080c;
+  --bg-elevated: #0a080c;
+  --surface: rgba(21, 15, 22, 0.88);
+  --surface-2: #150f16;
+  --surface-hover: #1a1319;
+  --bg-sidebar: #0e0b0f;
 
-  --border: rgba(201, 150, 72, 0.2);
-  --border-strong: rgba(218, 161, 72, 0.55);
+  --border: #2d1d28;
+  --border-strong: rgba(255, 158, 44, 0.35);
 
-  --foreground: #f2ede4;
-  --muted: #aaa69e;
-  --muted-2: #6f7278;
+  --foreground: #ffffff;
+  --muted: #a598a3;
+  --muted-2: #6b5a66;
 
-  --accent: #d8a04d;
-  --accent-bright: #f0bd68;
-  --accent-dim: #9f7840;
-  --accent-soft: rgba(216, 160, 77, 0.12);
+  --accent: #ff9e2c;
+  --accent-bright: #ffb85c;
+  --accent-dim: #cc7e23;
+  --accent-soft: rgba(255, 158, 44, 0.1);
 
   --danger: #c64a3e;
   --success: #79c88a;
   --info: #7fa7d8;
   --violet: #6c557d;
-  --ember: #d66b3d;
+  --ember: #ff4e21;
 
   --red: #a73832;
   --red-bright: #c64a3e;
@@ -36,7 +36,7 @@
   --atmosphere-opacity: 0.12;
   --row-tint: linear-gradient(90deg, rgba(108, 85, 125, 0.13), rgba(214, 107, 61, 0.08));
   --row-tint-hover: linear-gradient(90deg, rgba(108, 85, 125, 0.16), rgba(233, 162, 74, 0.14));
-  --bg-hero-glow: radial-gradient(circle at 78% 0%, rgba(125, 37, 37, 0.1), transparent 28%);
+  --bg-hero-glow: radial-gradient(circle at 78% 0%, rgba(255, 78, 33, 0.08), transparent 28%);
 }
 
 /* XD Guild — light fantasy-landscape theme: its own mood, not an inversion. */
@@ -99,13 +99,13 @@
   --color-indigo: var(--indigo);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  --font-serif: var(--font-noto-serif);
+  --font-heading: var(--font-unbounded);
 }
 
 /* Tactical, not toy-like: comfortable but not pill-heavy rounding. */
 @theme {
-  --radius-md: 0.4375rem;
-  --radius-lg: 0.625rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
 }
 
 * {
@@ -147,15 +147,5 @@ table th {
 }
 .row-tint:hover {
   background-image: var(--row-tint-hover);
-}
-
-/* Short brush-stroke accent under a section heading. */
-.brush-stroke {
-  width: 130px;
-  height: 3px;
-  background: linear-gradient(90deg, rgba(173, 54, 45, 0.8), rgba(173, 54, 45, 0));
-}
-:root[data-theme="light"] .brush-stroke {
-  background: linear-gradient(90deg, rgba(180, 70, 55, 0.55), rgba(180, 70, 55, 0));
 }
 

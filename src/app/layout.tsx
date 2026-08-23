@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Serif } from "next/font/google";
+import { Geist, Geist_Mono, Unbounded } from "next/font/google";
 import AppShell from "@/components/AppShell";
 import { guild } from "@/lib/config";
 import { getCurrentUser } from "@/lib/auth";
@@ -15,10 +15,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin", "cyrillic"],
 });
 
-const notoSerif = Noto_Serif({
-  variable: "--font-noto-serif",
+const unbounded = Unbounded({
+  variable: "--font-unbounded",
   subsets: ["latin", "cyrillic"],
-  weight: ["600", "700"],
+  weight: ["500", "600", "700", "900"],
 });
 
 export const metadata: Metadata = {
@@ -33,7 +33,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="ru"
-      className={`${geistSans.variable} ${geistMono.variable} ${notoSerif.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${unbounded.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

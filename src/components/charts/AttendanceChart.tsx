@@ -27,8 +27,8 @@ export default function AttendanceChart({ data }: { data: AttendanceChartPoint[]
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--accent-bright)" />
-              <stop offset="100%" stopColor="var(--accent-dim)" />
+              <stop offset="0%" stopColor="var(--accent)" />
+              <stop offset="100%" stopColor="var(--ember)" />
             </linearGradient>
           </defs>
           <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />

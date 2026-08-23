@@ -39,7 +39,7 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
         </button>
         <Logo size="sm" variant="mark" className="lg:hidden" />
         <div className="min-w-0">
-          <h1 className="truncate font-serif text-lg font-semibold leading-tight sm:text-xl lg:text-[28px]">
+          <h1 className="truncate font-heading text-lg font-bold leading-tight sm:text-xl lg:text-[28px]">
             {label}
           </h1>
           <p className="truncate text-[11px] uppercase tracking-[0.08em] text-muted">

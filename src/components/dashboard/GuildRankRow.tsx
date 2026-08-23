@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import Image from "next/image";
 import Link from "next/link";
 
 const roleColor: Record<string, string> = {
@@ -9,16 +10,6 @@ const roleColor: Record<string, string> = {
   Милик: "#b3806a",
 };
 
-const rankTier: Record<number, string> = {
-  1: "border-[rgba(223,171,77,0.55)]",
-  2: "border-[rgba(190,190,190,0.25)]",
-  3: "border-[rgba(178,106,51,0.35)]",
-};
-
-const rankTextTier: Record<number, string> = {
-  1: "text-[#f2bd62]",
-};
-
 type GuildRankRowProps = {
   href: string;
   rank: number;
@@ -26,35 +17,53 @@ type GuildRankRowProps = {
   role: string;
   valueLabel: string;
   valueClassName?: string;
+  /** 0-100; when set, renders a textured fill behind the row proportional to this value. */
+  progressPct?: number;
 };
 
-export default function GuildRankRow({ href, rank, name, role, valueLabel, valueClassName }: GuildRankRowProps) {
+export default function GuildRankRow({
+  href,
+  rank,
+  name,
+  role,
+  valueLabel,
+  valueClassName,
+  progressPct,
+}: GuildRankRowProps) {
   const color = roleColor[role] ?? "var(--accent-dim)";
+  const pct = typeof progressPct === "number" ? Math.max(0, Math.min(100, progressPct)) : undefined;
   return (
     <Link
       href={href}
-      className="group flex min-h-[42px] items-center gap-3 rounded-[7px] border border-white/[0.035] bg-gradient-to-r from-white/[0.026] to-white/[0.012] px-2.5 py-1.5 text-sm transition-[background-color,border-color,transform] duration-150 hover:-translate-y-px hover:border-accent/20 hover:bg-accent-soft"
+      className="group relative flex min-h-[46px] items-center justify-between gap-3 overflow-hidden rounded-lg border border-border bg-surface px-4 py-2.5 text-sm transition-colors duration-150 hover:border-accent/30"
     >
-      <span
-        className={clsx(
-          "flex h-[30px] w-[30px] flex-shrink-0 items-center justify-center rounded-md border text-xs font-semibold text-muted",
-          rankTier[rank] ?? "border-border",
-          rankTextTier[rank]
-        )}
-      >
-        {rank}
+      {pct !== undefined && (
+        <div aria-hidden="true" className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${pct}%` }}>
+          <div className="relative h-full w-[700px]">
+            <Image src="/dashboard/hero-banner.png" alt="" fill sizes="700px" className="object-cover opacity-20" />
+            <div
+              className="absolute inset-0"
+              style={{ backgroundImage: "linear-gradient(90deg, rgba(255,158,44,0.16), rgba(255,158,44,0) 90%)" }}
+            />
+          </div>
+        </div>
+      )}
+      <span className="relative flex items-center gap-3 truncate">
+        <span className="font-heading text-sm font-bold text-accent">{rank}</span>
+        <span
+          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border"
+          style={{ borderColor: "rgba(255,158,44,.25)" }}
+        >
+          <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+        </span>
+        <span className="min-w-0 truncate">
+          <span className="text-[14px] font-semibold text-foreground">{name}</span>
+          <span className="ml-2 text-[11px] text-muted-2">{role}</span>
+        </span>
       </span>
-      <span
-        className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-full border"
-        style={{ borderColor: "rgba(216,160,77,.25)" }}
-      >
-        <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+      <span className={clsx("relative flex-shrink-0 font-heading text-sm font-semibold", valueClassName ?? "text-accent")}>
+        {valueLabel}
       </span>
-      <span className="min-w-0 flex-1 truncate">
-        <span className="text-[13px] font-semibold text-foreground">{name}</span>
-        <span className="ml-2 text-[11px] text-muted">{role}</span>
-      </span>
-      <span className={clsx("flex-shrink-0 text-xs font-medium", valueClassName)}>{valueLabel}</span>
     </Link>
   );
 }

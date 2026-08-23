@@ -1,20 +1,19 @@
 import clsx from "clsx";
 import Link from "next/link";
 import type { ComponentType } from "react";
-import JapaneseWavePattern from "./dashboard/JapaneseWavePattern";
 
 type Tone = "accent" | "violet" | "ember" | "info" | "accent-dim" | "red";
 
 const toneClasses: Record<Tone, string> = {
-  accent: "bg-accent-soft text-accent-bright",
-  violet: "bg-violet/15 text-violet",
-  ember: "bg-ember/15 text-ember",
-  info: "bg-info/15 text-info",
-  "accent-dim": "bg-accent-dim/15 text-accent-dim",
-  red: "bg-red-bright/10 text-red-bright",
+  accent: "text-accent-bright",
+  violet: "text-violet",
+  ember: "text-ember",
+  info: "text-info",
+  "accent-dim": "text-accent-dim",
+  red: "text-red-bright",
 };
 
-type StatIcon = ComponentType<{ size?: number; strokeWidth?: number }>;
+type StatIcon = ComponentType<{ size?: number; strokeWidth?: number; className?: string }>;
 
 type StatCardProps = {
   label: string;
@@ -43,36 +42,20 @@ export default function StatCard({
 }: StatCardProps) {
   if (variant === "dashboard") {
     const className = clsx(
-      "relative flex min-h-[106px] flex-col justify-between overflow-hidden rounded-lg border bg-gradient-to-br from-[rgba(18,26,38,0.97)] to-[rgba(10,16,25,0.98)] p-4 transition-colors",
-      href ? "hover:border-accent/60" : "hover:border-border-strong",
-      strong
-        ? "border-accent/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.025),0_0_24px_rgba(216,160,77,0.035)]"
-        : "border-[rgba(209,155,72,0.22)]"
+      "flex min-h-[106px] flex-col gap-3 rounded-xl border bg-surface p-4 transition-colors",
+      href ? "hover:border-accent/40" : "hover:border-border-strong",
+      strong ? "border-accent/35" : "border-border"
     );
     const content = (
       <>
-        <JapaneseWavePattern className="text-accent" opacity={0.045} />
-        <div className="relative flex items-center gap-2.5">
-          {Icon && (
-            <span
-              className={clsx(
-                "flex h-[34px] w-[34px] flex-shrink-0 items-center justify-center rounded-full border border-current/25",
-                toneClasses[tone]
-              )}
-            >
-              <Icon size={15} strokeWidth={2.25} />
-            </span>
-          )}
-          <p className="truncate text-[11px] font-medium uppercase tracking-[0.035em] text-muted">{label}</p>
+        <div className="flex items-center gap-2">
+          {Icon && <Icon size={16} strokeWidth={2} className={toneClasses[tone]} />}
+          <p className="truncate text-xs font-medium text-muted">{label}</p>
         </div>
-        <div className="relative">
-          <p
-            className={clsx(
-              "mt-2 font-mono text-[21px] font-semibold tracking-tight tabular-nums",
-              goldValue ? "text-accent-bright" : "text-foreground"
-            )}
-          >
+        <div>
+          <p className="flex items-baseline gap-1.5 font-heading text-[22px] font-bold tracking-tight tabular-nums text-foreground">
             {value}
+            {goldValue && <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full bg-accent" />}
           </p>
           <p className="mt-1 text-[11px] text-muted-2">{hint}</p>
         </div>
@@ -90,14 +73,10 @@ export default function StatCard({
   return (
     <div className="rounded-lg border border-border bg-surface/90 p-4 backdrop-blur-sm transition-colors hover:border-border-strong hover:bg-surface-hover">
       <div className="flex items-center gap-2">
-        {Icon && (
-          <span className={clsx("flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md", toneClasses[tone])}>
-            <Icon size={14} strokeWidth={2.25} />
-          </span>
-        )}
+        {Icon && <Icon size={15} strokeWidth={2} className={toneClasses[tone]} />}
         <p className="truncate text-xs font-medium uppercase tracking-wider text-muted">{label}</p>
       </div>
-      <p className="mt-2 font-mono text-2xl font-semibold tracking-tight tabular-nums text-foreground">{value}</p>
+      <p className="mt-2 font-heading text-2xl font-bold tracking-tight tabular-nums text-foreground">{value}</p>
       <p className="mt-1 text-xs text-muted">{hint}</p>
     </div>
   );

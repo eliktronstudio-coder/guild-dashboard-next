@@ -1,6 +1,6 @@
 import Link from "next/link";
 import clsx from "clsx";
-import { Coins, Landmark, Archive, Swords, CalendarClock } from "lucide-react";
+import { Coins, Landmark, Archive, Swords, CalendarClock, Zap } from "lucide-react";
 import StatCard from "@/components/StatCard";
 import TreasuryChart from "@/components/charts/TreasuryChart";
 import AttendanceChart from "@/components/charts/AttendanceChart";
@@ -10,7 +10,6 @@ import DashboardPanel from "@/components/dashboard/DashboardPanel";
 import SectionHeader from "@/components/dashboard/SectionHeader";
 import GuildRankRow from "@/components/dashboard/GuildRankRow";
 import ActivityRow from "@/components/dashboard/ActivityRow";
-import JapaneseCrest from "@/components/dashboard/JapaneseCrest";
 import BlurGate from "@/components/BlurGate";
 import { daysUntilNextPayout } from "@/lib/payout";
 import { getCurrentUser } from "@/lib/auth";
@@ -32,10 +31,6 @@ function attendanceTone(pct: number) {
   if (pct <= 20) return "text-danger";
   if (pct <= 50) return "text-accent-dim";
   return "text-accent-bright";
-}
-
-function CrestIcon({ size }: { size?: number; strokeWidth?: number }) {
-  return <JapaneseCrest size={size ?? 16} />;
 }
 
 export default async function DashboardPage() {
@@ -129,7 +124,7 @@ export default async function DashboardPage() {
             label="Ср. посещаемость"
             value={avgAttendance30d > 0 ? `${avgAttendance30d} чел.` : "—"}
             hint="за последние 30 дней"
-            icon={CrestIcon}
+            icon={Zap}
             tone="info"
           />
           <StatCard
@@ -192,6 +187,7 @@ export default async function DashboardPage() {
                   role={p.role}
                   valueLabel={`${p.attendancePctPrime}%`}
                   valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
+                  progressPct={p.attendancePctPrime}
                 />
               ))}
             </div>
@@ -223,6 +219,7 @@ export default async function DashboardPage() {
                   role={p.role}
                   valueLabel={`${p.attendancePctMiniRb}%`}
                   valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
+                  progressPct={p.attendancePctMiniRb}
                 />
               ))}
             </div>

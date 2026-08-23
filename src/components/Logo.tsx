@@ -6,29 +6,36 @@ type LogoProps = {
   className?: string;
 };
 
-const markSize: Record<NonNullable<LogoProps["size"]>, string> = {
-  sm: "text-lg",
-  md: "text-2xl",
-  lg: "text-3xl",
+const badgeSize: Record<NonNullable<LogoProps["size"]>, string> = {
+  sm: "h-8 w-8 text-sm",
+  md: "h-9 w-9 text-base",
+  lg: "h-10 w-10 text-lg",
 };
 
-const subSize: Record<NonNullable<LogoProps["size"]>, string> = {
-  sm: "text-[6px] tracking-[0.3em]",
-  md: "text-[9px] tracking-[0.35em] mt-0.5",
-  lg: "text-[11px] tracking-[0.4em] mt-1",
+const nameSize: Record<NonNullable<LogoProps["size"]>, string> = {
+  sm: "text-sm",
+  md: "text-[15px]",
+  lg: "text-base",
 };
 
 export default function Logo({ size = "md", variant = "full", className }: LogoProps) {
   return (
-    <div className={clsx("flex flex-col leading-none", className)}>
+    <div className={clsx("flex items-center gap-3", className)}>
       <span
-        className={clsx(markSize[size], "bg-clip-text font-extrabold tracking-tight text-transparent")}
-        style={{ backgroundImage: "linear-gradient(135deg, #f4c46f, #bc7930)" }}
+        className={clsx(
+          badgeSize[size],
+          "flex flex-shrink-0 items-center justify-center rounded-lg border border-accent bg-accent-soft font-heading font-black text-accent"
+        )}
       >
         XD
       </span>
       {variant === "full" && (
-        <span className={clsx(subSize[size], "font-semibold uppercase text-muted")}>Guild</span>
+        <span className="flex flex-col leading-none">
+          <span className={clsx(nameSize[size], "font-heading font-bold text-foreground")}>XD GUILD</span>
+          <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.25em] text-muted-2">
+            Samurai Reign
+          </span>
+        </span>
       )}
     </div>
   );
