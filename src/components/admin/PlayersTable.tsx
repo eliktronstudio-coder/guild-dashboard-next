@@ -18,6 +18,7 @@ type Player = {
   attendancePct: number;
   attendancePctPrime: number;
   attendancePctMiniRb: number;
+  pvpCount: number;
   salaryCoefficient: number;
   salary: number;
   salaryPrime: number;
@@ -118,6 +119,8 @@ export default function PlayersTable({
       cancelled = true;
     };
   }, [openPlayerId]);
+
+  const maxPvpCount = useMemo(() => Math.max(1, ...players.map((p) => p.pvpCount)), [players]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -319,7 +322,7 @@ export default function PlayersTable({
                 <th className="px-4 py-3 font-medium">Роль</th>
                 <th
                   className="px-4 py-3 font-medium"
-                  title="П — доля активностей категории «Прайм», М — доля активностей категории «Мини-РБ», в которых участвовал игрок"
+                  title="П — доля активностей категории «Прайм», М — доля активностей категории «Мини-РБ», в которых участвовал игрок. PvP — число участий в активностях режима PvP (шкала относительно лучшего в гильдии)"
                 >
                   Посещаемость
                 </th>
@@ -401,6 +404,18 @@ export default function PlayersTable({
                             <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
                               {p.attendancePctMiniRb}%
                             </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="PvP">
+                              PvP
+                            </span>
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
+                              <div
+                                className="h-full rounded-full bg-info"
+                                style={{ width: `${Math.min(100, (p.pvpCount / maxPvpCount) * 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-medium text-info">{p.pvpCount}</span>
                           </div>
                         </div>
                       </BlurValue>

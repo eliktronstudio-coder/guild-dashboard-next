@@ -30,19 +30,33 @@ function buildAttendanceMap(activities: ActivityForAttendance[]): Map<string, nu
   return map;
 }
 
+// PvP считается отдельно от Прайм/Мини-РБ и не в процентах, а в "штуках"
+// участий (только для отображения активности — на казну/ЗП не влияет).
+function buildCountMap(activities: { participants: { playerId: string }[] }[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const a of activities) {
+    for (const p of a.participants) {
+      map.set(p.playerId, (map.get(p.playerId) ?? 0) + 1);
+    }
+  }
+  return map;
+}
+
 async function getAttendanceMaps(): Promise<{
   overall: Map<string, number>;
   prime: Map<string, number>;
   miniRb: Map<string, number>;
+  pvpCount: Map<string, number>;
 }> {
   const activities = await prisma.activity.findMany({
-    select: { category: true, participants: { select: { playerId: true } } },
+    select: { category: true, mode: true, participants: { select: { playerId: true } } },
   });
 
   return {
     overall: buildAttendanceMap(activities),
     prime: buildAttendanceMap(activities.filter((a) => a.category === "Прайм")),
     miniRb: buildAttendanceMap(activities.filter((a) => a.category === "Мини-РБ")),
+    pvpCount: buildCountMap(activities.filter((a) => a.mode === "PvP")),
   };
 }
 
@@ -92,6 +106,7 @@ async function getDerivedPlayerMaps() {
     attendance: attendanceMaps.overall,
     attendancePrime: attendanceMaps.prime,
     attendanceMiniRb: attendanceMaps.miniRb,
+    pvpCount: attendanceMaps.pvpCount,
     salaryPrime,
     salaryMiniRb,
   };
@@ -103,6 +118,7 @@ function withDerived<T extends { id: string }>(
     attendance: Map<string, number>;
     attendancePrime: Map<string, number>;
     attendanceMiniRb: Map<string, number>;
+    pvpCount: Map<string, number>;
     salaryPrime: Map<string, number>;
     salaryMiniRb: Map<string, number>;
   }
@@ -115,6 +131,7 @@ function withDerived<T extends { id: string }>(
       attendancePct: derived.attendance.get(p.id) ?? 0,
       attendancePctPrime: derived.attendancePrime.get(p.id) ?? 0,
       attendancePctMiniRb: derived.attendanceMiniRb.get(p.id) ?? 0,
+      pvpCount: derived.pvpCount.get(p.id) ?? 0,
       salaryPrime,
       salaryMiniRb,
       salary: salaryPrime + salaryMiniRb,
