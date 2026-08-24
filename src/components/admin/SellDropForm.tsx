@@ -6,6 +6,7 @@ import AutocompleteInput from "./AutocompleteInput";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const AUCTION = "__auction__";
+const JUNK = "__junk__";
 
 type DropEntry = { id: string; quantity: number; value: number };
 type DropOption = { item: string; quantity: number; totalValue: number; entries: DropEntry[] };
@@ -45,41 +46,56 @@ export default function SellDropForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const selectedDrop = drops.find((d) => d.item === item) ?? null;
+  const isJunk = item === JUNK;
+  const selectedDrop = isJunk ? null : (drops.find((d) => d.item === item) ?? null);
   const isAuction = buyer === AUCTION;
   const fixedTotal = selectedDrop ? proportionalTotal(selectedDrop.entries, qty) : 0;
+  const showManualAmount = isAuction || isJunk;
 
   function handleItemChange(value: string) {
     setItem(value);
+    if (value === JUNK) {
+      setQty(1);
+      return;
+    }
     const d = drops.find((x) => x.item === value);
     setQty(d ? d.quantity : 1);
   }
 
   function handleQtyChange(value: string) {
-    const max = selectedDrop?.quantity ?? 1;
     const n = Math.round(Number(value));
     if (!Number.isFinite(n)) return;
+    if (isJunk) {
+      setQty(Math.max(1, n));
+      return;
+    }
+    const max = selectedDrop?.quantity ?? 1;
     setQty(Math.min(max, Math.max(1, n)));
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!selectedDrop) {
+    if (!isJunk && !selectedDrop) {
       setError("Выберите предмет из инвентаря.");
       return;
     }
-    if (qty < 1 || qty > selectedDrop.quantity) {
+    if (!isJunk && selectedDrop && (qty < 1 || qty > selectedDrop.quantity)) {
       setError("Некорректное количество.");
+      return;
+    }
+    if (isJunk && (qty < 1 || !amount || !Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+      setError("Укажите количество и сумму продажи.");
       return;
     }
     if (!buyer) {
       setError("Выберите, кому продажа.");
       return;
     }
+    const itemLabel = isJunk ? "Мусор" : (selectedDrop?.item ?? "");
     const buyerLabel = isAuction ? "аукцион" : (players.find((p) => p.id === buyer)?.name ?? buyer);
-    const totalLabel = isAuction ? (amount ? `${numberFmt.format(Number(amount))} золота` : "сумма не указана") : `${numberFmt.format(fixedTotal)} золота`;
-    if (!confirm(`Продать ×${qty} «${selectedDrop.item}» — ${buyerLabel}, ${totalLabel}?`)) {
+    const totalLabel = showManualAmount ? (amount ? `${numberFmt.format(Number(amount))} золота` : "сумма не указана") : `${numberFmt.format(fixedTotal)} золота`;
+    if (!confirm(`Продать ×${qty} «${itemLabel}» — ${buyerLabel}, ${totalLabel}?`)) {
       return;
     }
     setBusy(true);
@@ -87,11 +103,15 @@ export default function SellDropForm({
       const res = await fetch("/api/drops/sell", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entryIds: selectedDrop.entries.map((en) => en.id),
-          quantity: qty,
-          ...(isAuction ? { amount: Number(amount) } : { playerId: buyer }),
-        }),
+        body: JSON.stringify(
+          isJunk
+            ? { junk: true, quantity: qty, amount: Number(amount), ...(isAuction ? {} : { playerId: buyer }) }
+            : {
+                entryIds: selectedDrop!.entries.map((en) => en.id),
+                quantity: qty,
+                ...(isAuction ? { amount: Number(amount) } : { playerId: buyer }),
+              }
+        ),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -116,7 +136,8 @@ export default function SellDropForm({
         <AutocompleteInput
           value={item}
           onChange={handleItemChange}
-          options={drops.map((d) => ({ value: d.item, label: d.item }))}
+          options={[{ value: JUNK, label: "Мусор" }, ...drops.map((d) => ({ value: d.item, label: d.item }))]}
+          pinnedValues={[JUNK]}
           placeholder="Поиск по дропу…"
         />
         {drops.length === 0 && (
@@ -139,8 +160,8 @@ export default function SellDropForm({
           value={qty}
           onChange={(e) => handleQtyChange(e.target.value)}
           min={1}
-          max={selectedDrop?.quantity ?? 1}
-          disabled={!selectedDrop}
+          max={isJunk ? undefined : (selectedDrop?.quantity ?? 1)}
+          disabled={!selectedDrop && !isJunk}
           required
           className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-60"
         />
@@ -159,7 +180,7 @@ export default function SellDropForm({
 
       <div>
         <label className="mb-1 block text-xs text-muted">Сумма (золото)</label>
-        {isAuction ? (
+        {showManualAmount ? (
           <input
             type="number"
             value={amount}

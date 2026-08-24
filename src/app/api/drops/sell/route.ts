@@ -14,6 +14,32 @@ export async function POST(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const body = await request.json().catch(() => null);
+
+  if (body?.junk === true) {
+    const quantity = Math.round(Number(body?.quantity ?? 1));
+    const playerId = typeof body?.playerId === "string" && body.playerId ? body.playerId : null;
+    const amount = Number(body?.amount);
+
+    if (!Number.isFinite(quantity) || quantity < 1) {
+      return NextResponse.json({ error: "Некорректное количество." }, { status: 400 });
+    }
+    if (!Number.isFinite(amount) || amount < 0) {
+      return NextResponse.json({ error: "Укажите сумму продажи (0 или больше)." }, { status: 400 });
+    }
+
+    let buyerName: string | null = null;
+    if (playerId) {
+      const player = await prisma.player.findUnique({ where: { id: playerId } });
+      if (!player) return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
+      buyerName = player.name;
+    }
+
+    await prisma.treasuryTransaction.create({
+      data: { description: `Продажа дропа: Мусор ×${quantity} — ${buyerName ?? "аукцион"}`, amount: Math.round(amount) },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
   const entryIds = Array.isArray(body?.entryIds)
     ? body.entryIds.filter((id: unknown): id is string => typeof id === "string")
     : [];
