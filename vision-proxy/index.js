@@ -1,5 +1,6 @@
 const express = require("express");
 const Anthropic = require("@anthropic-ai/sdk");
+const sharp = require("sharp");
 
 const { ANTHROPIC_API_KEY, VISION_PROXY_SECRET, PORT = 3001 } = process.env;
 
@@ -59,12 +60,25 @@ app.post("/extract-names", async (req, res) => {
       body.image,
       body.mediaType,
       "На скрине список участников игровой активности (MMO-гильдия). " +
-        "Выпиши все игровые ники участников, которые видишь на скрине. " +
+        "Выпиши все игровые ники участников, которые видишь на скрине, и укажи расположение каждого ника " +
+        "на изображении: x, y — координаты левого верхнего угла текста ника, w, h — ширина и высота area " +
+        "с ником, всё в процентах от размеров всего изображения (числа от 0 до 100). " +
         "Игнорируй элементы интерфейса, заголовки, кнопки, названия активности/локации — только ники игроков. " +
-        'Ответь строго JSON без пояснений в формате {"names": ["ник1", "ник2"]}. Если ников нет — {"names": []}.'
+        'Ответь строго JSON без пояснений в формате {"names": [{"name": "ник1", "x": 12.5, "y": 30.2, "w": 8, "h": 3}]}. ' +
+        'Если ников нет — {"names": []}.'
     );
-    const names = parsed?.names;
-    res.json({ names: Array.isArray(names) ? names.filter((n) => typeof n === "string" && n.trim()) : [] });
+    const names = Array.isArray(parsed?.names)
+      ? parsed.names
+          .filter((n) => n && typeof n.name === "string" && n.name.trim())
+          .map((n) => ({
+            name: n.name.trim(),
+            x: Number(n.x),
+            y: Number(n.y),
+            w: Number(n.w),
+            h: Number(n.h),
+          }))
+      : [];
+    res.json({ names });
   } catch (err) {
     console.error("Ошибка распознавания ников:", err);
     res.status(502).json({ error: err.message || "Ошибка запроса к Anthropic." });
@@ -95,6 +109,49 @@ app.post("/extract-drops", async (req, res) => {
   } catch (err) {
     console.error("Ошибка распознавания дропа:", err);
     res.status(502).json({ error: err.message || "Ошибка запроса к Anthropic." });
+  }
+});
+
+// Обводит красными рамками указанные области на полном скрине (для ников,
+// которых не удалось сопоставить с составом гильдии) и возвращает PNG.
+app.post("/draw-boxes", async (req, res) => {
+  if (!requireAuth(req, res)) return;
+  const { image, boxes } = req.body || {};
+  if (typeof image !== "string" || !image) {
+    return res.status(400).json({ error: "Нужен image (base64)." });
+  }
+  const validBoxes = Array.isArray(boxes)
+    ? boxes.filter(
+        (b) => b && [b.x, b.y, b.w, b.h].every((n) => typeof n === "number" && Number.isFinite(n))
+      )
+    : [];
+  if (validBoxes.length === 0) {
+    return res.status(400).json({ error: "Нужен непустой список boxes с координатами." });
+  }
+
+  try {
+    const buffer = Buffer.from(image, "base64");
+    const base = sharp(buffer);
+    const meta = await base.metadata();
+    const width = meta.width || 1000;
+    const height = meta.height || 1000;
+
+    const rects = validBoxes
+      .map((b) => {
+        const x = Math.max(0, (b.x / 100) * width - 4);
+        const y = Math.max(0, (b.y / 100) * height - 4);
+        const w = (b.w / 100) * width + 8;
+        const h = (b.h / 100) * height + 8;
+        return `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#ff2d55" stroke-width="4" rx="3" />`;
+      })
+      .join("");
+    const svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">${rects}</svg>`;
+
+    const outBuffer = await base.composite([{ input: Buffer.from(svg), top: 0, left: 0 }]).png().toBuffer();
+    res.json({ image: outBuffer.toString("base64") });
+  } catch (err) {
+    console.error("Ошибка отрисовки рамок:", err);
+    res.status(502).json({ error: err.message || "Ошибка отрисовки." });
   }
 });
 

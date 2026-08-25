@@ -8,6 +8,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  AttachmentBuilder,
 } = require("discord.js");
 
 const {
@@ -62,7 +63,10 @@ client.on(Events.MessageCreate, async (message) => {
     await message.react("⏳");
 
     const { buffer: rosterBuffer, mediaType: rosterMediaType } = await downloadImage(rosterImage);
-    const names = await extractNicknames(rosterBuffer.toString("base64"), rosterMediaType);
+    const rosterBase64 = rosterBuffer.toString("base64");
+    const recognized = await extractNicknames(rosterBase64, rosterMediaType);
+    const names = recognized.map((n) => n.name);
+    const boxByName = new Map(recognized.map((n) => [n.name, n]));
 
     let dropItems = [];
     let dropBuffer, dropMediaType;
@@ -74,7 +78,7 @@ client.on(Events.MessageCreate, async (message) => {
     const { category, mode } = await askActivityOptions(message);
 
     const screenshotDataUrl =
-      rosterBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${rosterMediaType};base64,${rosterBuffer.toString("base64")}` : undefined;
+      rosterBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${rosterMediaType};base64,${rosterBase64}` : undefined;
     const dropScreenshotDataUrl =
       dropBuffer && dropBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${dropMediaType};base64,${dropBuffer.toString("base64")}` : undefined;
 
@@ -98,12 +102,23 @@ client.on(Events.MessageCreate, async (message) => {
     await message.react("✅");
 
     const matchedList = data.matched.map((m) => m.playerName).join(", ") || "—";
-    const unmatchedList = data.unmatched.join(", ") || "—";
     let reply =
       `Активность «${data.activity.name}» (${data.activity.category}, ${data.activity.mode}) создана.\n` +
       `Распознано ников: ${names.length}\n` +
-      `Найдены в составе: ${matchedList}\n` +
-      `Не найдены (добавлены как гости): ${unmatchedList}\n`;
+      `Найдены в составе: ${matchedList}\n`;
+
+    const files = [];
+    if (data.unmatched.length > 0) {
+      const boxes = data.unmatched.map((n) => boxByName.get(n)).filter(Boolean);
+      const annotated = boxes.length > 0 ? await drawBoxes(rosterBase64, boxes).catch(() => null) : null;
+      if (annotated) {
+        reply += `Не найдены в составе (добавлены как гости, отмечены рамкой на скрине): ${data.unmatched.length} шт.\n`;
+        files.push(new AttachmentBuilder(Buffer.from(annotated, "base64"), { name: "unmatched.png" }));
+      } else {
+        reply += `Не найдены (добавлены как гости): ${data.unmatched.join(", ")}\n`;
+      }
+    }
+
     if (dropImage) {
       const dropMatchedList = data.drops.matched.map((d) => `${d.quantity}✕${d.catalogName}`).join(", ") || "—";
       const dropUnmatchedList = data.drops.unmatched.join(", ") || "—";
@@ -112,7 +127,7 @@ client.on(Events.MessageCreate, async (message) => {
         `Не найдено в реестре дропа (добавьте вручную): ${dropUnmatchedList}\n`;
     }
     reply += "Проверьте и донастройте активность на сайте.";
-    await message.reply(reply);
+    await message.reply({ content: reply, files });
   } catch (err) {
     console.error("Ошибка обработки сообщения:", err);
     await message.reactions.resolve("⏳")?.users.remove(client.user.id).catch(() => {});
@@ -206,6 +221,17 @@ async function extractNicknames(base64, mediaType) {
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
   return Array.isArray(data.names) ? data.names : [];
+}
+
+async function drawBoxes(base64, boxes) {
+  const res = await fetch(`${VISION_PROXY_URL}/draw-boxes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${VISION_PROXY_SECRET}` },
+    body: JSON.stringify({ image: base64, boxes }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
+  return data.image;
 }
 
 async function extractDrops(base64, mediaType) {
