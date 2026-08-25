@@ -24,9 +24,7 @@ function stripTruncationMark(name: string) {
   return match ? match[1].trim() : null;
 }
 
-function detectCategory(activityName: string): "Прайм" | "Мини-РБ" {
-  return /прайм/i.test(activityName) ? "Прайм" : "Мини-РБ";
-}
+const CATEGORIES = ["Мини-РБ", "Прайм"];
 
 // Тестовая интеграция с Discord-ботом: бот присылает название активности и
 // список ников, распознанных ИИ со скрина. Ники сверяются с игроками гильдии
@@ -39,6 +37,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const category = typeof body?.category === "string" && CATEGORIES.includes(body.category) ? body.category : CATEGORIES[0];
   const screenshot = typeof body?.screenshot === "string" ? body.screenshot : "";
   const participantNames: string[] = Array.isArray(body?.participants)
     ? body.participants
@@ -84,8 +83,6 @@ export async function POST(request: NextRequest) {
       stillUnmatched.push(raw);
     }
   }
-
-  const category = detectCategory(name);
 
   const activity = await prisma.activity.create({
     data: {

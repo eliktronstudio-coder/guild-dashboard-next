@@ -1,5 +1,14 @@
 require("dotenv/config");
-const { Client, GatewayIntentBits, Partials, Events } = require("discord.js");
+const {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  Events,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+} = require("discord.js");
 
 const {
   DISCORD_BOT_TOKEN,
@@ -59,6 +68,7 @@ client.on(Events.MessageCreate, async (message) => {
     const base64 = imageBuffer.toString("base64");
 
     const names = await extractNicknames(base64, mediaType);
+    const category = await askCategory(message);
 
     const screenshotDataUrl =
       imageBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${mediaType};base64,${base64}` : undefined;
@@ -66,7 +76,7 @@ client.on(Events.MessageCreate, async (message) => {
     const res = await fetch(`${SITE_API_URL}/api/bot/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
-      body: JSON.stringify({ name: activityName, participants: names, screenshot: screenshotDataUrl }),
+      body: JSON.stringify({ name: activityName, category, participants: names, screenshot: screenshotDataUrl }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || `Сайт вернул ошибку (${res.status})`);
@@ -90,6 +100,28 @@ client.on(Events.MessageCreate, async (message) => {
     await message.reply(`Не получилось создать активность: ${err.message}`);
   }
 });
+
+async function askCategory(message) {
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("category_prime").setLabel("Прайм").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("category_mini").setLabel("Мини-РБ").setStyle(ButtonStyle.Secondary)
+  );
+  const prompt = await message.reply({ content: "Тип активности?", components: [row] });
+
+  try {
+    const interaction = await prompt.awaitMessageComponent({
+      componentType: ComponentType.Button,
+      time: 60_000,
+      filter: (i) => i.user.id === message.author.id,
+    });
+    const category = interaction.customId === "category_prime" ? "Прайм" : "Мини-РБ";
+    await interaction.update({ content: `Тип активности: ${category}`, components: [] });
+    return category;
+  } catch {
+    await prompt.edit({ content: "Время выбора вышло, тип по умолчанию: Мини-РБ.", components: [] });
+    return "Мини-РБ";
+  }
+}
 
 function sniffMediaType(buffer) {
   if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
