@@ -1,0 +1,15 @@
+{
+  "name": "guild-discord-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Тестовый бот: скрин + название активности в Discord -> активность на сайте",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "discord.js": "^14.16.3",
+    "dotenv": "^17.4.2"
+  }
+}
