@@ -47,8 +47,10 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
   if (message.channelId !== DISCORD_CHANNEL_ID) return;
 
-  const image = message.attachments.find((a) => (a.contentType || "").startsWith("image/"));
-  if (!image) return;
+  const images = [...message.attachments.values()].filter((a) => (a.contentType || "").startsWith("image/"));
+  const rosterImage = images[0];
+  const dropImage = images[1]; // второй скрин в том же сообщении = дроп
+  if (!rosterImage) return;
 
   const activityName = message.content.trim();
   if (!activityName) {
@@ -59,24 +61,31 @@ client.on(Events.MessageCreate, async (message) => {
   try {
     await message.react("⏳");
 
-    const imageRes = await fetch(image.url);
-    if (!imageRes.ok) throw new Error(`Не удалось скачать скрин (${imageRes.status})`);
-    const imageBuffer = Buffer.from(await imageRes.arrayBuffer());
-    // Discord иногда присылает contentType, не совпадающий с реальным форматом файла
-    // (например помечает webp то, что по факту png) — определяем по сигнатуре байтов.
-    const mediaType = sniffMediaType(imageBuffer) || image.contentType || "image/png";
-    const base64 = imageBuffer.toString("base64");
+    const { buffer: rosterBuffer, mediaType: rosterMediaType } = await downloadImage(rosterImage);
+    const names = await extractNicknames(rosterBuffer.toString("base64"), rosterMediaType);
 
-    const names = await extractNicknames(base64, mediaType);
+    let dropItems = [];
+    if (dropImage) {
+      const { buffer: dropBuffer, mediaType: dropMediaType } = await downloadImage(dropImage);
+      dropItems = await extractDrops(dropBuffer.toString("base64"), dropMediaType);
+    }
+
     const { category, mode } = await askActivityOptions(message);
 
     const screenshotDataUrl =
-      imageBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${mediaType};base64,${base64}` : undefined;
+      rosterBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${rosterMediaType};base64,${rosterBuffer.toString("base64")}` : undefined;
 
     const res = await fetch(`${SITE_API_URL}/api/bot/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
-      body: JSON.stringify({ name: activityName, category, mode, participants: names, screenshot: screenshotDataUrl }),
+      body: JSON.stringify({
+        name: activityName,
+        category,
+        mode,
+        participants: names,
+        drops: dropItems,
+        screenshot: screenshotDataUrl,
+      }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || `Сайт вернул ошибку (${res.status})`);
@@ -86,13 +95,20 @@ client.on(Events.MessageCreate, async (message) => {
 
     const matchedList = data.matched.map((m) => m.playerName).join(", ") || "—";
     const unmatchedList = data.unmatched.join(", ") || "—";
-    await message.reply(
+    let reply =
       `Активность «${data.activity.name}» (${data.activity.category}, ${data.activity.mode}) создана.\n` +
-        `Распознано ников: ${names.length}\n` +
-        `Найдены в составе: ${matchedList}\n` +
-        `Не найдены (добавлены как гости): ${unmatchedList}\n` +
-        `Проверьте и донастройте активность на сайте.`
-    );
+      `Распознано ников: ${names.length}\n` +
+      `Найдены в составе: ${matchedList}\n` +
+      `Не найдены (добавлены как гости): ${unmatchedList}\n`;
+    if (dropImage) {
+      const dropMatchedList = data.drops.matched.map((d) => `${d.quantity}✕${d.catalogName}`).join(", ") || "—";
+      const dropUnmatchedList = data.drops.unmatched.join(", ") || "—";
+      reply +=
+        `Дроп добавлен в инвентарь: ${dropMatchedList}\n` +
+        `Не найдено в реестре дропа (добавьте вручную): ${dropUnmatchedList}\n`;
+    }
+    reply += "Проверьте и донастройте активность на сайте.";
+    await message.reply(reply);
   } catch (err) {
     console.error("Ошибка обработки сообщения:", err);
     await message.reactions.resolve("⏳")?.users.remove(client.user.id).catch(() => {});
@@ -149,6 +165,16 @@ async function askActivityOptions(message) {
   });
 }
 
+async function downloadImage(attachment) {
+  const res = await fetch(attachment.url);
+  if (!res.ok) throw new Error(`Не удалось скачать скрин (${res.status})`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  // Discord иногда присылает contentType, не совпадающий с реальным форматом файла
+  // (например помечает webp то, что по факту png) — определяем по сигнатуре байтов.
+  const mediaType = sniffMediaType(buffer) || attachment.contentType || "image/png";
+  return { buffer, mediaType };
+}
+
 function sniffMediaType(buffer) {
   if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
     return "image/png";
@@ -176,6 +202,17 @@ async function extractNicknames(base64, mediaType) {
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
   return Array.isArray(data.names) ? data.names : [];
+}
+
+async function extractDrops(base64, mediaType) {
+  const res = await fetch(`${VISION_PROXY_URL}/extract-drops`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${VISION_PROXY_SECRET}` },
+    body: JSON.stringify({ image: base64, mediaType }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
+  return Array.isArray(data.items) ? data.items : [];
 }
 
 client.login(DISCORD_BOT_TOKEN);
