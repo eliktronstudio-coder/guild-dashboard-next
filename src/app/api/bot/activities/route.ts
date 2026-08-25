@@ -50,6 +50,7 @@ function fuzzyThreshold(len: number) {
 }
 
 const CATEGORIES = ["Мини-РБ", "Прайм"];
+const MODES = ["PvE", "PvP"];
 
 // Тестовая интеграция с Discord-ботом: бот присылает название активности и
 // список ников, распознанных ИИ со скрина. Ники сверяются с игроками гильдии
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const category = typeof body?.category === "string" && CATEGORIES.includes(body.category) ? body.category : CATEGORIES[0];
+  const mode = typeof body?.mode === "string" && MODES.includes(body.mode) ? body.mode : MODES[0];
   const screenshot = typeof body?.screenshot === "string" ? body.screenshot : "";
   const participantNames: string[] = Array.isArray(body?.participants)
     ? body.participants
@@ -140,6 +142,7 @@ export async function POST(request: NextRequest) {
     data: {
       name,
       category,
+      mode,
       addedByUserId: null,
       participants: { create: matched.map((m) => ({ playerId: m.playerId })) },
       guests: { create: fuzzyUnmatched.map((n) => ({ name: n })) },
@@ -149,7 +152,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json(
     {
-      activity: { id: activity.id, name: activity.name, category: activity.category },
+      activity: { id: activity.id, name: activity.name, category: activity.category, mode: activity.mode },
       matched: matched.map((m) => ({ input: m.input, playerName: m.playerName })),
       unmatched: fuzzyUnmatched,
     },

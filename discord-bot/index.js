@@ -68,7 +68,7 @@ client.on(Events.MessageCreate, async (message) => {
     const base64 = imageBuffer.toString("base64");
 
     const names = await extractNicknames(base64, mediaType);
-    const category = await askCategory(message);
+    const { category, mode } = await askActivityOptions(message);
 
     const screenshotDataUrl =
       imageBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${mediaType};base64,${base64}` : undefined;
@@ -76,7 +76,7 @@ client.on(Events.MessageCreate, async (message) => {
     const res = await fetch(`${SITE_API_URL}/api/bot/activities`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
-      body: JSON.stringify({ name: activityName, category, participants: names, screenshot: screenshotDataUrl }),
+      body: JSON.stringify({ name: activityName, category, mode, participants: names, screenshot: screenshotDataUrl }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || `Сайт вернул ошибку (${res.status})`);
@@ -87,7 +87,7 @@ client.on(Events.MessageCreate, async (message) => {
     const matchedList = data.matched.map((m) => m.playerName).join(", ") || "—";
     const unmatchedList = data.unmatched.join(", ") || "—";
     await message.reply(
-      `Активность «${data.activity.name}» (${data.activity.category}) создана.\n` +
+      `Активность «${data.activity.name}» (${data.activity.category}, ${data.activity.mode}) создана.\n` +
         `Распознано ников: ${names.length}\n` +
         `Найдены в составе: ${matchedList}\n` +
         `Не найдены (добавлены как гости): ${unmatchedList}\n` +
@@ -101,26 +101,52 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
-async function askCategory(message) {
-  const row = new ActionRowBuilder().addComponents(
+async function askActivityOptions(message) {
+  const categoryRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId("category_prime").setLabel("Прайм").setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId("category_mini").setLabel("Мини-РБ").setStyle(ButtonStyle.Secondary)
   );
-  const prompt = await message.reply({ content: "Тип активности?", components: [row] });
+  const modeRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("mode_pve").setLabel("PvE").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("mode_pvp").setLabel("PvP").setStyle(ButtonStyle.Danger)
+  );
+  const prompt = await message.reply({ content: "Тип активности и режим?", components: [categoryRow, modeRow] });
 
-  try {
-    const interaction = await prompt.awaitMessageComponent({
+  return new Promise((resolve) => {
+    let category = null;
+    let mode = null;
+    const collector = prompt.createMessageComponentCollector({
       componentType: ComponentType.Button,
       time: 60_000,
       filter: (i) => i.user.id === message.author.id,
     });
-    const category = interaction.customId === "category_prime" ? "Прайм" : "Мини-РБ";
-    await interaction.update({ content: `Тип активности: ${category}`, components: [] });
-    return category;
-  } catch {
-    await prompt.edit({ content: "Время выбора вышло, тип по умолчанию: Мини-РБ.", components: [] });
-    return "Мини-РБ";
-  }
+
+    collector.on("collect", async (interaction) => {
+      if (interaction.customId.startsWith("category_")) {
+        category = interaction.customId === "category_prime" ? "Прайм" : "Мини-РБ";
+      } else {
+        mode = interaction.customId === "mode_pvp" ? "PvP" : "PvE";
+      }
+      if (category && mode) {
+        await interaction.update({ content: `Тип: ${category}, режим: ${mode} ✅`, components: [] });
+        collector.stop("done");
+      } else {
+        await interaction.update({
+          content: `Тип: ${category ?? "не выбран"}, режим: ${mode ?? "не выбран"}`,
+          components: [categoryRow, modeRow],
+        });
+      }
+    });
+
+    collector.on("end", (_collected, reason) => {
+      if (reason !== "done") {
+        prompt
+          .edit({ content: `Время выбора вышло. Тип: ${category ?? "Мини-РБ"}, режим: ${mode ?? "PvE"}.`, components: [] })
+          .catch(() => {});
+      }
+      resolve({ category: category ?? "Мини-РБ", mode: mode ?? "PvE" });
+    });
+  });
 }
 
 function sniffMediaType(buffer) {
