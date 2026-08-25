@@ -10,7 +10,14 @@ import AddDropForm from "./AddDropForm";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
-type Entry = { id: string; quantity: number; value: number; date: string; playerName: string | null };
+type Entry = {
+  id: string;
+  quantity: number;
+  value: number;
+  date: string;
+  playerName: string | null;
+  activityName: string | null;
+};
 type InventoryItem = {
   item: string;
   quantity: number;
@@ -340,6 +347,7 @@ export default function InventoryPanel({
                         </p>
                         <p className="mt-0.5 text-xs text-muted">
                           {e.date}
+                          {e.activityName && <> · {e.activityName}</>}
                           {e.playerName && <> · {e.playerName}</>}
                         </p>
                       </div>

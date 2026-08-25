@@ -604,13 +604,24 @@ export async function getDropGoldMiniRb() {
 // переносом из Общего). Внутри склада — предметы из журнала дропа,
 // которые ещё не проданы, сгруппированные по названию для отображения
 // иконками с суммарным количеством.
-type InventoryEntry = { id: string; quantity: number; value: number; date: string; playerName: string | null };
+type InventoryEntry = {
+  id: string;
+  quantity: number;
+  value: number;
+  date: string;
+  playerName: string | null;
+  activityName: string | null;
+};
 type InventoryItem = { item: string; quantity: number; totalValue: number; imageUrl: string | null; entries: InventoryEntry[] };
 
 export async function getInventory(): Promise<{ hd: InventoryItem[]; nt: InventoryItem[]; general: InventoryItem[] }> {
   const drops = await prisma.dropItem.findMany({
     where: { status: "Не продано" },
-    include: { catalogItem: { select: { imageUrl: true } }, player: { select: { name: true } } },
+    include: {
+      catalogItem: { select: { imageUrl: true } },
+      player: { select: { name: true } },
+      activity: { select: { name: true } },
+    },
     orderBy: { date: "desc" },
   });
 
@@ -630,6 +641,7 @@ export async function getInventory(): Promise<{ hd: InventoryItem[]; nt: Invento
       value: d.value,
       date: dateFmt.format(d.date),
       playerName: d.player?.name ?? null,
+      activityName: d.activity?.name ?? null,
     };
     if (existing) {
       existing.quantity += d.quantity;
