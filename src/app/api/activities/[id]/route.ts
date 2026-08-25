@@ -79,7 +79,12 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const { id } = await params;
-  await prisma.activity.delete({ where: { id } });
+  // DropItem.activity — onDelete: SetNull, поэтому дроп сам по себе не удалится
+  // вместе с активностью и осядет в инвентаре без привязки. Удаляем явно.
+  await prisma.$transaction([
+    prisma.dropItem.deleteMany({ where: { activityId: id } }),
+    prisma.activity.delete({ where: { id } }),
+  ]);
 
   return NextResponse.json({ ok: true });
 }
