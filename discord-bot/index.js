@@ -1,20 +1,21 @@
 require("dotenv/config");
 const { Client, GatewayIntentBits, Partials, Events } = require("discord.js");
-const Anthropic = require("@anthropic-ai/sdk");
 
 const {
   DISCORD_BOT_TOKEN,
   DISCORD_CHANNEL_ID,
-  ANTHROPIC_API_KEY,
   BOT_API_SECRET,
   SITE_API_URL = "http://localhost:3000",
+  VISION_PROXY_URL,
+  VISION_PROXY_SECRET,
 } = process.env;
 
 for (const [key, value] of Object.entries({
   DISCORD_BOT_TOKEN,
   DISCORD_CHANNEL_ID,
-  ANTHROPIC_API_KEY,
   BOT_API_SECRET,
+  VISION_PROXY_URL,
+  VISION_PROXY_SECRET,
 })) {
   if (!value) {
     console.error(`Не задана переменная окружения ${key}. Заполните discord-bot/.env и перезапустите.`);
@@ -23,8 +24,6 @@ for (const [key, value] of Object.entries({
 }
 
 const MAX_IMAGE_BYTES = 800_000; // должно совпадать с лимитом на /api/bot/activities
-
-const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -90,37 +89,17 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
+// Anthropic блокирует запросы с IP этого VPS, поэтому распознавание ников
+// идёт через отдельный прокси на Render (US), а не напрямую.
 async function extractNicknames(base64, mediaType) {
-  const response = await anthropic.messages.create({
-    model: "claude-sonnet-5",
-    max_tokens: 1024,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-          {
-            type: "text",
-            text:
-              "На скрине список участников игровой активности (MMO-гильдия). " +
-              "Выпиши все игровые ники участников, которые видишь на скрине. " +
-              "Игнорируй элементы интерфейса, заголовки, кнопки, названия активности/локации — только ники игроков. " +
-              'Ответь строго JSON без пояснений в формате {"names": ["ник1", "ник2"]}. Если ников нет — {"names": []}.',
-          },
-        ],
-      },
-    ],
+  const res = await fetch(`${VISION_PROXY_URL}/extract-names`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${VISION_PROXY_SECRET}` },
+    body: JSON.stringify({ image: base64, mediaType }),
   });
-
-  const text = response.content.find((c) => c.type === "text")?.text ?? "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return [];
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    return Array.isArray(parsed.names) ? parsed.names.filter((n) => typeof n === "string" && n.trim()) : [];
-  } catch {
-    return [];
-  }
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
+  return Array.isArray(data.names) ? data.names : [];
 }
 
 client.login(DISCORD_BOT_TOKEN);

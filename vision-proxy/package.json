@@ -1,0 +1,14 @@
+{
+  "name": "guild-vision-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Маленький прокси на US-хостинге: принимает скрин, зовёт Claude vision, отдаёт список ников. Нужен потому что Anthropic API блокирует запросы с IP VPS дискорд-бота.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0",
+    "express": "^4.19.2"
+  }
+}

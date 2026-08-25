@@ -14,8 +14,9 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Stale local build artifact from an earlier, abandoned Vercel deploy attempt.
     ".vercel/**",
-    // Standalone CommonJS Node service, not part of the Next.js app.
+    // Standalone CommonJS Node services, not part of the Next.js app.
     "discord-bot/**",
+    "vision-proxy/**",
   ]),
 ]);
 
