@@ -85,6 +85,10 @@ export async function POST(request: NextRequest) {
     : [];
   const catalogById = new Map(catalogItems.map((c) => [c.id, c]));
 
+  // Тот же маршрут склада, что и при ручном добавлении дропа через /api/drops:
+  // с Мини-РБ активности — сразу на склад ХД, с Прайм — в Общий инвентарь.
+  const dropWarehouse = category === "Мини-РБ" ? "ХД" : "Общий";
+
   const activity = await prisma.activity.create({
     data: {
       name,
@@ -107,6 +111,8 @@ export async function POST(request: NextRequest) {
               quantity: Math.max(1, d.quantity),
               date,
               catalogItemId: catalogItem.id,
+              warehouse: dropWarehouse,
+              category,
             };
           })
           .filter((d): d is NonNullable<typeof d> => d !== null),
