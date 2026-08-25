@@ -65,8 +65,9 @@ client.on(Events.MessageCreate, async (message) => {
     const names = await extractNicknames(rosterBuffer.toString("base64"), rosterMediaType);
 
     let dropItems = [];
+    let dropBuffer, dropMediaType;
     if (dropImage) {
-      const { buffer: dropBuffer, mediaType: dropMediaType } = await downloadImage(dropImage);
+      ({ buffer: dropBuffer, mediaType: dropMediaType } = await downloadImage(dropImage));
       dropItems = await extractDrops(dropBuffer.toString("base64"), dropMediaType);
     }
 
@@ -74,6 +75,8 @@ client.on(Events.MessageCreate, async (message) => {
 
     const screenshotDataUrl =
       rosterBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${rosterMediaType};base64,${rosterBuffer.toString("base64")}` : undefined;
+    const dropScreenshotDataUrl =
+      dropBuffer && dropBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${dropMediaType};base64,${dropBuffer.toString("base64")}` : undefined;
 
     const res = await fetch(`${SITE_API_URL}/api/bot/activities`, {
       method: "POST",
@@ -85,6 +88,7 @@ client.on(Events.MessageCreate, async (message) => {
         participants: names,
         drops: dropItems,
         screenshot: screenshotDataUrl,
+        dropScreenshot: dropScreenshotDataUrl,
       }),
     });
     const data = await res.json();

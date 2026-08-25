@@ -142,6 +142,7 @@ export async function POST(request: NextRequest) {
   const category = typeof body?.category === "string" && CATEGORIES.includes(body.category) ? body.category : CATEGORIES[0];
   const mode = typeof body?.mode === "string" && MODES.includes(body.mode) ? body.mode : MODES[0];
   const screenshot = typeof body?.screenshot === "string" ? body.screenshot : "";
+  const dropScreenshot = typeof body?.dropScreenshot === "string" ? body.dropScreenshot : "";
   const participantNames: string[] = Array.isArray(body?.participants)
     ? body.participants
         .filter((n: unknown): n is string => typeof n === "string")
@@ -170,6 +171,9 @@ export async function POST(request: NextRequest) {
   if (screenshot && (!screenshot.startsWith("data:image/") || screenshot.length > MAX_IMAGE_BYTES)) {
     return NextResponse.json({ error: "Скрин слишком большой или неверного формата." }, { status: 400 });
   }
+  if (dropScreenshot && (!dropScreenshot.startsWith("data:image/") || dropScreenshot.length > MAX_IMAGE_BYTES)) {
+    return NextResponse.json({ error: "Скрин дропа слишком большой или неверного формата." }, { status: 400 });
+  }
 
   const allPlayers = await prisma.player.findMany({ select: { id: true, name: true } });
   const players = matchNames(participantNames, allPlayers);
@@ -195,7 +199,12 @@ export async function POST(request: NextRequest) {
       addedByUserId: null,
       participants: { create: players.matched.map((m) => ({ playerId: m.item.id })) },
       guests: { create: players.unmatched.map((n) => ({ name: n })) },
-      screenshots: screenshot ? { create: [{ kind: "roster", imageUrl: screenshot }] } : undefined,
+      screenshots: {
+        create: [
+          ...(screenshot ? [{ kind: "roster", imageUrl: screenshot }] : []),
+          ...(dropScreenshot ? [{ kind: "drop", imageUrl: dropScreenshot }] : []),
+        ],
+      },
       drops: {
         create: drops.matched.map((m) => ({
           item: m.item.name,
