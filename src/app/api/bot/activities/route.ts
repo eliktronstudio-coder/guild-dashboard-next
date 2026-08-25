@@ -24,6 +24,31 @@ function stripTruncationMark(name: string) {
   return match ? match[1].trim() : null;
 }
 
+function levenshtein(a: string, b: string) {
+  const dp: number[] = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let prevDiag = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prevDiag : 1 + Math.min(prevDiag, dp[j], dp[j - 1]);
+      prevDiag = temp;
+    }
+  }
+  return dp[b.length];
+}
+
+// Мелкий/стилизованный шрифт на скрине иногда сбивает распознавание пары
+// букв (не обрезка, а именно опечатка). Ищем игрока по близости ника —
+// только если разница минимальна и подходит ровно один, иначе это слишком
+// рискованно и лучше оставить в гостях.
+function fuzzyThreshold(len: number) {
+  if (len < 4) return 0;
+  if (len <= 5) return 1;
+  if (len <= 10) return 2;
+  return 3;
+}
+
 const CATEGORIES = ["Мини-РБ", "Прайм"];
 
 // Тестовая интеграция с Discord-ботом: бот присылает название активности и
@@ -84,13 +109,40 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const fuzzyUnmatched: string[] = [];
+  for (const raw of stillUnmatched) {
+    const normalized = normalizeName(raw);
+    const threshold = fuzzyThreshold(normalized.length);
+    let best: { player: (typeof allPlayers)[number]; distance: number } | null = null;
+    let bestIsUnique = true;
+    if (threshold > 0) {
+      for (const player of allPlayers) {
+        if (matchedPlayerIds.has(player.id)) continue;
+        const distance = levenshtein(normalized, normalizeName(player.name));
+        if (distance > threshold) continue;
+        if (!best || distance < best.distance) {
+          best = { player, distance };
+          bestIsUnique = true;
+        } else if (distance === best.distance) {
+          bestIsUnique = false;
+        }
+      }
+    }
+    if (best && bestIsUnique) {
+      matched.push({ input: raw, playerId: best.player.id, playerName: best.player.name });
+      matchedPlayerIds.add(best.player.id);
+    } else {
+      fuzzyUnmatched.push(raw);
+    }
+  }
+
   const activity = await prisma.activity.create({
     data: {
       name,
       category,
       addedByUserId: null,
       participants: { create: matched.map((m) => ({ playerId: m.playerId })) },
-      guests: { create: stillUnmatched.map((n) => ({ name: n })) },
+      guests: { create: fuzzyUnmatched.map((n) => ({ name: n })) },
       screenshots: screenshot ? { create: [{ kind: "roster", imageUrl: screenshot }] } : undefined,
     },
   });
@@ -99,7 +151,7 @@ export async function POST(request: NextRequest) {
     {
       activity: { id: activity.id, name: activity.name, category: activity.category },
       matched: matched.map((m) => ({ input: m.input, playerName: m.playerName })),
-      unmatched: stillUnmatched,
+      unmatched: fuzzyUnmatched,
     },
     { status: 201 }
   );
