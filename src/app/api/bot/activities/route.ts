@@ -15,6 +15,19 @@ function normalizeName(name: string) {
   return name.trim().toLowerCase();
 }
 
+// Ники в игровом интерфейсе иногда обрезаны многоточием ("Konigzav...") —
+// ИИ добросовестно переписывает то, что видно на скрине. Для таких случаев
+// пробуем найти игрока по началу ника, но только если подходит ровно один —
+// при неоднозначности лучше оставить в гостях для ручной проверки.
+function stripTruncationMark(name: string) {
+  const match = name.match(/^(.*?)(?:\.{3,}|…)$/);
+  return match ? match[1].trim() : null;
+}
+
+function detectCategory(activityName: string): "Прайм" | "Мини-РБ" {
+  return /прайм/i.test(activityName) ? "Прайм" : "Мини-РБ";
+}
+
 // Тестовая интеграция с Discord-ботом: бот присылает название активности и
 // список ников, распознанных ИИ со скрина. Ники сверяются с игроками гильдии
 // по имени (без учёта регистра) — совпавшие становятся участниками, остальные
@@ -55,21 +68,41 @@ export async function POST(request: NextRequest) {
     else unmatched.push(raw);
   }
 
+  const matchedPlayerIds = new Set(matched.map((m) => m.playerId));
+  const stillUnmatched: string[] = [];
+  for (const raw of unmatched) {
+    const prefix = stripTruncationMark(raw);
+    const normalizedPrefix = prefix ? normalizeName(prefix) : "";
+    const candidates =
+      prefix && normalizedPrefix.length >= 2
+        ? allPlayers.filter((p) => !matchedPlayerIds.has(p.id) && normalizeName(p.name).startsWith(normalizedPrefix))
+        : [];
+    if (candidates.length === 1) {
+      matched.push({ input: raw, playerId: candidates[0].id, playerName: candidates[0].name });
+      matchedPlayerIds.add(candidates[0].id);
+    } else {
+      stillUnmatched.push(raw);
+    }
+  }
+
+  const category = detectCategory(name);
+
   const activity = await prisma.activity.create({
     data: {
       name,
+      category,
       addedByUserId: null,
       participants: { create: matched.map((m) => ({ playerId: m.playerId })) },
-      guests: { create: unmatched.map((n) => ({ name: n })) },
+      guests: { create: stillUnmatched.map((n) => ({ name: n })) },
       screenshots: screenshot ? { create: [{ kind: "roster", imageUrl: screenshot }] } : undefined,
     },
   });
 
   return NextResponse.json(
     {
-      activity: { id: activity.id, name: activity.name },
+      activity: { id: activity.id, name: activity.name, category: activity.category },
       matched: matched.map((m) => ({ input: m.input, playerName: m.playerName })),
-      unmatched,
+      unmatched: stillUnmatched,
     },
     { status: 201 }
   );

@@ -77,7 +77,7 @@ client.on(Events.MessageCreate, async (message) => {
     const matchedList = data.matched.map((m) => m.playerName).join(", ") || "—";
     const unmatchedList = data.unmatched.join(", ") || "—";
     await message.reply(
-      `Активность «${data.activity.name}» создана.\n` +
+      `Активность «${data.activity.name}» (${data.activity.category}) создана.\n` +
         `Распознано ников: ${names.length}\n` +
         `Найдены в составе: ${matchedList}\n` +
         `Не найдены (добавлены как гости): ${unmatchedList}\n` +
