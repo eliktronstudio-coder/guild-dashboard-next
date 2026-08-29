@@ -207,7 +207,6 @@ export default async function DashboardPage() {
                   role={p.role}
                   valueLabel={`${p.attendancePctPrime}%`}
                   valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
-                  progressPct={p.attendancePctPrime}
                 />
               ))}
             </div>
@@ -239,7 +238,6 @@ export default async function DashboardPage() {
                   role={p.role}
                   valueLabel={`${p.attendancePctMiniRb}%`}
                   valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
-                  progressPct={p.attendancePctMiniRb}
                 />
               ))}
             </div>
