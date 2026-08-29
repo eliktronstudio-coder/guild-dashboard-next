@@ -58,12 +58,12 @@ export default function StatCard({
       <>
         {art && (
           <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-            <Image src={art} alt="" fill sizes="(max-width: 1280px) 50vw, 25vw" className="object-cover opacity-60" />
+            <Image src={art} alt="" fill sizes="(max-width: 1280px) 50vw, 25vw" className="object-cover" />
             <div
               className="absolute inset-0"
               style={{
                 backgroundImage:
-                  "linear-gradient(90deg, rgba(var(--art-scrim),0.97) 0%, rgba(var(--art-scrim),0.88) 45%, rgba(var(--art-scrim),0.35) 75%, rgba(var(--art-scrim),0.1) 100%)",
+                  "linear-gradient(90deg, rgba(var(--art-scrim),0.97) 0%, rgba(var(--art-scrim),0.85) 45%, rgba(var(--art-scrim),0.2) 75%, rgba(var(--art-scrim),0) 100%)",
               }}
             />
           </div>
