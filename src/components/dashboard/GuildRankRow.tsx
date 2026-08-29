@@ -1,5 +1,4 @@
 import clsx from "clsx";
-import Image from "next/image";
 import Link from "next/link";
 
 const roleColor: Record<string, string> = {
@@ -17,7 +16,7 @@ type GuildRankRowProps = {
   role: string;
   valueLabel: string;
   valueClassName?: string;
-  /** 0-100; when set, renders a textured fill behind the row proportional to this value. */
+  /** 0-100; when set, renders an accent fill behind the row proportional to this value. */
   progressPct?: number;
 };
 
@@ -35,18 +34,17 @@ export default function GuildRankRow({
   return (
     <Link
       href={href}
-      className="group relative flex min-h-[46px] items-center justify-between gap-3 overflow-hidden rounded-lg border border-border bg-surface px-4 py-2.5 text-sm transition-colors duration-150 hover:border-accent/30"
+      className="group relative flex min-h-[46px] items-center justify-between gap-3 overflow-hidden rounded-lg border border-border bg-transparent px-4 py-2.5 text-sm transition-colors duration-150 hover:border-accent/30"
     >
       {pct !== undefined && (
-        <div aria-hidden="true" className="absolute inset-y-0 left-0 overflow-hidden" style={{ width: `${pct}%` }}>
-          <div className="relative h-full w-[700px]">
-            <Image src="/dashboard/hero-banner.png" alt="" fill sizes="700px" className="object-cover opacity-20" />
-            <div
-              className="absolute inset-0"
-              style={{ backgroundImage: "linear-gradient(90deg, rgba(255,158,44,0.16), rgba(255,158,44,0) 90%)" }}
-            />
-          </div>
-        </div>
+        <div
+          aria-hidden="true"
+          className="absolute inset-y-0 left-0"
+          style={{
+            width: `${pct}%`,
+            backgroundImage: "linear-gradient(90deg, rgba(255,158,44,0.18), rgba(255,158,44,0.04) 90%)",
+          }}
+        />
       )}
       <span className="relative flex items-center gap-3 truncate">
         <span className="font-heading text-sm font-bold text-accent">{rank}</span>
