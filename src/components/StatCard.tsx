@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import Link from "next/link";
+import Image from "next/image";
 import type { ComponentType } from "react";
 
 type Tone = "accent" | "violet" | "ember" | "info" | "accent-dim" | "red";
@@ -27,6 +28,11 @@ type StatCardProps = {
   goldValue?: boolean;
   /** When set (dashboard variant only), the card renders as a link to this path. */
   href?: string;
+  /**
+   * Background artwork (dashboard variant only). The image sits on the right and is
+   * faded out towards the left by a gradient so the label/value stay readable.
+   */
+  art?: string;
 };
 
 export default function StatCard({
@@ -39,20 +45,34 @@ export default function StatCard({
   strong = false,
   goldValue = false,
   href,
+  art,
 }: StatCardProps) {
   if (variant === "dashboard") {
     const className = clsx(
-      "flex min-h-[106px] flex-col gap-3 rounded-xl border bg-surface p-4 transition-colors",
+      "relative flex min-h-[106px] flex-col gap-3 overflow-hidden rounded-xl border p-4 transition-colors",
+      art ? "bg-surface-2" : "bg-surface",
       href ? "hover:border-accent/40" : "hover:border-border-strong",
       strong ? "border-accent/35" : "border-border"
     );
     const content = (
       <>
-        <div className="flex items-center gap-2">
+        {art && (
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+            <Image src={art} alt="" fill sizes="(max-width: 1280px) 50vw, 25vw" className="object-cover opacity-60" />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundImage:
+                  "linear-gradient(90deg, rgba(var(--art-scrim),0.97) 0%, rgba(var(--art-scrim),0.88) 45%, rgba(var(--art-scrim),0.35) 75%, rgba(var(--art-scrim),0.1) 100%)",
+              }}
+            />
+          </div>
+        )}
+        <div className="relative flex items-center gap-2">
           {Icon && <Icon size={16} strokeWidth={2} className={toneClasses[tone]} />}
           <p className="truncate text-xs font-medium text-muted">{label}</p>
         </div>
-        <div>
+        <div className="relative">
           <p className="flex items-baseline gap-1.5 font-heading text-[22px] font-bold tracking-tight tabular-nums text-foreground">
             {value}
             {goldValue && <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full bg-accent" />}

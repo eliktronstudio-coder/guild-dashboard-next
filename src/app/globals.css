@@ -37,6 +37,11 @@
   --row-tint: linear-gradient(90deg, rgba(108, 85, 125, 0.13), rgba(214, 107, 61, 0.08));
   --row-tint-hover: linear-gradient(90deg, rgba(108, 85, 125, 0.16), rgba(233, 162, 74, 0.14));
   --bg-hero-glow: radial-gradient(circle at 78% 0%, rgba(255, 78, 33, 0.08), transparent 28%);
+
+  /* RGB triplet of the scrim laid over photographic artwork (KPI cards, panels,
+     hero) so label/value text stays readable. Must follow the theme, otherwise a
+     dark scrim hides dark text in the light theme. */
+  --art-scrim: 18, 13, 15;
 }
 
 /* XD Guild — light fantasy-landscape theme: its own mood, not an inversion. */
@@ -68,6 +73,7 @@
   --atmosphere-opacity: 0.08;
   --row-tint: linear-gradient(90deg, rgba(139, 122, 158, 0.08), rgba(201, 138, 46, 0.05));
   --row-tint-hover: linear-gradient(90deg, rgba(139, 122, 158, 0.1), rgba(201, 138, 46, 0.12));
+  --art-scrim: 250, 247, 243;
   --bg-hero-glow: radial-gradient(circle at 50% 0%, transparent, transparent);
 }
 

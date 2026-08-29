@@ -27,6 +27,19 @@ import {
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
+// Photographic artwork behind each KPI card / leaderboard panel (see public/dashboard/art).
+const art = {
+  prime: "/dashboard/art/kpi-prime.webp",
+  miniRb: "/dashboard/art/kpi-minirb.webp",
+  guild: "/dashboard/art/kpi-guild.webp",
+  drop: "/dashboard/art/kpi-drop.webp",
+  dropGeneral: "/dashboard/art/kpi-drop-general.webp",
+  attendance: "/dashboard/art/kpi-attendance.webp",
+  payout: "/dashboard/art/kpi-payout.webp",
+  leadersPrime: "/dashboard/art/leaders-prime.webp",
+  leadersMiniRb: "/dashboard/art/leaders-minirb.webp",
+};
+
 function attendanceTone(pct: number) {
   if (pct <= 20) return "text-danger";
   if (pct <= 50) return "text-accent-dim";
@@ -73,6 +86,7 @@ export default async function DashboardPage() {
           <StatCard
             variant="dashboard"
             label="Казна с Прайма"
+            art={art.prime}
             value={`${numberFmt.format(treasuryBreakdown.prime)} золота`}
             hint="70% — фонд ЗП"
             icon={Coins}
@@ -83,6 +97,7 @@ export default async function DashboardPage() {
           <StatCard
             variant="dashboard"
             label="Казна мини-РБ"
+            art={art.miniRb}
             value={`${numberFmt.format(treasuryBreakdown.miniRb)} золота`}
             hint="100% — фонд ЗП"
             icon={Landmark}
@@ -92,6 +107,7 @@ export default async function DashboardPage() {
           <StatCard
             variant="dashboard"
             label="Казна гильдии"
+            art={art.guild}
             value={`${numberFmt.format(treasuryBreakdown.guild)} золота`}
             hint="30% — резерв гильдии"
             icon={Archive}
@@ -101,6 +117,7 @@ export default async function DashboardPage() {
           <StatCard
             variant="dashboard"
             label="Дроп с Мини-РБ / Дроп с Прайм"
+            art={art.drop}
             value={`${numberFmt.format(dropGoldMiniRb)} / ${numberFmt.format(dropGoldPrimeManual)} золота`}
             hint="склад ХД / ручной дроп"
             icon={Swords}
@@ -111,6 +128,7 @@ export default async function DashboardPage() {
           <StatCard
             variant="dashboard"
             label="Дроп общего инвентаря"
+            art={art.dropGeneral}
             value={`${numberFmt.format(dropGoldGeneralAuto)} золота`}
             hint="эквивалент в золоте"
             icon={Swords}
@@ -122,6 +140,7 @@ export default async function DashboardPage() {
           <StatCard
             variant="dashboard"
             label="Ср. посещаемость"
+            art={art.attendance}
             value={avgAttendance30d > 0 ? `${avgAttendance30d} чел.` : "—"}
             hint="за последние 30 дней"
             icon={Zap}
@@ -130,6 +149,7 @@ export default async function DashboardPage() {
           <StatCard
             variant="dashboard"
             label="Дней до выплаты"
+            art={art.payout}
             value={`${payoutDays}`}
             hint="выплата 15-го числа"
             icon={CalendarClock}
@@ -162,7 +182,7 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
-        <DashboardPanel>
+        <DashboardPanel art={art.leadersPrime}>
           <SectionHeader
             title="Посещаемость: Прайм"
             right={
@@ -194,7 +214,7 @@ export default async function DashboardPage() {
           )}
         </DashboardPanel>
 
-        <DashboardPanel>
+        <DashboardPanel art={art.leadersMiniRb}>
           <SectionHeader
             title="Посещаемость: Мини-РБ"
             right={

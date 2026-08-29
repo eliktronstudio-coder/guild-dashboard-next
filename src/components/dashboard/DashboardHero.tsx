@@ -16,7 +16,7 @@ export default function DashboardHero() {
         className="absolute inset-0"
         style={{
           backgroundImage:
-            "linear-gradient(180deg, rgba(10,8,12,0) 0%, rgba(10,8,12,0.15) 30%, rgba(10,8,12,0.6) 60%, var(--background) 100%)",
+            "linear-gradient(180deg, rgba(var(--art-scrim),0) 0%, rgba(var(--art-scrim),0.15) 30%, rgba(var(--art-scrim),0.6) 60%, var(--background) 100%)",
         }}
       />
     </div>
