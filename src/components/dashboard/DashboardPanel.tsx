@@ -19,7 +19,7 @@ export default function DashboardPanel({
   return (
     <div
       className={clsx(
-        "relative overflow-hidden rounded-2xl border border-border p-5",
+        "relative flex flex-col overflow-hidden rounded-2xl border border-border p-5",
         art ? "bg-surface-2" : "bg-surface",
         className
       )}
@@ -36,7 +36,7 @@ export default function DashboardPanel({
           />
         </div>
       )}
-      <div className="relative">{children}</div>
+      <div className="relative flex min-h-0 flex-1 flex-col">{children}</div>
     </div>
   );
 }

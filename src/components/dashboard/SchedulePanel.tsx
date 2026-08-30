@@ -31,7 +31,7 @@ export default function SchedulePanel() {
   const nowMs = useSyncExternalStore(subscribe, getSnapshot, () => null);
 
   if (nowMs === null) {
-    return <div className="h-[196px]" aria-hidden="true" />;
+    return <div className="min-h-[196px] max-h-[320px] flex-1" aria-hidden="true" />;
   }
 
   const now = new Date(nowMs);
@@ -39,7 +39,7 @@ export default function SchedulePanel() {
   const slots = upcomingSlots(now, SHOWN);
 
   return (
-    <div className="scroll-slim h-[196px] space-y-[5px] overflow-y-auto pr-2">
+    <div className="scroll-slim max-h-[320px] min-h-[196px] flex-1 space-y-[5px] overflow-y-auto pr-2">
       {slots.map((slot, i) => (
         <div key={`${slot.day}-${slot.minutes}-${slot.name}`}>
           {(i === 0 || slot.day !== slots[i - 1].day) && (
@@ -47,8 +47,8 @@ export default function SchedulePanel() {
               {dayLabel(slot.day, today)}
             </p>
           )}
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm">
-            <span className="flex-shrink-0 font-heading text-[13px] font-bold tabular-nums text-accent">
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-sm">
+            <span className="flex-shrink-0 font-heading text-[16px] font-bold tabular-nums text-accent">
               {formatSlotTime(slot.minutes)}
             </span>
             <span className="min-w-0 flex-1 truncate text-foreground">{slot.name}</span>
