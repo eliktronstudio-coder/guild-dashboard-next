@@ -166,36 +166,45 @@ function parseRename(content) {
   return { from, to };
 }
 
+/** Одно сообщение может содержать несколько переименований — по одному на строку. */
+function parseRenames(content) {
+  return content
+    .split("\n")
+    .map((line) => parseRename(line))
+    .filter(Boolean);
+}
+
 /**
  * «СтарыйНик - НовыйНик» в канале ренеймов переименовывает игрока на сайте.
  */
 async function handleRename(message) {
-  const parsed = parseRename(message.content);
-  if (!parsed) return;
-  const { from, to } = parsed;
+  const pairs = parseRenames(message.content);
+  if (pairs.length === 0) return;
 
-  try {
-    const res = await fetch(`${SITE_API_URL}/api/bot/players/rename`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
-      body: JSON.stringify({ from, to }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      await message.react("❌");
-      await message.reply(data?.error || `Сайт вернул ошибку (${res.status}).`);
-      return;
+  const results = [];
+  for (const { from, to } of pairs) {
+    try {
+      const res = await fetch(`${SITE_API_URL}/api/bot/players/rename`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
+        body: JSON.stringify({ from, to }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        results.push({ ok: false, text: `«${from}» → «${to}»: ${data?.error || `ошибка ${res.status}`}` });
+        continue;
+      }
+      const extra = data.renamedGuestEntries ? ` (+${data.renamedGuestEntries} в активностях)` : "";
+      results.push({ ok: true, text: `«${data.player.from}» → «${data.player.to}»${extra}` });
+    } catch (err) {
+      console.error("Ошибка переименования:", err);
+      results.push({ ok: false, text: `«${from}» → «${to}»: ${err.message}` });
     }
-    await message.react("✅");
-    const extra = data.renamedGuestEntries
-      ? ` Также обновлено записей в активностях: ${data.renamedGuestEntries}.`
-      : "";
-    await message.reply(`Переименовал в составе: «${data.player.from}» → «${data.player.to}».${extra}`);
-  } catch (err) {
-    console.error("Ошибка переименования:", err);
-    await message.react("❌");
-    await message.reply(`Не получилось переименовать: ${err.message}`);
   }
+
+  const okCount = results.filter((r) => r.ok).length;
+  await message.react(okCount === results.length ? "✅" : okCount === 0 ? "❌" : "⚠️");
+  await message.reply(results.map((r) => `${r.ok ? "✅" : "❌"} ${r.text}`).join("\n"));
 }
 
 async function askActivityOptions(message) {
