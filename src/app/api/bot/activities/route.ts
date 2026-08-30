@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 const MAX_IMAGE_BYTES = 800_000;
 const MAX_PARTICIPANTS = 60;
 const MAX_DROPS = 60;
+const MAX_SCREENSHOTS_PER_KIND = 6; // как в /api/activities
+const SCREENSHOT_KINDS = ["roster", "drop"];
 
 function isAuthorized(request: NextRequest) {
   const secret = process.env.BOT_API_SECRET;
@@ -141,8 +143,15 @@ export async function POST(request: NextRequest) {
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const category = typeof body?.category === "string" && CATEGORIES.includes(body.category) ? body.category : CATEGORIES[0];
   const mode = typeof body?.mode === "string" && MODES.includes(body.mode) ? body.mode : MODES[0];
-  const screenshot = typeof body?.screenshot === "string" ? body.screenshot : "";
-  const dropScreenshot = typeof body?.dropScreenshot === "string" ? body.dropScreenshot : "";
+  const screenshots: { kind: string; imageUrl: string }[] = Array.isArray(body?.screenshots)
+    ? body.screenshots
+        .filter((s: unknown): s is { kind: unknown; imageUrl: unknown } => typeof s === "object" && s !== null)
+        .map((s: { kind: unknown; imageUrl: unknown }) => ({
+          kind: typeof s.kind === "string" ? s.kind : "",
+          imageUrl: typeof s.imageUrl === "string" ? s.imageUrl : "",
+        }))
+        .filter((s: { kind: string; imageUrl: string }) => SCREENSHOT_KINDS.includes(s.kind) && s.imageUrl)
+    : [];
   const participantNames: string[] = Array.isArray(body?.participants)
     ? body.participants
         .filter((n: unknown): n is string => typeof n === "string")
@@ -168,11 +177,13 @@ export async function POST(request: NextRequest) {
   if (dropEntries.length > MAX_DROPS) {
     return NextResponse.json({ error: `Слишком много предметов (максимум ${MAX_DROPS}).` }, { status: 400 });
   }
-  if (screenshot && (!screenshot.startsWith("data:image/") || screenshot.length > MAX_IMAGE_BYTES)) {
+  if (screenshots.some((s) => !s.imageUrl.startsWith("data:image/") || s.imageUrl.length > MAX_IMAGE_BYTES)) {
     return NextResponse.json({ error: "Скрин слишком большой или неверного формата." }, { status: 400 });
   }
-  if (dropScreenshot && (!dropScreenshot.startsWith("data:image/") || dropScreenshot.length > MAX_IMAGE_BYTES)) {
-    return NextResponse.json({ error: "Скрин дропа слишком большой или неверного формата." }, { status: 400 });
+  for (const kind of SCREENSHOT_KINDS) {
+    if (screenshots.filter((s) => s.kind === kind).length > MAX_SCREENSHOTS_PER_KIND) {
+      return NextResponse.json({ error: `Максимум ${MAX_SCREENSHOTS_PER_KIND} скринов на раздел.` }, { status: 400 });
+    }
   }
 
   const allPlayers = await prisma.player.findMany({ select: { id: true, name: true } });
@@ -199,12 +210,7 @@ export async function POST(request: NextRequest) {
       addedByUserId: null,
       participants: { create: players.matched.map((m) => ({ playerId: m.item.id })) },
       guests: { create: players.unmatched.map((n) => ({ name: n })) },
-      screenshots: {
-        create: [
-          ...(screenshot ? [{ kind: "roster", imageUrl: screenshot }] : []),
-          ...(dropScreenshot ? [{ kind: "drop", imageUrl: dropScreenshot }] : []),
-        ],
-      },
+      screenshots: { create: screenshots },
       drops: {
         create: drops.matched.map((m) => ({
           item: m.item.name,

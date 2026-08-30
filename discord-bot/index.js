@@ -34,6 +34,8 @@ for (const [key, value] of Object.entries({
 }
 
 const MAX_IMAGE_BYTES = 800_000; // должно совпадать с лимитом на /api/bot/activities
+const MAX_IMAGES = 12; // по 6 на раздел, столько принимает /api/bot/activities
+const MAX_NICK = 40; // должно совпадать с /api/bot/players/rename
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
@@ -74,35 +76,43 @@ client.on(Events.MessageCreate, async (message) => {
   if (message.channelId !== DISCORD_CHANNEL_ID) return;
 
   const images = [...message.attachments.values()].filter((a) => (a.contentType || "").startsWith("image/"));
-  const rosterImage = images[0];
-  const dropImage = images[1]; // второй скрин в том же сообщении = дроп
-  if (!rosterImage) return;
+  if (images.length === 0) return;
 
   const activityName = message.content.trim();
   if (!activityName) {
     await message.reply("Напишите название активности текстом вместе со скрином.");
     return;
   }
+  if (images.length > MAX_IMAGES) {
+    await message.reply(`Слишком много скринов: ${images.length}. Максимум ${MAX_IMAGES} за раз.`);
+    return;
+  }
 
   try {
     await message.react("⏳");
 
-    const { buffer: rosterBuffer, mediaType: rosterMediaType } = await downloadImage(rosterImage);
-    const names = await extractNicknames(rosterBuffer.toString("base64"), rosterMediaType);
-
-    let dropItems = [];
-    let dropBuffer, dropMediaType;
-    if (dropImage) {
-      ({ buffer: dropBuffer, mediaType: dropMediaType } = await downloadImage(dropImage));
-      dropItems = await extractDrops(dropBuffer.toString("base64"), dropMediaType);
+    // Каждый скрин классифицируется отдельно, поэтому порядок вложений не важен
+    // и скринов состава/дропа может быть сколько угодно.
+    const shots = [];
+    for (const image of images) {
+      const { buffer, mediaType } = await downloadImage(image);
+      const base64 = buffer.toString("base64");
+      const extracted = await extractFromImage(base64, mediaType);
+      shots.push({ buffer, mediaType, base64, ...extracted });
     }
+
+    const rosterShots = shots.filter((s) => s.kind === "roster");
+    const dropShots = shots.filter((s) => s.kind === "drop");
+    const unknownCount = shots.length - rosterShots.length - dropShots.length;
+
+    const names = dedupeNames(rosterShots.flatMap((s) => s.names));
+    const dropItems = mergeItems(dropShots.flatMap((s) => s.items));
 
     const { category, mode } = await askActivityOptions(message);
 
-    const screenshotDataUrl =
-      rosterBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${rosterMediaType};base64,${rosterBuffer.toString("base64")}` : undefined;
-    const dropScreenshotDataUrl =
-      dropBuffer && dropBuffer.byteLength <= MAX_IMAGE_BYTES ? `data:${dropMediaType};base64,${dropBuffer.toString("base64")}` : undefined;
+    const screenshots = shots
+      .filter((s) => s.kind !== "unknown" && s.buffer.byteLength <= MAX_IMAGE_BYTES)
+      .map((s) => ({ kind: s.kind, imageUrl: `data:${s.mediaType};base64,${s.base64}` }));
 
     const res = await fetch(`${SITE_API_URL}/api/bot/activities`, {
       method: "POST",
@@ -113,8 +123,7 @@ client.on(Events.MessageCreate, async (message) => {
         mode,
         participants: names,
         drops: dropItems,
-        screenshot: screenshotDataUrl,
-        dropScreenshot: dropScreenshotDataUrl,
+        screenshots,
       }),
     });
     const data = await res.json();
@@ -125,20 +134,22 @@ client.on(Events.MessageCreate, async (message) => {
 
     const matchedList = data.matched.map((m) => m.playerName).join(", ") || "—";
     const unmatchedList = data.unmatched.join(", ") || "—";
-    let reply =
-      `Активность «${data.activity.name}» (${data.activity.category}, ${data.activity.mode}) создана.\n` +
-      `Распознано ников: ${names.length}\n` +
-      `Найдены в составе: ${matchedList}\n` +
-      `Не найдены (добавлены как гости): ${unmatchedList}\n`;
-    if (dropImage) {
+    const lines = [
+      `Активность «${data.activity.name}» (${data.activity.category}, ${data.activity.mode}) создана.`,
+      `Скринов: состав — ${rosterShots.length}, дроп — ${dropShots.length}` +
+        (unknownCount ? `, не распознано — ${unknownCount}` : ""),
+      `Распознано ников: ${names.length}`,
+      `Найдены в составе: ${matchedList}`,
+      `Не найдены (добавлены как гости): ${unmatchedList}`,
+    ];
+    if (dropShots.length > 0) {
       const dropMatchedList = data.drops.matched.map((d) => `${d.quantity}✕${d.catalogName}`).join(", ") || "—";
       const dropUnmatchedList = data.drops.unmatched.join(", ") || "—";
-      reply +=
-        `Дроп добавлен в инвентарь: ${dropMatchedList}\n` +
-        `Не найдено в реестре дропа (добавьте вручную): ${dropUnmatchedList}\n`;
+      lines.push(`Дроп добавлен в инвентарь: ${dropMatchedList}`);
+      lines.push(`Не найдено в реестре дропа (добавьте вручную): ${dropUnmatchedList}`);
     }
-    reply += "Проверьте и донастройте активность на сайте.";
-    await message.reply(reply);
+    lines.push("Проверьте и донастройте активность на сайте.");
+    await message.reply(lines.join("\n"));
   } catch (err) {
     console.error("Ошибка обработки сообщения:", err);
     await message.reactions.resolve("⏳")?.users.remove(client.user.id).catch(() => {});
@@ -147,7 +158,6 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
-const MAX_NICK = 40; // должно совпадать с /api/bot/players/rename
 const ARROW_RE = /^(.+?)\s*(?:->|=>|→|–|—)\s*(.+)$/;
 const HYPHEN_RE = /^(\S+)\s*-\s*(\S+)$/;
 
@@ -281,28 +291,48 @@ function sniffMediaType(buffer) {
   return null;
 }
 
-// Anthropic блокирует запросы с IP этого VPS, поэтому распознавание ников
-// идёт через отдельный прокси на Render (US), а не напрямую.
-async function extractNicknames(base64, mediaType) {
-  const res = await fetch(`${VISION_PROXY_URL}/extract-names`, {
+// Anthropic блокирует запросы с IP этого VPS, поэтому распознавание идёт через
+// отдельный прокси на Render (US), а не напрямую. Прокси заодно определяет,
+// что на скрине — состав или дроп.
+async function extractFromImage(base64, mediaType) {
+  const res = await fetch(`${VISION_PROXY_URL}/extract`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${VISION_PROXY_SECRET}` },
     body: JSON.stringify({ image: base64, mediaType }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
-  return Array.isArray(data.names) ? data.names : [];
+  return {
+    kind: data.kind === "roster" || data.kind === "drop" ? data.kind : "unknown",
+    names: Array.isArray(data.names) ? data.names : [],
+    items: Array.isArray(data.items) ? data.items : [],
+  };
 }
 
-async function extractDrops(base64, mediaType) {
-  const res = await fetch(`${VISION_PROXY_URL}/extract-drops`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${VISION_PROXY_SECRET}` },
-    body: JSON.stringify({ image: base64, mediaType }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
-  return Array.isArray(data.items) ? data.items : [];
+/** Один и тот же игрок может попасть на два скрина состава. */
+function dedupeNames(names) {
+  const seen = new Set();
+  const out = [];
+  for (const name of names) {
+    const key = name.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name.trim());
+  }
+  return out;
+}
+
+/** Скрины дропа обычно продолжают друг друга, поэтому количества складываются. */
+function mergeItems(items) {
+  const byName = new Map();
+  for (const item of items) {
+    const key = item.name.trim().toLowerCase();
+    if (!key) continue;
+    const existing = byName.get(key);
+    if (existing) existing.quantity += item.quantity;
+    else byName.set(key, { name: item.name.trim(), quantity: item.quantity });
+  }
+  return [...byName.values()];
 }
 
 client.login(DISCORD_BOT_TOKEN);

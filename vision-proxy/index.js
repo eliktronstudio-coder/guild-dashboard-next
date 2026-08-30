@@ -49,51 +49,39 @@ function readImageBody(req, res) {
   return { image, mediaType };
 }
 
-app.post("/extract-names", async (req, res) => {
+const PROMPT =
+  "Это скрин из MMO-игры, относящийся к активности гильдии. Он может быть одного из двух видов:\n" +
+  '- "roster" — список участников активности (игровые ники людей);\n' +
+  '- "drop" — список полученного дропа (предметы и их количество).\n' +
+  "Определи вид скрина и выпиши его содержимое.\n" +
+  "Для roster: все игровые ники участников. Игнорируй элементы интерфейса, заголовки, кнопки, " +
+  "названия активности и локации — только ники игроков.\n" +
+  "Для drop: каждый предмет и его количество. Игнорируй элементы интерфейса, кнопки и золото/валюту, " +
+  "если это не отдельный именованный трофей.\n" +
+  'Ответь строго JSON без пояснений: {"kind": "roster", "names": ["ник1"], "items": []} ' +
+  'или {"kind": "drop", "names": [], "items": [{"name": "предмет", "quantity": 1}]}. ' +
+  'Если не удалось определить вид — {"kind": "unknown", "names": [], "items": []}.';
+
+/** Классифицирует скрин и вытаскивает содержимое за один запрос к модели. */
+app.post("/extract", async (req, res) => {
   if (!requireAuth(req, res)) return;
   const body = readImageBody(req, res);
   if (!body) return;
 
   try {
-    const parsed = await askVision(
-      body.image,
-      body.mediaType,
-      "На скрине список участников игровой активности (MMO-гильдия). " +
-        "Выпиши все игровые ники участников, которые видишь на скрине. " +
-        "Игнорируй элементы интерфейса, заголовки, кнопки, названия активности/локации — только ники игроков. " +
-        'Ответь строго JSON без пояснений в формате {"names": ["ник1", "ник2"]}. Если ников нет — {"names": []}.'
-    );
-    const names = parsed?.names;
-    res.json({ names: Array.isArray(names) ? names.filter((n) => typeof n === "string" && n.trim()) : [] });
-  } catch (err) {
-    console.error("Ошибка распознавания ников:", err);
-    res.status(502).json({ error: err.message || "Ошибка запроса к Anthropic." });
-  }
-});
-
-app.post("/extract-drops", async (req, res) => {
-  if (!requireAuth(req, res)) return;
-  const body = readImageBody(req, res);
-  if (!body) return;
-
-  try {
-    const parsed = await askVision(
-      body.image,
-      body.mediaType,
-      "На скрине список дропа (предметов), полученных в игровой активности (MMO-гильдия). " +
-        "Выпиши каждый предмет и его количество. Игнорируй элементы интерфейса, кнопки, золото/валюту, " +
-        "если это не отдельный именованный трофей. " +
-        'Ответь строго JSON без пояснений в формате {"items": [{"name": "предмет", "quantity": 1}]}. ' +
-        'Если предметов нет — {"items": []}.'
-    );
+    const parsed = await askVision(body.image, body.mediaType, PROMPT);
+    const kind = parsed?.kind === "roster" || parsed?.kind === "drop" ? parsed.kind : "unknown";
+    const names = Array.isArray(parsed?.names)
+      ? parsed.names.filter((n) => typeof n === "string" && n.trim()).map((n) => n.trim())
+      : [];
     const items = Array.isArray(parsed?.items)
       ? parsed.items
           .filter((i) => i && typeof i.name === "string" && i.name.trim())
           .map((i) => ({ name: i.name.trim(), quantity: Math.max(1, Math.round(Number(i.quantity) || 1)) }))
       : [];
-    res.json({ items });
+    res.json({ kind, names, items });
   } catch (err) {
-    console.error("Ошибка распознавания дропа:", err);
+    console.error("Ошибка распознавания:", err);
     res.status(502).json({ error: err.message || "Ошибка запроса к Anthropic." });
   }
 });
