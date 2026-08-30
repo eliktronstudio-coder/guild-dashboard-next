@@ -51,6 +51,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Ник «${taken.name}» уже занят другим игроком.` }, { status: 409 });
   }
 
-  const updated = await prisma.player.update({ where: { id: matches[0].id }, data: { name: to } });
-  return NextResponse.json({ player: { id: updated.id, from: matches[0].name, to: updated.name } });
+  // Participants/payments/drops reference the player by id, so they follow the
+  // rename on their own. Guest rows are the exception: they store the nickname
+  // as text, for people the bot could not match to the roster.
+  const guests = await prisma.activityGuest.findMany({ select: { id: true, name: true } });
+  const staleGuestIds = guests.filter((g) => normalizeName(g.name) === normalizeName(from)).map((g) => g.id);
+
+  const [updated] = await prisma.$transaction([
+    prisma.player.update({ where: { id: matches[0].id }, data: { name: to } }),
+    prisma.activityGuest.updateMany({ where: { id: { in: staleGuestIds } }, data: { name: to } }),
+  ]);
+
+  return NextResponse.json({
+    player: { id: updated.id, from: matches[0].name, to: updated.name },
+    renamedGuestEntries: staleGuestIds.length,
+  });
 }

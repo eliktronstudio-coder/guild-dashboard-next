@@ -176,7 +176,10 @@ async function handleRename(message) {
       return;
     }
     await message.react("✅");
-    await message.reply(`Переименовал в составе: «${data.player.from}» → «${data.player.to}».`);
+    const extra = data.renamedGuestEntries
+      ? ` Также обновлено записей в активностях: ${data.renamedGuestEntries}.`
+      : "";
+    await message.reply(`Переименовал в составе: «${data.player.from}» → «${data.player.to}».${extra}`);
   } catch (err) {
     console.error("Ошибка переименования:", err);
     await message.react("❌");
