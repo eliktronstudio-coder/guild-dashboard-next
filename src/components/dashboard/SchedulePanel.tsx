@@ -52,7 +52,7 @@ export default function SchedulePanel() {
               {formatSlotTime(slot.minutes)}
             </span>
             <span className="min-w-0 flex-1 truncate text-foreground">{slot.name}</span>
-            <span className="flex-shrink-0 whitespace-nowrap text-xs text-muted">
+            <span className="flex-shrink-0 whitespace-nowrap text-[15px] font-medium text-muted">
               {formatCountdown(slot.inMinutes)}
             </span>
           </div>
