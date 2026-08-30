@@ -47,13 +47,17 @@ export default function SchedulePanel() {
               {dayLabel(slot.day, today)}
             </p>
           )}
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 text-sm">
-            <span className="flex-shrink-0 font-heading text-[16px] font-bold tabular-nums text-accent">
+          <div className="flex min-h-[92px] items-center gap-4 rounded-lg border border-border bg-surface px-4 py-3">
+            <span className="flex-shrink-0 font-heading text-[22px] font-bold tabular-nums text-accent">
               {formatSlotTime(slot.minutes)}
             </span>
-            <span className="min-w-0 flex-1 truncate text-foreground">{slot.name}</span>
-            <span className="flex-shrink-0 whitespace-nowrap text-[15px] font-medium text-muted">
-              {formatCountdown(slot.inMinutes)}
+            {/* Stacked: at one-third column width a single line leaves the name
+                only ~55px, which truncates even short boss names. */}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-medium text-foreground">{slot.name}</span>
+              <span className="mt-1 block truncate text-[15px] text-muted">
+                {slot.inMinutes <= 0 ? "сейчас" : `через ${formatCountdown(slot.inMinutes)}`}
+              </span>
             </span>
           </div>
         </div>
