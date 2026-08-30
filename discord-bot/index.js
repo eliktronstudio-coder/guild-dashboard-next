@@ -13,6 +13,7 @@ const {
 const {
   DISCORD_BOT_TOKEN,
   DISCORD_CHANNEL_ID,
+  DISCORD_RENAME_CHANNEL_ID,
   BOT_API_SECRET,
   SITE_API_URL = "http://localhost:3000",
   VISION_PROXY_URL,
@@ -41,10 +42,24 @@ const client = new Client({
 
 client.once(Events.ClientReady, () => {
   console.log(`Бот запущен как ${client.user.tag}, слушаю канал ${DISCORD_CHANNEL_ID}`);
+  if (!DISCORD_RENAME_CHANNEL_ID) {
+    console.log("DISCORD_RENAME_CHANNEL_ID не задан — переименования отключены.");
+    return;
+  }
+  const renameChannel = client.channels.cache.get(DISCORD_RENAME_CHANNEL_ID);
+  if (!renameChannel) {
+    console.error(`Канал ренеймов ${DISCORD_RENAME_CHANNEL_ID} не виден боту — дайте право «Просматривать канал».`);
+  } else {
+    console.log(`Слушаю канал ренеймов «${renameChannel.name}» (${DISCORD_RENAME_CHANNEL_ID})`);
+  }
 });
 
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
+  if (DISCORD_RENAME_CHANNEL_ID && message.channelId === DISCORD_RENAME_CHANNEL_ID) {
+    await handleRename(message);
+    return;
+  }
   if (message.channelId !== DISCORD_CHANNEL_ID) return;
 
   const images = [...message.attachments.values()].filter((a) => (a.contentType || "").startsWith("image/"));
@@ -120,6 +135,54 @@ client.on(Events.MessageCreate, async (message) => {
     await message.reply(`Не получилось создать активность: ${err.message}`);
   }
 });
+
+const MAX_NICK = 40; // должно совпадать с /api/bot/players/rename
+const ARROW_RE = /^(.+?)\s*(?:->|=>|→|–|—)\s*(.+)$/;
+const HYPHEN_RE = /^(\S+)\s*-\s*(\S+)$/;
+
+/**
+ * Разбирает «СтарыйНик - НовыйНик». Стрелку можно окружать чем угодно, а
+ * простой дефис считается разделителем только когда с обеих сторон одно слово —
+ * иначе обычная фраза вроде «кто-нибудь тут?» была бы принята за переименование.
+ */
+function parseRename(content) {
+  const text = content.trim();
+  const match = text.match(ARROW_RE) || text.match(HYPHEN_RE);
+  if (!match) return null;
+  const from = match[1].trim();
+  const to = match[2].trim();
+  if (!from || !to || from.length > MAX_NICK || to.length > MAX_NICK) return null;
+  return { from, to };
+}
+
+/**
+ * «СтарыйНик - НовыйНик» в канале ренеймов переименовывает игрока на сайте.
+ */
+async function handleRename(message) {
+  const parsed = parseRename(message.content);
+  if (!parsed) return;
+  const { from, to } = parsed;
+
+  try {
+    const res = await fetch(`${SITE_API_URL}/api/bot/players/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
+      body: JSON.stringify({ from, to }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      await message.react("❌");
+      await message.reply(data?.error || `Сайт вернул ошибку (${res.status}).`);
+      return;
+    }
+    await message.react("✅");
+    await message.reply(`Переименовал в составе: «${data.player.from}» → «${data.player.to}».`);
+  } catch (err) {
+    console.error("Ошибка переименования:", err);
+    await message.react("❌");
+    await message.reply(`Не получилось переименовать: ${err.message}`);
+  }
+}
 
 async function askActivityOptions(message) {
   const categoryRow = new ActionRowBuilder().addComponents(
