@@ -3,7 +3,8 @@
 import { useSyncExternalStore } from "react";
 import { DAY_NAMES, formatCountdown, formatSlotTime, mskNow, upcomingSlots } from "@/lib/schedule";
 
-const SHOWN = 8;
+/** Enough slots to scroll through; only the first few are visible at rest. */
+const SHOWN = 14;
 const TICK_MS = 15_000;
 
 function subscribe(onChange: () => void) {
@@ -30,7 +31,7 @@ export default function SchedulePanel() {
   const nowMs = useSyncExternalStore(subscribe, getSnapshot, () => null);
 
   if (nowMs === null) {
-    return <div className="min-h-[255px]" aria-hidden="true" />;
+    return <div className="h-[196px]" aria-hidden="true" />;
   }
 
   const now = new Date(nowMs);
@@ -38,7 +39,7 @@ export default function SchedulePanel() {
   const slots = upcomingSlots(now, SHOWN);
 
   return (
-    <div className="max-h-[320px] min-h-[255px] space-y-[5px] overflow-y-auto pr-1">
+    <div className="scroll-slim h-[196px] space-y-[5px] overflow-y-auto pr-2">
       {slots.map((slot, i) => (
         <div key={`${slot.day}-${slot.minutes}-${slot.name}`}>
           {(i === 0 || slot.day !== slots[i - 1].day) && (

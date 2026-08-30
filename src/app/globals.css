@@ -155,3 +155,22 @@ table th {
   background-image: var(--row-tint-hover);
 }
 
+
+/* Slim themed scrollbar for in-panel lists, instead of the OS default bar. */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent-dim) transparent;
+}
+.scroll-slim::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: var(--accent-dim);
+  border-radius: 999px;
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
