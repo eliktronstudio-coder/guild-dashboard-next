@@ -10,6 +10,7 @@ import DashboardPanel from "@/components/dashboard/DashboardPanel";
 import SectionHeader from "@/components/dashboard/SectionHeader";
 import GuildRankRow from "@/components/dashboard/GuildRankRow";
 import ActivityRow from "@/components/dashboard/ActivityRow";
+import SchedulePanel from "@/components/dashboard/SchedulePanel";
 import BlurGate from "@/components/BlurGate";
 import { daysUntilNextPayout } from "@/lib/payout";
 import { getCurrentUser } from "@/lib/auth";
@@ -158,7 +159,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
         <DashboardPanel className="min-w-0">
           <SectionHeader title="Динамика казны" right={<span className="text-xs text-muted">золото</span>} />
           <div className="min-h-[255px] max-h-[320px]">
@@ -178,6 +179,14 @@ export default async function DashboardPage() {
               <AttendanceChart data={attendanceChart} />
             )}
           </div>
+        </DashboardPanel>
+
+        <DashboardPanel className="min-w-0">
+          <SectionHeader
+            title="До активностей"
+            right={<span className="text-xs text-muted">по МСК</span>}
+          />
+          <SchedulePanel />
         </DashboardPanel>
       </div>
 

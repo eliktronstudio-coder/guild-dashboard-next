@@ -1,0 +1,62 @@
+"use client";
+
+import { useSyncExternalStore } from "react";
+import { DAY_NAMES, formatCountdown, formatSlotTime, mskNow, upcomingSlots } from "@/lib/schedule";
+
+const SHOWN = 8;
+const TICK_MS = 15_000;
+
+function subscribe(onChange: () => void) {
+  const id = setInterval(onChange, TICK_MS);
+  return () => clearInterval(id);
+}
+
+/** Clock bucketed to the tick, so a render pass always sees one stable value. */
+function getSnapshot() {
+  const t = Date.now();
+  return t - (t % TICK_MS);
+}
+
+/** Day header for a slot: "Сегодня" / "Завтра" / weekday name, relative to MSK. */
+function dayLabel(slotDay: number, todayDay: number) {
+  if (slotDay === todayDay) return "Сегодня";
+  if (slotDay === (todayDay + 1) % 7) return "Завтра";
+  return DAY_NAMES[slotDay];
+}
+
+export default function SchedulePanel() {
+  // null on the server: the countdown depends on the current time, which the
+  // server and the browser would disagree on during hydration.
+  const nowMs = useSyncExternalStore(subscribe, getSnapshot, () => null);
+
+  if (nowMs === null) {
+    return <div className="min-h-[255px]" aria-hidden="true" />;
+  }
+
+  const now = new Date(nowMs);
+  const today = mskNow(now).day;
+  const slots = upcomingSlots(now, SHOWN);
+
+  return (
+    <div className="max-h-[320px] min-h-[255px] space-y-[5px] overflow-y-auto pr-1">
+      {slots.map((slot, i) => (
+        <div key={`${slot.day}-${slot.minutes}-${slot.name}`}>
+          {(i === 0 || slot.day !== slots[i - 1].day) && (
+            <p className="px-1 pb-1 pt-2 text-[11px] uppercase tracking-wider text-muted-2 first:pt-0">
+              {dayLabel(slot.day, today)}
+            </p>
+          )}
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-sm">
+            <span className="flex-shrink-0 font-heading text-[13px] font-bold tabular-nums text-accent">
+              {formatSlotTime(slot.minutes)}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-foreground">{slot.name}</span>
+            <span className="flex-shrink-0 whitespace-nowrap text-xs text-muted">
+              {formatCountdown(slot.inMinutes)}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
