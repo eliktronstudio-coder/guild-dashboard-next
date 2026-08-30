@@ -48,7 +48,18 @@ client.once(Events.ClientReady, () => {
   }
   const renameChannel = client.channels.cache.get(DISCORD_RENAME_CHANNEL_ID);
   if (!renameChannel) {
-    console.error(`Канал ренеймов ${DISCORD_RENAME_CHANNEL_ID} не виден боту — дайте право «Просматривать канал».`);
+    console.error(`Канал ренеймов ${DISCORD_RENAME_CHANNEL_ID} не найден у бота.`);
+    return;
+  }
+  // Каналы, которые боту не видны, всё равно попадают в кэш — само наличие
+  // канала ничего не доказывает, нужны конкретные права.
+  const perms = renameChannel.permissionsFor(client.user);
+  const missing = ["ViewChannel", "ReadMessageHistory", "SendMessages", "AddReactions"].filter((x) => !perms?.has(x));
+  if (missing.length > 0) {
+    console.error(
+      `Каналу ренеймов «${renameChannel.name}» не хватает прав: ${missing.join(", ")}. ` +
+        "Переименования работать не будут."
+    );
   } else {
     console.log(`Слушаю канал ренеймов «${renameChannel.name}» (${DISCORD_RENAME_CHANNEL_ID})`);
   }
