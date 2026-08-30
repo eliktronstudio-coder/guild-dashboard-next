@@ -14,7 +14,7 @@ export default function StatusBadge({ label, tone }: { label: string; tone: Tone
   return (
     <span
       className={clsx(
-        "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-xs font-medium",
         toneClass[tone]
       )}
     >

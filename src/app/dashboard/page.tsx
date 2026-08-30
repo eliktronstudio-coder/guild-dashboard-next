@@ -181,7 +181,7 @@ export default async function DashboardPage() {
         </DashboardPanel>
       </div>
 
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
         <DashboardPanel art={art.leadersPrime}>
           <SectionHeader
             title="Посещаемость: Прайм"
@@ -243,34 +243,34 @@ export default async function DashboardPage() {
             </div>
           )}
         </DashboardPanel>
-      </div>
 
-      <DashboardPanel>
-        <SectionHeader
-          title="Последние активности"
-          right={
-            <Link href="/activities" className="text-xs text-accent hover:underline">
-              Все
-            </Link>
-          }
-        />
-        {recentActivities.length === 0 ? (
-          <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-        ) : (
-          <div className="space-y-[5px]">
-            {recentActivities.map((a) => (
-              <ActivityRow
-                key={a.id}
-                href={`/activities/${a.id}`}
-                name={a.name}
-                participants={a.participants}
-                status={a.status}
-                date={a.date}
-              />
-            ))}
-          </div>
-        )}
-      </DashboardPanel>
+        <DashboardPanel>
+          <SectionHeader
+            title="Последние активности"
+            right={
+              <Link href="/activities" className="text-xs text-accent hover:underline">
+                Все
+              </Link>
+            }
+          />
+          {recentActivities.length === 0 ? (
+            <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+          ) : (
+            <div className="space-y-[5px]">
+              {recentActivities.map((a) => (
+                <ActivityRow
+                  key={a.id}
+                  href={`/activities/${a.id}`}
+                  name={a.name}
+                  participants={a.participants}
+                  status={a.status}
+                  date={a.date}
+                />
+              ))}
+            </div>
+          )}
+        </DashboardPanel>
+      </div>
     </div>
     </BlurGate>
   );
