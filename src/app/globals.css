@@ -174,3 +174,13 @@ table th {
 .scroll-slim::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
 }
+
+/* Ячейка настраиваемой сетки дашборда. Заданные пользователем ширина и высота
+   применяются только на широких экранах — на мобильном панели всегда в одну
+   колонку и по содержимому. */
+@media (min-width: 1024px) {
+  .panel-cell {
+    grid-column: span var(--panel-span) / span var(--panel-span);
+    height: var(--panel-height);
+  }
+}

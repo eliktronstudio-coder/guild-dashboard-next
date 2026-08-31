@@ -11,6 +11,7 @@ import SectionHeader from "@/components/dashboard/SectionHeader";
 import GuildRankRow from "@/components/dashboard/GuildRankRow";
 import ActivityRow from "@/components/dashboard/ActivityRow";
 import SchedulePanel from "@/components/dashboard/SchedulePanel";
+import CustomizableGrid from "@/components/dashboard/CustomizableGrid";
 import BlurGate from "@/components/BlurGate";
 import { daysUntilNextPayout } from "@/lib/payout";
 import { getCurrentUser } from "@/lib/auth";
@@ -159,127 +160,165 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
-        <DashboardPanel className="min-w-0">
-          <SectionHeader title="Динамика казны" right={<span className="text-xs text-muted">золото</span>} />
-          <div className="min-h-[255px] max-h-[320px]">
-            {treasuryChart.length === 0 ? (
-              <EmptyState variant="dashboard" />
-            ) : (
-              <TreasuryChart data={treasuryChart} />
-            )}
-          </div>
-        </DashboardPanel>
-        <DashboardPanel className="min-w-0">
-          <SectionHeader title="Посещаемость" right={<span className="text-xs text-muted">участия / день</span>} />
-          <div className="min-h-[255px] max-h-[320px]">
-            {attendanceChart.length === 0 ? (
-              <EmptyState variant="dashboard" />
-            ) : (
-              <AttendanceChart data={attendanceChart} />
-            )}
-          </div>
-        </DashboardPanel>
-
-        <DashboardPanel className="min-w-0">
-          <SectionHeader
-            title="До активностей"
-            right={<span className="text-xs text-muted">по МСК</span>}
-          />
-          <SchedulePanel />
-        </DashboardPanel>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2 xl:grid-cols-3">
-        <DashboardPanel art={art.leadersPrime}>
-          <SectionHeader
-            title="Посещаемость: Прайм"
-            right={
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-muted">за всё время</span>
-                <Link href="/players" className="text-xs text-accent hover:underline">
-                  Состав
-                </Link>
-              </div>
-            }
-          />
-          {primeTop.length === 0 ? (
-            <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-          ) : (
-            <div className="space-y-[5px]">
-              {primeTop.map((p, i) => (
-                <GuildRankRow
-                  key={p.id}
-                  href={`/players/${p.id}`}
-                  rank={i + 1}
-                  name={p.name}
-                  role={p.role}
-                  valueLabel={`${p.attendancePctPrime}%`}
-                  valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
+      <CustomizableGrid
+        panels={[
+          {
+            id: "treasury-chart",
+            label: "Динамика казны",
+            defaultSpan: 4,
+            content: (
+              <DashboardPanel className="min-w-0">
+                <SectionHeader title="Динамика казны" right={<span className="text-xs text-muted">золото</span>} />
+                <div className="min-h-[255px] max-h-[320px]">
+                  {treasuryChart.length === 0 ? (
+                    <EmptyState variant="dashboard" />
+                  ) : (
+                    <TreasuryChart data={treasuryChart} />
+                  )}
+                </div>
+              </DashboardPanel>
+            ),
+          },
+          {
+            id: "attendance-chart",
+            label: "Посещаемость",
+            defaultSpan: 4,
+            content: (
+              <DashboardPanel className="min-w-0">
+                <SectionHeader title="Посещаемость" right={<span className="text-xs text-muted">участия / день</span>} />
+                <div className="min-h-[255px] max-h-[320px]">
+                  {attendanceChart.length === 0 ? (
+                    <EmptyState variant="dashboard" />
+                  ) : (
+                    <AttendanceChart data={attendanceChart} />
+                  )}
+                </div>
+              </DashboardPanel>
+            ),
+          },
+          {
+            id: "schedule",
+            label: "До активностей",
+            defaultSpan: 4,
+            content: (
+              <DashboardPanel className="min-w-0">
+                <SectionHeader
+                  title="До активностей"
+                  right={<span className="text-xs text-muted">по МСК</span>}
                 />
-              ))}
-            </div>
-          )}
-        </DashboardPanel>
-
-        <DashboardPanel art={art.leadersMiniRb}>
-          <SectionHeader
-            title="Посещаемость: Мини-РБ"
-            right={
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-muted">за всё время</span>
-                <Link href="/players" className="text-xs text-accent hover:underline">
-                  Состав
-                </Link>
-              </div>
-            }
-          />
-          {miniRbTop.length === 0 ? (
-            <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-          ) : (
-            <div className="space-y-[5px]">
-              {miniRbTop.map((p, i) => (
-                <GuildRankRow
-                  key={p.id}
-                  href={`/players/${p.id}`}
-                  rank={i + 1}
-                  name={p.name}
-                  role={p.role}
-                  valueLabel={`${p.attendancePctMiniRb}%`}
-                  valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
+                <SchedulePanel />
+              </DashboardPanel>
+            ),
+          },
+          {
+            id: "leaders-prime",
+            label: "Посещаемость: Прайм",
+            defaultSpan: 4,
+            content: (
+              <DashboardPanel art={art.leadersPrime}>
+                <SectionHeader
+                  title="Посещаемость: Прайм"
+                  right={
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted">за всё время</span>
+                      <Link href="/players" className="text-xs text-accent hover:underline">
+                        Состав
+                      </Link>
+                    </div>
+                  }
                 />
-              ))}
-            </div>
-          )}
-        </DashboardPanel>
-
-        <DashboardPanel>
-          <SectionHeader
-            title="Последние активности"
-            right={
-              <Link href="/activities" className="text-xs text-accent hover:underline">
-                Все
-              </Link>
-            }
-          />
-          {recentActivities.length === 0 ? (
-            <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-          ) : (
-            <div className="space-y-[5px]">
-              {recentActivities.map((a) => (
-                <ActivityRow
-                  key={a.id}
-                  href={`/activities/${a.id}`}
-                  name={a.name}
-                  participants={a.participants}
-                  status={a.status}
-                  date={a.date}
+                {primeTop.length === 0 ? (
+                  <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                ) : (
+                  <div className="space-y-[5px]">
+                    {primeTop.map((p, i) => (
+                      <GuildRankRow
+                        key={p.id}
+                        href={`/players/${p.id}`}
+                        rank={i + 1}
+                        name={p.name}
+                        role={p.role}
+                        valueLabel={`${p.attendancePctPrime}%`}
+                        valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
+                      />
+                    ))}
+                  </div>
+                )}
+              </DashboardPanel>
+            ),
+          },
+          {
+            id: "leaders-minirb",
+            label: "Посещаемость: Мини-РБ",
+            defaultSpan: 4,
+            content: (
+              <DashboardPanel art={art.leadersMiniRb}>
+                <SectionHeader
+                  title="Посещаемость: Мини-РБ"
+                  right={
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted">за всё время</span>
+                      <Link href="/players" className="text-xs text-accent hover:underline">
+                        Состав
+                      </Link>
+                    </div>
+                  }
                 />
-              ))}
-            </div>
-          )}
-        </DashboardPanel>
-      </div>
+                {miniRbTop.length === 0 ? (
+                  <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                ) : (
+                  <div className="space-y-[5px]">
+                    {miniRbTop.map((p, i) => (
+                      <GuildRankRow
+                        key={p.id}
+                        href={`/players/${p.id}`}
+                        rank={i + 1}
+                        name={p.name}
+                        role={p.role}
+                        valueLabel={`${p.attendancePctMiniRb}%`}
+                        valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
+                      />
+                    ))}
+                  </div>
+                )}
+              </DashboardPanel>
+            ),
+          },
+          {
+            id: "recent-activities",
+            label: "Последние активности",
+            defaultSpan: 4,
+            content: (
+              <DashboardPanel>
+                <SectionHeader
+                  title="Последние активности"
+                  right={
+                    <Link href="/activities" className="text-xs text-accent hover:underline">
+                      Все
+                    </Link>
+                  }
+                />
+                {recentActivities.length === 0 ? (
+                  <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                ) : (
+                  <div className="space-y-[5px]">
+                    {recentActivities.map((a) => (
+                      <ActivityRow
+                        key={a.id}
+                        href={`/activities/${a.id}`}
+                        name={a.name}
+                        participants={a.participants}
+                        status={a.status}
+                        date={a.date}
+                      />
+                    ))}
+                  </div>
+                )}
+              </DashboardPanel>
+            ),
+          },
+        ]}
+      />
     </div>
     </BlurGate>
   );
