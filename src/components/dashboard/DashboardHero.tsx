@@ -10,7 +10,9 @@ export default function DashboardHero() {
         fill
         priority
         sizes="100vw"
-        className="object-cover opacity-40"
+        // Кадр смещён вверх: по центру на широких экранах голова самурая
+        // уходила выше видимой полосы.
+        className="object-cover object-[center_25%] opacity-40"
       />
       <div
         className="absolute inset-0"
