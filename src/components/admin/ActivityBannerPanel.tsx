@@ -5,15 +5,25 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { Plus, Trash2, Pencil, X, ImageOff, Search } from "lucide-react";
 
-/** Ширина, до которой ужимается загруженное фото. Баннер показывается миниатюрой,
- *  а исходные скрины из игры весят по 2 МБ — в базу такое класть незачем. */
-const TARGET_WIDTH = 640;
 const MAX_IMAGE_BYTES = 800_000;
+/**
+ * Баннер на странице активности растягивается на всю ширину карточки, поэтому
+ * 1600px хватает и для retina. Больше класть в базу смысла нет: картинки
+ * хранятся строками и грузятся вместе со списком баннеров.
+ * Варианты перебираются по очереди, пока результат не влезет в лимит:
+ * сначала теряем качество, потом разрешение.
+ */
+const QUALITY_STEPS = [0.92, 0.85, 0.78, 0.7];
+const WIDTH_STEPS = [1600, 1280, 1024, 800];
 
-type Banner = { id: string; name: string; imageUrl: string };
-type FormState = { name: string; imageUrl: string | null };
+type Banner = { id: string; name: string; imageUrl: string; height: number | null; widthPct: number | null };
+type FormState = { name: string; imageUrl: string | null; height: string; widthPct: string };
 
-const emptyForm: FormState = { name: "", imageUrl: null };
+/** Значения по умолчанию совпадают с тем, как баннер рисуется без настроек. */
+const DEFAULT_HEIGHT = 160;
+const DEFAULT_WIDTH_PCT = 100;
+
+const emptyForm: FormState = { name: "", imageUrl: null, height: String(DEFAULT_HEIGHT), widthPct: String(DEFAULT_WIDTH_PCT) };
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -24,26 +34,38 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-/** Ужимает картинку до TARGET_WIDTH и переводит в webp. */
-function downscale(dataUrl: string): Promise<string> {
+function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
-    img.onload = () => {
-      const scale = Math.min(1, TARGET_WIDTH / img.width);
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * scale);
-      canvas.height = Math.round(img.height * scale);
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        reject(new Error("Не удалось обработать изображение."));
-        return;
-      }
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL("image/webp", 0.82));
-    };
+    img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("Не удалось прочитать изображение."));
     img.src = dataUrl;
   });
+}
+
+function encode(img: HTMLImageElement, width: number, quality: number) {
+  const scale = Math.min(1, width / img.width);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.width * scale);
+  canvas.height = Math.round(img.height * scale);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Не удалось обработать изображение.");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/webp", quality);
+}
+
+/** Берёт самый качественный вариант, который помещается в лимит хранения. */
+async function compress(dataUrl: string): Promise<string> {
+  const img = await loadImage(dataUrl);
+  let last = "";
+  for (const width of WIDTH_STEPS) {
+    for (const quality of QUALITY_STEPS) {
+      last = encode(img, width, quality);
+      if (last.length <= MAX_IMAGE_BYTES) return last;
+    }
+  }
+  return last;
 }
 
 export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) {
@@ -68,7 +90,12 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
   }
 
   function startEdit(banner: Banner) {
-    setForm({ name: banner.name, imageUrl: banner.imageUrl });
+    setForm({
+      name: banner.name,
+      imageUrl: banner.imageUrl,
+      height: String(banner.height ?? DEFAULT_HEIGHT),
+      widthPct: String(banner.widthPct ?? DEFAULT_WIDTH_PCT),
+    });
     setError(null);
     setAdding(false);
     setEditingId(banner.id);
@@ -88,7 +115,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
       return;
     }
     try {
-      const compressed = await downscale(await readFileAsDataUrl(file));
+      const compressed = await compress(await readFileAsDataUrl(file));
       if (compressed.length > MAX_IMAGE_BYTES) {
         setError("Фото слишком большое даже после сжатия — возьмите картинку поменьше.");
         return;
@@ -112,7 +139,12 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
       const res = await fetch(editingId ? `/api/activity-banners/${editingId}` : "/api/activity-banners", {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, imageUrl: form.imageUrl }),
+        body: JSON.stringify({
+          name: form.name,
+          imageUrl: form.imageUrl,
+          height: Number(form.height),
+          widthPct: Number(form.widthPct),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -199,6 +231,50 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
                   className="w-full text-xs text-muted file:mr-2 file:rounded-md file:border file:border-border file:bg-surface-2 file:px-2 file:py-1 file:text-xs file:text-foreground"
                 />
               </div>
+            </div>
+
+            <div className="sm:col-span-3">
+              <label className="mb-1 block text-xs text-muted">Размер баннера на странице активности</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs text-muted">
+                  Высота
+                  <input
+                    type="number"
+                    min={60}
+                    max={600}
+                    value={form.height}
+                    onChange={(e) => setForm((f) => ({ ...f, height: e.target.value }))}
+                    className="w-20 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent"
+                  />
+                  px
+                </label>
+                <label className="flex items-center gap-2 text-xs text-muted">
+                  Ширина
+                  <input
+                    type="number"
+                    min={10}
+                    max={100}
+                    value={form.widthPct}
+                    onChange={(e) => setForm((f) => ({ ...f, widthPct: e.target.value }))}
+                    className="w-20 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent"
+                  />
+                  % от карточки
+                </label>
+              </div>
+              {form.imageUrl && (
+                <div className="mt-2 rounded-md border border-border bg-surface-2 p-2">
+                  <p className="mb-1.5 text-xs text-muted-2">Предпросмотр</p>
+                  <div
+                    className="relative overflow-hidden rounded"
+                    style={{
+                      height: `${Math.min(600, Math.max(60, Number(form.height) || DEFAULT_HEIGHT))}px`,
+                      width: `${Math.min(100, Math.max(10, Number(form.widthPct) || DEFAULT_WIDTH_PCT))}%`,
+                    }}
+                  >
+                    <Image src={form.imageUrl} alt="" fill sizes="100vw" className="object-cover" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {error && <p className="text-xs text-danger sm:col-span-3">{error}</p>}

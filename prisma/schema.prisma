@@ -138,5 +138,8 @@ model ActivityBanner {
   id        String   @id @default(cuid())
   name      String   @unique
   imageUrl  String
+  /// Размер баннера на странице активности: высота в px, ширина в % от карточки.
+  height    Int?
+  widthPct  Int?
   createdAt DateTime @default(now())
 }

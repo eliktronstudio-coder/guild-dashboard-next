@@ -22,6 +22,8 @@ export default async function ActivityDetailPage({
   ]);
   if (!activity) notFound();
 
+  const banner = findLabelMatch(activity.name, banners);
+
   return (
     <div className="space-y-4">
       <div>
@@ -36,7 +38,9 @@ export default async function ActivityDetailPage({
           catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price, imageUrl: c.imageUrl }))}
           isAdmin={canManageActivitiesRole(user?.role)}
           canManageDrops={isFullAdminRole(user?.role)}
-          bannerUrl={findLabelMatch(activity.name, banners)?.imageUrl ?? null}
+          bannerUrl={banner?.imageUrl ?? null}
+          bannerHeight={banner?.height ?? undefined}
+          bannerWidthPct={banner?.widthPct ?? undefined}
         />
       </BlurGate>
     </div>
