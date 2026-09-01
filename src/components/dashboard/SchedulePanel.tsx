@@ -49,28 +49,31 @@ export default function SchedulePanel({ banners = {} }: { banners?: Record<strin
               {dayLabel(slot.day, today)}
             </p>
           )}
-          <div className="flex min-h-[92px] items-center gap-4 rounded-lg border border-border bg-surface px-4 py-3">
-            <span className="flex-shrink-0 font-heading text-[22px] font-bold tabular-nums text-accent">
+          <div className="relative flex min-h-[92px] items-center gap-4 overflow-hidden rounded-lg border border-border bg-surface px-4 py-3">
+            {banners[slot.name] && (
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+                <Image src={banners[slot.name]} alt="" fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" />
+                {/* Текст лежит слева, поэтому картинка раскрывается только справа. */}
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(90deg, rgba(var(--art-scrim),0.97) 0%, rgba(var(--art-scrim),0.9) 45%, rgba(var(--art-scrim),0.45) 75%, rgba(var(--art-scrim),0.15) 100%)",
+                  }}
+                />
+              </div>
+            )}
+            <span className="relative flex-shrink-0 font-heading text-[22px] font-bold tabular-nums text-accent">
               {formatSlotTime(slot.minutes)}
             </span>
             {/* Stacked: at one-third column width a single line leaves the name
                 only ~55px, which truncates even short boss names. */}
-            <span className="min-w-0 flex-1">
+            <span className="relative min-w-0 flex-1">
               <span className="block truncate text-[15px] font-medium text-foreground">{slot.name}</span>
               <span className="mt-1 block truncate text-[15px] text-muted">
                 {slot.inMinutes <= 0 ? "сейчас" : `через ${formatCountdown(slot.inMinutes)}`}
               </span>
             </span>
-            {banners[slot.name] && (
-              <Image
-                src={banners[slot.name]}
-                alt=""
-                width={56}
-                height={34}
-                unoptimized
-                className="h-[34px] w-14 flex-shrink-0 rounded object-cover"
-              />
-            )}
           </div>
         </div>
       ))}
