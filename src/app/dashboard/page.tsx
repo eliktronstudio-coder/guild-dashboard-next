@@ -25,7 +25,10 @@ import {
   getDropGoldGeneralAuto,
   getDropGoldPrimeManual,
   getDropGoldMiniRb,
+  getActivityBanners,
 } from "@/lib/queries";
+import { findLabelMatch } from "@/lib/nameMatch";
+import { SCHEDULE } from "@/lib/schedule";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -61,6 +64,7 @@ export default async function DashboardPage() {
     dropGoldGeneralAuto,
     dropGoldPrimeManual,
     dropGoldMiniRb,
+    activityBanners,
   ] = await Promise.all([
     getCurrentUser(),
     topPlayersByAttendanceCategory("attendancePctPrime", 5),
@@ -73,7 +77,16 @@ export default async function DashboardPage() {
     getDropGoldGeneralAuto(),
     getDropGoldPrimeManual(),
     getDropGoldMiniRb(),
+    getActivityBanners(),
   ]);
+
+  // Баннеры для расписания подбираются здесь, а не в клиентском компоненте:
+  // иначе в браузер уехали бы картинки всех активностей, а не только нужных.
+  const scheduleBanners: Record<string, string> = {};
+  for (const name of new Set(SCHEDULE.map((s) => s.name))) {
+    const banner = findLabelMatch(name, activityBanners);
+    if (banner) scheduleBanners[name] = banner.imageUrl;
+  }
   const recentActivities = allActivities.slice(0, 5);
   const payoutDays = daysUntilNextPayout();
   const isRandom = user?.role === "random";
@@ -210,7 +223,7 @@ export default async function DashboardPage() {
                   title="До активностей"
                   right={<span className="text-xs text-muted">по МСК</span>}
                 />
-                <SchedulePanel />
+                <SchedulePanel banners={scheduleBanners} />
               </DashboardPanel>
             ),
           },

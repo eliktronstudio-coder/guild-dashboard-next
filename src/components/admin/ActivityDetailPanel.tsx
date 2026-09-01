@@ -56,6 +56,7 @@ export default function ActivityDetailPanel({
   catalog,
   isAdmin,
   canManageDrops = isAdmin,
+  bannerUrl = null,
 }: {
   activity: Activity;
   players: Player[];
@@ -63,6 +64,8 @@ export default function ActivityDetailPanel({
   isAdmin: boolean;
   /** РЛ управляет активностью (isAdmin), но не дропом/казной — только Админ/ГМ. */
   canManageDrops?: boolean;
+  /** Фото из «Баннеров активностей», подобранное по названию. */
+  bannerUrl?: string | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(activity.status);
@@ -315,7 +318,21 @@ export default function ActivityDetailPanel({
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       <div className="space-y-4 lg:col-span-2">
-        <div className="rounded-lg border border-border bg-surface p-4">
+        <div className="overflow-hidden rounded-lg border border-border bg-surface">
+          {bannerUrl && (
+            <div className="relative h-[160px] w-full">
+              <Image src={bannerUrl} alt="" fill sizes="(max-width: 1024px) 100vw, 66vw" className="object-cover" />
+              {/* Затемнение снизу — под ним начинается заголовок с бейджами. */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundImage:
+                    "linear-gradient(180deg, rgba(var(--art-scrim),0.1) 0%, rgba(var(--art-scrim),0.55) 65%, rgba(var(--art-scrim),0.95) 100%)",
+                }}
+              />
+            </div>
+          )}
+          <div className="p-4">
           {!editingActivity && (
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold">{activity.name}</h2>
@@ -558,6 +575,7 @@ export default function ActivityDetailPanel({
             </div>
           </div>
           )}
+          </div>
         </div>
 
         <div className="rounded-lg border border-border bg-surface p-4">

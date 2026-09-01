@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import Image from "next/image";
 import { DAY_NAMES, formatCountdown, formatSlotTime, mskNow, upcomingSlots } from "@/lib/schedule";
 
 /** Enough slots to scroll through; only the first few are visible at rest. */
@@ -25,7 +26,8 @@ function dayLabel(slotDay: number, todayDay: number) {
   return DAY_NAMES[slotDay];
 }
 
-export default function SchedulePanel() {
+/** name -> фото баннера; подбирается на сервере, чтобы не тащить в браузер все картинки. */
+export default function SchedulePanel({ banners = {} }: { banners?: Record<string, string> }) {
   // null on the server: the countdown depends on the current time, which the
   // server and the browser would disagree on during hydration.
   const nowMs = useSyncExternalStore(subscribe, getSnapshot, () => null);
@@ -59,6 +61,16 @@ export default function SchedulePanel() {
                 {slot.inMinutes <= 0 ? "сейчас" : `через ${formatCountdown(slot.inMinutes)}`}
               </span>
             </span>
+            {banners[slot.name] && (
+              <Image
+                src={banners[slot.name]}
+                alt=""
+                width={56}
+                height={34}
+                unoptimized
+                className="h-[34px] w-14 flex-shrink-0 rounded object-cover"
+              />
+            )}
           </div>
         </div>
       ))}
