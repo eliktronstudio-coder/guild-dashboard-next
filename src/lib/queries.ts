@@ -705,3 +705,7 @@ export async function getAttendanceChartData() {
 export async function getAllPayments() {
   return prisma.payment.findMany({ orderBy: { date: "desc" }, include: { player: true } });
 }
+
+export async function getActivityBanners() {
+  return prisma.activityBanner.findMany({ orderBy: { name: "asc" } });
+}

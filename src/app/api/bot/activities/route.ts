@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { matchNames } from "@/lib/nameMatch";
 
 const MAX_IMAGE_BYTES = 800_000;
 const MAX_PARTICIPANTS = 60;
@@ -12,117 +13,6 @@ function isAuthorized(request: NextRequest) {
   if (!secret) return false;
   const header = request.headers.get("authorization");
   return header === `Bearer ${secret}`;
-}
-
-function normalizeName(name: string) {
-  return name.trim().toLowerCase();
-}
-
-// Ники/названия предметов в игровом интерфейсе иногда обрезаны многоточием
-// ("Konigzav...") — ИИ добросовестно переписывает то, что видно на скрине.
-// Для таких случаев пробуем найти запись по началу строки, но только если
-// подходит ровно одна — при неоднозначности лучше оставить для ручной проверки.
-function stripTruncationMark(name: string) {
-  const match = name.match(/^(.*?)(?:\.{3,}|…)$/);
-  return match ? match[1].trim() : null;
-}
-
-function levenshtein(a: string, b: string) {
-  const dp: number[] = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    let prevDiag = dp[0];
-    dp[0] = i;
-    for (let j = 1; j <= b.length; j++) {
-      const temp = dp[j];
-      dp[j] = a[i - 1] === b[j - 1] ? prevDiag : 1 + Math.min(prevDiag, dp[j], dp[j - 1]);
-      prevDiag = temp;
-    }
-  }
-  return dp[b.length];
-}
-
-// Мелкий/стилизованный шрифт на скрине иногда сбивает распознавание пары
-// букв (не обрезка, а именно опечатка). Ищем по близости строки — только
-// если разница минимальна и подходит ровно одна запись, иначе слишком
-// рискованно и лучше оставить для ручной проверки.
-function fuzzyThreshold(len: number) {
-  if (len < 4) return 0;
-  if (len <= 5) return 1;
-  if (len <= 10) return 2;
-  return 3;
-}
-
-function matchByPrefix<T extends { id: string; name: string }>(raw: string, candidates: T[], usedIds: Set<string>) {
-  const prefix = stripTruncationMark(raw);
-  const normalizedPrefix = prefix ? normalizeName(prefix) : "";
-  if (!prefix || normalizedPrefix.length < 2) return null;
-  const found = candidates.filter((c) => !usedIds.has(c.id) && normalizeName(c.name).startsWith(normalizedPrefix));
-  return found.length === 1 ? found[0] : null;
-}
-
-function matchByFuzzy<T extends { id: string; name: string }>(raw: string, candidates: T[], usedIds: Set<string>) {
-  const normalized = normalizeName(raw);
-  const threshold = fuzzyThreshold(normalized.length);
-  if (threshold === 0) return null;
-  let best: { item: T; distance: number } | null = null;
-  let unique = true;
-  for (const candidate of candidates) {
-    if (usedIds.has(candidate.id)) continue;
-    const distance = levenshtein(normalized, normalizeName(candidate.name));
-    if (distance > threshold) continue;
-    if (!best || distance < best.distance) {
-      best = { item: candidate, distance };
-      unique = true;
-    } else if (distance === best.distance) {
-      unique = false;
-    }
-  }
-  return best && unique ? best.item : null;
-}
-
-// Три прохода одинаковой строгости для любого списка {id, name}: точное
-// совпадение (без учёта регистра) -> обрезанное многоточием название ->
-// опечатка на 1-3 буквы. На каждом шаге совпадение принимается, только
-// если оно однозначно — иначе запись остаётся неопознанной для ручной проверки.
-function matchNames<T extends { id: string; name: string }>(rawNames: string[], candidates: T[]) {
-  const byExactName = new Map(candidates.map((c) => [normalizeName(c.name), c]));
-  const matched: { input: string; item: T }[] = [];
-  const usedIds = new Set<string>();
-  const unmatched: string[] = [];
-
-  for (const raw of rawNames) {
-    const exact = byExactName.get(normalizeName(raw));
-    if (exact && !usedIds.has(exact.id)) {
-      matched.push({ input: raw, item: exact });
-      usedIds.add(exact.id);
-    } else {
-      unmatched.push(raw);
-    }
-  }
-
-  const afterPrefix: string[] = [];
-  for (const raw of unmatched) {
-    const found = matchByPrefix(raw, candidates, usedIds);
-    if (found) {
-      matched.push({ input: raw, item: found });
-      usedIds.add(found.id);
-    } else {
-      afterPrefix.push(raw);
-    }
-  }
-
-  const stillUnmatched: string[] = [];
-  for (const raw of afterPrefix) {
-    const found = matchByFuzzy(raw, candidates, usedIds);
-    if (found) {
-      matched.push({ input: raw, item: found });
-      usedIds.add(found.id);
-    } else {
-      stillUnmatched.push(raw);
-    }
-  }
-
-  return { matched, unmatched: stillUnmatched };
 }
 
 const CATEGORIES = ["Мини-РБ", "Прайм"];

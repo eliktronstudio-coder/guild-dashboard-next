@@ -131,3 +131,12 @@ model Payment {
   archiveMonth String?
   createdAt    DateTime @default(now())
 }
+
+/// Баннер активности: название -> фото. Отдельно от Activity, потому что
+/// активностей с одним названием много, а картинка у них общая.
+model ActivityBanner {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  imageUrl  String
+  createdAt DateTime @default(now())
+}

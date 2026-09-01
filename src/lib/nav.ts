@@ -7,6 +7,7 @@ import {
   Calculator,
   ShieldCheck,
   BookOpen,
+  ImagePlay,
   type LucideIcon,
 } from "lucide-react";
 
@@ -49,6 +50,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: "/users", label: "Пользователи", icon: ShieldCheck, adminOnly: true },
       { href: "/drop-catalog", label: "Реестр дропа", icon: BookOpen, adminOnly: true },
+      { href: "/activity-banners", label: "Баннеры активностей", icon: ImagePlay, adminOnly: true },
     ],
   },
 ];

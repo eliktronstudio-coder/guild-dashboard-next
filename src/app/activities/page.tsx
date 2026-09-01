@@ -1,4 +1,12 @@
-import { getFilteredActivities, getDistinctActivityNames, getRegisteredPlayers, getAllPlayers, getDropCatalog } from "@/lib/queries";
+import {
+  getFilteredActivities,
+  getDistinctActivityNames,
+  getRegisteredPlayers,
+  getAllPlayers,
+  getDropCatalog,
+  getActivityBanners,
+} from "@/lib/queries";
+import { findLabelMatch } from "@/lib/nameMatch";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageActivitiesRole } from "@/lib/accountRoles";
 import ActivitiesList from "@/components/admin/ActivitiesList";
@@ -23,14 +31,25 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
     page: sp.page && typeof sp.page === "string" ? Math.max(1, Number(sp.page) || 1) : 1,
   };
 
-  const [result, distinctNames, players, allPlayers, user, catalog] = await Promise.all([
+  const [result, distinctNames, players, allPlayers, user, catalog, banners] = await Promise.all([
     getFilteredActivities(filters),
     getDistinctActivityNames(),
     getRegisteredPlayers(),
     getAllPlayers(),
     getCurrentUser(),
     getDropCatalog(),
+    getActivityBanners(),
   ]);
+
+  // Названия активностей приходят из игры вразнобой («АГЛ Т1», «морф»), поэтому
+  // баннер ищется тем же подбором, что и ники: точное -> по началу -> опечатка.
+  const bannerByName = new Map<string, string | null>();
+  function resolveBanner(name: string) {
+    if (!bannerByName.has(name)) {
+      bannerByName.set(name, findLabelMatch(name, banners)?.imageUrl ?? null);
+    }
+    return bannerByName.get(name) ?? null;
+  }
 
   const counts = result.activities.map((a) => a.participants);
   const avgAttendance = counts.length ? Math.round(counts.reduce((s, c) => s + c, 0) / counts.length) : 0;
@@ -40,7 +59,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
   return (
     <BlurGate blurred={user?.role === "random"}>
       <ActivitiesList
-        activities={result.activities}
+        activities={result.activities.map((a) => ({ ...a, bannerUrl: resolveBanner(a.name) }))}
         total={result.total}
         totalPages={result.totalPages}
         filters={filters}

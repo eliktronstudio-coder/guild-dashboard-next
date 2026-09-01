@@ -33,6 +33,7 @@ type ActivityRow = {
   date: string;
   dateIso: string;
   participants: number;
+  bannerUrl: string | null;
 };
 
 type PlayerOption = { id: string; name: string; role: string };
@@ -705,10 +706,22 @@ export default function ActivitiesList({
                 <tr key={a.id} className="hover:bg-surface-2">
                   <td className="whitespace-nowrap px-4 py-3 text-muted">{a.dateIso}</td>
                   <td className="px-4 py-3">
-                    <Link href={`/activities/${a.id}`} className="font-medium hover:text-accent">
-                      {a.name}
-                    </Link>
-                    {a.isNight && <span className="ml-1.5 text-xs text-muted">🌙</span>}
+                    <div className="flex items-center gap-2.5">
+                      {a.bannerUrl && (
+                        <Image
+                          src={a.bannerUrl}
+                          alt=""
+                          width={44}
+                          height={26}
+                          unoptimized
+                          className="h-[26px] w-11 flex-shrink-0 rounded object-cover"
+                        />
+                      )}
+                      <Link href={`/activities/${a.id}`} className="font-medium hover:text-accent">
+                        {a.name}
+                      </Link>
+                      {a.isNight && <span className="text-xs text-muted">🌙</span>}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
