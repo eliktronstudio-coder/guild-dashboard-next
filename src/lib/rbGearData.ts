@@ -72,3 +72,25 @@ export const RB_GEAR_ROWS: GearRow[] = [
     costs: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 255260, 536046],
   },
 ];
+
+export type ScaleRange = { label: string; lower: number; upper: number | null };
+
+/**
+ * Шкала цветов предмета: диапазон накопленного опыта РБ, при котором предмет
+ * данного цвета. Считается из той же таблицы costs — соседние ненулевые
+ * значения задают границы (costs[i] это верхняя граница ранга costs.indexOf(i)-1
+ * и одновременно нижняя для следующего), «Обычный» в шкале не участвует —
+ * это стартовое состояние предмета до всякой прокачки. Ранги с costs=0
+ * недостижимы для конкретного предмета и в шкалу не попадают.
+ */
+export function buildRankScale(costs: number[]): ScaleRange[] {
+  const validIndices: number[] = [];
+  for (let i = 1; i < costs.length; i++) {
+    if (costs[i] !== 0) validIndices.push(i);
+  }
+  return validIndices.map((idx, k) => ({
+    label: RANK_LABELS[idx],
+    lower: k === 0 ? 0 : costs[validIndices[k - 1]],
+    upper: k === validIndices.length - 1 ? null : costs[idx] - 1,
+  }));
+}

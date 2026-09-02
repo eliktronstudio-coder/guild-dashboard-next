@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { RANK_LABELS, RB_GEAR_ROWS } from "@/lib/rbGearData";
+import { RANK_LABELS, RB_GEAR_ROWS, buildRankScale } from "@/lib/rbGearData";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -26,6 +26,8 @@ export default function GearRankCalculator() {
     const gold = (total / 1000) * pricePer1000;
     return { total, steps, gold };
   }, [item, currentRank, targetRank, pricePer1000]);
+
+  const scale = useMemo(() => buildRankScale(item.costs), [item]);
 
   return (
     <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
@@ -120,6 +122,36 @@ export default function GearRankCalculator() {
             </>
           )}
         </div>
+      </div>
+
+      <div>
+        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+          Шкала прокачки: {item.name}
+        </h3>
+        {scale.length === 0 ? (
+          <p className="text-xs text-muted">Для этого предмета нет данных по опыту.</p>
+        ) : (
+          <div className="overflow-hidden rounded-md border border-border">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border bg-surface-2 text-left text-muted">
+                  <th className="px-3 py-2 font-medium">Цвет</th>
+                  <th className="px-3 py-2 text-right font-medium">Диапазон опыта</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {scale.map((r) => (
+                  <tr key={r.label}>
+                    <td className="px-3 py-1.5 text-foreground">{r.label}</td>
+                    <td className="px-3 py-1.5 text-right font-mono text-muted">
+                      от {numberFmt.format(r.lower)} {r.upper === null ? "и выше" : `до ${numberFmt.format(r.upper)}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div>
