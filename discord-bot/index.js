@@ -92,13 +92,15 @@ client.on(Events.MessageCreate, async (message) => {
   try {
     await message.react("⏳");
 
+    const knownPlayerNames = await fetchPlayerNames();
+
     // Каждый скрин классифицируется отдельно, поэтому порядок вложений не важен
     // и скринов состава/дропа может быть сколько угодно.
     const shots = [];
     for (const image of images) {
       const { buffer, mediaType } = await downloadImage(image);
       const base64 = buffer.toString("base64");
-      const extracted = await extractFromImage(base64, mediaType);
+      const extracted = await extractFromImage(base64, mediaType, knownPlayerNames);
       shots.push({ buffer, mediaType, base64, ...extracted });
     }
 
@@ -409,6 +411,21 @@ async function askDropChoices(message, questions) {
   return chosen;
 }
 
+/** Ники состава — подсказка для распознавания ростер-скринов, чтобы модель меньше путала похожие буквы. */
+async function fetchPlayerNames() {
+  try {
+    const res = await fetch(`${SITE_API_URL}/api/bot/player-names`, {
+      headers: { Authorization: `Bearer ${BOT_API_SECRET}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.names) ? data.names : [];
+  } catch (err) {
+    console.error("Не удалось получить список ников состава:", err);
+    return [];
+  }
+}
+
 /** Канонический список названий активностей; пустой список = откат на текст сообщения. */
 async function fetchActivityNames() {
   try {
@@ -439,11 +456,11 @@ function suggestName(typed, names) {
 // Anthropic блокирует запросы с IP этого VPS, поэтому распознавание идёт через
 // отдельный прокси на Render (US), а не напрямую. Прокси заодно определяет,
 // что на скрине — состав или дроп.
-async function extractFromImage(base64, mediaType) {
+async function extractFromImage(base64, mediaType, knownNames = []) {
   const res = await fetch(`${VISION_PROXY_URL}/extract`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${VISION_PROXY_SECRET}` },
-    body: JSON.stringify({ image: base64, mediaType }),
+    body: JSON.stringify({ image: base64, mediaType, knownNames }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
