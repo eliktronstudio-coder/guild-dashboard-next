@@ -31,10 +31,30 @@ export default async function ArcheAgePage() {
       <GearRankCalculator />
 
       <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
-        <h2 className="text-sm font-semibold">Крафт торговых паков</h2>
+        <h2 className="text-sm font-semibold">Паки — калькулятор dllib.ru (Dead Legion)</h2>
         <p className="text-sm text-muted-2">
-          Общая механика по официальной вики ArcheAge — на вашем сервере детали (конкретные рецепты, ресурсы,
-          цены) могут отличаться, точный список см. в игровом фолио.
+          Живой калькулятор паков именно под ваш сервер (версия 8.0): доход по каждому рецепту с учётом текущего
+          % цен, где крафтить и куда везти на продажу — с реальными названиями локаций сервера. Плюс полная база
+          предметов «Крафкулятор» (экипировка, петы и транспорт, ресурсы, расходка, усиление ГС, мебель) и отдельно
+          ресурсы под паки по регионам.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <SourceLink href="https://dllib.ru/">Паки — таблица цен</SourceLink>
+          <SourceLink href="https://dllib.ru/">Ресурсы для паков</SourceLink>
+          <SourceLink href="https://dllib.ru/">Крафкулятор — база предметов</SourceLink>
+        </div>
+        <p className="text-xs text-muted">
+          Все три инструмента на одном сайте — переключаются кнопками сверху страницы («паки» / «крафкулятор»),
+          цены пересчитываются на лету под выбранный процент, поэтому таблицу лучше открывать напрямую, а не
+          копировать сюда — тут она мгновенно устареет.
+        </p>
+      </div>
+
+      <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
+        <h2 className="text-sm font-semibold">Крафт торговых паков — общая механика</h2>
+        <p className="text-sm text-muted-2">
+          Справочно, по официальной англоязычной вики ArcheAge — названия локаций и детали там западные, могут не
+          совпадать с вашим сервером один в один. Для реальных цифр используйте dllib.ru выше.
         </p>
         <ul className="list-disc space-y-2 pl-5 text-sm text-foreground">
           <li>
