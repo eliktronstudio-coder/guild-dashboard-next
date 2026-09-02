@@ -8,18 +8,6 @@ const statusTone: Record<string, "accent" | "success" | "danger"> = {
   Отменено: "danger",
 };
 
-/**
- * Short badge label for an activity, e.g. "АГЛ Т1" -> "АГЛ", "Кракен" -> "КР".
- * Already-uppercase first words (in-game raid codes) are kept as-is up to three
- * characters; ordinary names collapse to their first two letters.
- */
-function abbreviate(name: string) {
-  const word = name.trim().split(/[\s(]+/)[0]?.replace(/[^\p{L}\p{N}]/gu, "") ?? "";
-  if (!word) return "—";
-  const isCode = word === word.toUpperCase();
-  return word.slice(0, isCode ? 3 : 2).toUpperCase();
-}
-
 type ActivityRowProps = {
   href: string;
   name: string;
@@ -30,31 +18,29 @@ type ActivityRowProps = {
 };
 
 /**
- * Two-line layout: this row sits in a one-third-width dashboard column, where a
- * single line leaves the name only a few pixels once the status badge and date
- * have taken their space.
+ * Full-row banner background with a left-to-right scrim, same treatment as
+ * the schedule panel rows — the text sits on the opaque left side, the
+ * artwork reveals on the right.
  */
 export default function ActivityRow({ href, name, participants, status, date, bannerUrl }: ActivityRowProps) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm transition-colors duration-150 hover:border-accent/30"
+      className="relative flex min-h-[64px] items-center gap-3 overflow-hidden rounded-lg border border-border bg-surface px-4 py-2.5 text-sm transition-colors duration-150 hover:border-accent/30"
     >
-      {bannerUrl ? (
-        <Image
-          src={bannerUrl}
-          alt=""
-          width={32}
-          height={32}
-          unoptimized
-          className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
-        />
-      ) : (
-        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-bold text-accent-bright">
-          {abbreviate(name)}
-        </span>
+      {bannerUrl && (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+          <Image src={bannerUrl} alt="" fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" />
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "linear-gradient(90deg, rgba(var(--art-scrim),0.97) 0%, rgba(var(--art-scrim),0.9) 45%, rgba(var(--art-scrim),0.45) 75%, rgba(var(--art-scrim),0.15) 100%)",
+            }}
+          />
+        </div>
       )}
-      <span className="min-w-0 flex-1">
+      <span className="relative min-w-0 flex-1">
         <span className="block truncate font-medium text-foreground">{name}</span>
         <span className="mt-1 flex items-center gap-2 text-xs text-muted-2">
           <span className="whitespace-nowrap">{date}</span>
@@ -62,7 +48,9 @@ export default function ActivityRow({ href, name, participants, status, date, ba
           <span className="whitespace-nowrap">{participants} уч.</span>
         </span>
       </span>
-      <StatusBadge tone={statusTone[status] ?? "muted"} label={status} />
+      <span className="relative flex-shrink-0">
+        <StatusBadge tone={statusTone[status] ?? "muted"} label={status} />
+      </span>
     </Link>
   );
 }
