@@ -109,3 +109,14 @@ export function buildRankScale(costs: number[]): ScaleRange[] {
     upper: k === validIndices.length - 1 ? null : costs[idx] - 1,
   }));
 }
+
+/**
+ * Нижняя граница накопленного опыта для каждого ранга (индекс = позиция в
+ * RANK_LABELS). «Обычный» всегда 0 — стартовое состояние. Ранг, недостижимый
+ * для предмета (пропуск в шкале), даёт null. Опыт здесь накопительный, не
+ * складывается по шагам — см. buildRankScale.
+ */
+export function rankThresholds(costs: number[]): (number | null)[] {
+  const byLabel = new Map(buildRankScale(costs).map((r) => [r.label, r.lower]));
+  return RANK_LABELS.map((label, i) => (i === 0 ? 0 : byLabel.get(label) ?? null));
+}

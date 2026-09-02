@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RANK_LABELS, RANK_COLORS, RB_GEAR_ROWS, buildRankScale } from "@/lib/rbGearData";
+import { RANK_LABELS, RANK_COLORS, RB_GEAR_ROWS, buildRankScale, rankThresholds } from "@/lib/rbGearData";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -15,18 +15,28 @@ export default function GearRankCalculator() {
 
   const item = RB_GEAR_ROWS[itemIndex];
 
+  // Опыт предмета накопительный (см. шкалу прокачки ниже), а не по шагам —
+  // стоимость перехода это разница накопленных порогов целевого и текущего
+  // ранга, а не сумма чисел из исходной таблицы по пути.
+  const thresholds = useMemo(() => rankThresholds(item.costs), [item]);
+
   const result = useMemo(() => {
     if (targetRank <= currentRank) return null;
-    const steps = [];
-    let total = 0;
-    for (let i = currentRank + 1; i <= targetRank; i++) {
-      const cost = item.costs[i];
-      total += cost;
-      steps.push({ rank: RANK_LABELS[i], cost });
+    const from = thresholds[currentRank];
+    const to = thresholds[targetRank];
+    if (from === null || to === null) {
+      return { unavailable: true as const, total: 0, gold: 0, steps: [] };
     }
+    const steps: { rank: string; cost: number | null }[] = [];
+    for (let i = currentRank + 1; i <= targetRank; i++) {
+      const prev = thresholds[i - 1];
+      const cur = thresholds[i];
+      steps.push({ rank: RANK_LABELS[i], cost: prev === null || cur === null ? null : cur - prev });
+    }
+    const total = to - from;
     const gold = (total / 1000) * pricePer1000;
-    return { total, steps, gold };
-  }, [item, currentRank, targetRank, pricePer1000]);
+    return { unavailable: false as const, total, steps, gold };
+  }, [thresholds, currentRank, targetRank, pricePer1000]);
 
   const scale = useMemo(() => buildRankScale(item.costs), [item]);
 
@@ -119,6 +129,8 @@ export default function GearRankCalculator() {
         <div className="space-y-3">
           {result === null ? (
             <p className="text-sm text-muted">Выберите целевой ранг выше текущего.</p>
+          ) : result.unavailable ? (
+            <p className="text-sm text-muted">Этот предмет не может быть в одном из выбранных рангов.</p>
           ) : (
             <>
               <div className="flex items-baseline justify-between rounded-md bg-surface-2 px-3 py-2.5">
@@ -135,8 +147,8 @@ export default function GearRankCalculator() {
                 {result.steps.map((step) => (
                   <div key={step.rank} className="flex justify-between text-xs">
                     <span className="text-muted">{step.rank}</span>
-                    <span className={step.cost === 0 ? "text-muted-2" : "text-foreground"}>
-                      {step.cost === 0 ? "недоступно" : `${numberFmt.format(step.cost)} XP`}
+                    <span className={step.cost === null ? "text-muted-2" : "text-foreground"}>
+                      {step.cost === null ? "недоступно" : `${numberFmt.format(step.cost)} XP`}
                     </span>
                   </div>
                 ))}
