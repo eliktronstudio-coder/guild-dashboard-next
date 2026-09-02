@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { RANK_LABELS, RB_GEAR_ROWS, buildRankScale } from "@/lib/rbGearData";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -11,6 +11,7 @@ export default function GearRankCalculator() {
   const [targetRank, setTargetRank] = useState(RANK_LABELS.length - 1);
   const [pricePer1000, setPricePer1000] = useState(100);
   const [showTable, setShowTable] = useState(false);
+  const [xpAmount, setXpAmount] = useState(0);
 
   const item = RB_GEAR_ROWS[itemIndex];
 
@@ -29,6 +30,24 @@ export default function GearRankCalculator() {
 
   const scale = useMemo(() => buildRankScale(item.costs), [item]);
 
+  // Открытый верхний цвет не имеет границы, поэтому ползунку нужен свой
+  // потолок — берём с запасом над последней известной границей.
+  const maxXp = useMemo(() => {
+    if (scale.length === 0) return 0;
+    const last = scale[scale.length - 1];
+    return Math.ceil((last.lower * 1.5 || 1000) / 100) * 100;
+  }, [scale]);
+
+  useEffect(() => {
+    setXpAmount((v) => Math.min(v, maxXp));
+  }, [maxXp]);
+
+  const xpRank = useMemo(
+    () => scale.find((r) => xpAmount >= r.lower && (r.upper === null || xpAmount <= r.upper)) ?? null,
+    [scale, xpAmount]
+  );
+  const xpGold = (xpAmount / 1000) * pricePer1000;
+
   return (
     <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
       <h2 className="text-sm font-semibold">Калькулятор прокачки РБ экипировки</h2>
@@ -39,7 +58,10 @@ export default function GearRankCalculator() {
             Экипировка
             <select
               value={itemIndex}
-              onChange={(e) => setItemIndex(Number(e.target.value))}
+              onChange={(e) => {
+                setItemIndex(Number(e.target.value));
+                setXpAmount(0);
+              }}
               className="mt-1 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             >
               {RB_GEAR_ROWS.map((row, i) => (
@@ -131,25 +153,32 @@ export default function GearRankCalculator() {
         {scale.length === 0 ? (
           <p className="text-xs text-muted">Для этого предмета нет данных по опыту.</p>
         ) : (
-          <div className="overflow-hidden rounded-md border border-border">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border bg-surface-2 text-left text-muted">
-                  <th className="px-3 py-2 font-medium">Цвет</th>
-                  <th className="px-3 py-2 text-right font-medium">Диапазон опыта</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {scale.map((r) => (
-                  <tr key={r.label}>
-                    <td className="px-3 py-1.5 text-foreground">{r.label}</td>
-                    <td className="px-3 py-1.5 text-right font-mono text-muted">
-                      от {numberFmt.format(r.lower)} {r.upper === null ? "и выше" : `до ${numberFmt.format(r.upper)}`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-3 rounded-md border border-border p-3">
+            <input
+              type="range"
+              min={0}
+              max={maxXp}
+              step={1}
+              value={xpAmount}
+              onChange={(e) => setXpAmount(Number(e.target.value))}
+              className="w-full accent-accent"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-mono text-sm text-foreground">{numberFmt.format(xpAmount)} XP</span>
+              <span className="text-sm font-medium text-accent">{xpRank ? xpRank.label : "Обычный"}</span>
+            </div>
+            <div className="flex items-baseline justify-between rounded-md bg-surface-2 px-3 py-2.5">
+              <span className="text-xs text-muted">Стоимость этого объёма опыта</span>
+              <span className="font-mono text-lg font-semibold text-accent-bright">
+                {numberFmt.format(Math.round(xpGold))} золота
+              </span>
+            </div>
+            {xpRank && (
+              <p className="text-xs text-muted">
+                Диапазон «{xpRank.label}»: от {numberFmt.format(xpRank.lower)}{" "}
+                {xpRank.upper === null ? "и выше" : `до ${numberFmt.format(xpRank.upper)}`}
+              </p>
+            )}
           </div>
         )}
       </div>
