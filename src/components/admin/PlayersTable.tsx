@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil, Trash2, Plus, X, Search, ClipboardCopy, Check } from "lucide-react";
+import { Pencil, Trash2, Plus, X, Search } from "lucide-react";
 import clsx from "clsx";
 import { ROLES } from "@/lib/roles";
 import Drawer from "@/components/Drawer";
@@ -85,7 +85,6 @@ export default function PlayersTable({
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("attendance");
-  const [copied, setCopied] = useState(false);
 
   const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
   const [detail, setDetail] = useState<PlayerDetail | null>(null);
@@ -122,13 +121,6 @@ export default function PlayersTable({
   }, [openPlayerId]);
 
   const maxPvpCount = useMemo(() => Math.max(1, ...players.map((p) => p.pvpCount)), [players]);
-
-  async function copyNames() {
-    const text = filtered.map((p) => p.name).join("\n");
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -315,16 +307,6 @@ export default function PlayersTable({
           <option value="salary">Сортировка: зарплата</option>
           <option value="name">Сортировка: имя</option>
         </select>
-        <button
-          type="button"
-          onClick={copyNames}
-          disabled={filtered.length === 0}
-          title="Скопировать список ников (с учётом поиска и фильтра) в буфер обмена"
-          className="flex items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {copied ? <Check size={15} className="text-success" /> : <ClipboardCopy size={15} />}
-          {copied ? "Скопировано" : "Выгрузить ники"}
-        </button>
       </div>
 
       {filtered.length === 0 ? (
