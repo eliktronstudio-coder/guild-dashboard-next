@@ -8,6 +8,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   ComponentType,
+  StringSelectMenuBuilder,
 } = require("discord.js");
 
 const {
@@ -108,7 +109,8 @@ client.on(Events.MessageCreate, async (message) => {
     const names = dedupeNames(rosterShots.flatMap((s) => s.names));
     const dropItems = mergeItems(dropShots.flatMap((s) => s.items));
 
-    const { category, mode } = await askActivityOptions(message);
+    const canonicalNames = await fetchActivityNames();
+    const { name, category, mode } = await askActivityOptions(message, activityName, canonicalNames);
 
     const screenshots = shots
       .filter((s) => s.kind !== "unknown" && s.buffer.byteLength <= MAX_IMAGE_BYTES)
@@ -118,7 +120,7 @@ client.on(Events.MessageCreate, async (message) => {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
       body: JSON.stringify({
-        name: activityName,
+        name,
         category,
         mode,
         participants: names,
@@ -217,7 +219,12 @@ async function handleRename(message) {
   await message.reply(results.map((r) => `${r.ok ? "✅" : "❌"} ${r.text}`).join("\n"));
 }
 
-async function askActivityOptions(message) {
+/**
+ * Один шаг подтверждения: название из фиксированного списка + тип + режим.
+ * Название берётся списком, а не из текста сообщения — иначе одна и та же
+ * активность заводится как «морф», «Морф» и «МОРФ».
+ */
+async function askActivityOptions(message, typedName, names) {
   const categoryRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId("category_prime").setLabel("Прайм").setStyle(ButtonStyle.Primary),
     new ButtonBuilder().setCustomId("category_mini").setLabel("Мини-РБ").setStyle(ButtonStyle.Secondary)
@@ -226,41 +233,61 @@ async function askActivityOptions(message) {
     new ButtonBuilder().setCustomId("mode_pve").setLabel("PvE").setStyle(ButtonStyle.Secondary),
     new ButtonBuilder().setCustomId("mode_pvp").setLabel("PvP").setStyle(ButtonStyle.Danger)
   );
-  const prompt = await message.reply({ content: "Тип активности и режим?", components: [categoryRow, modeRow] });
+
+  const suggested = suggestName(typedName, names);
+  let name = suggested ?? (names.length === 0 ? typedName : null);
+
+  const buildNameRow = (selected) =>
+    new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("activity_name")
+        .setPlaceholder("Выберите активность")
+        .addOptions(
+          names.slice(0, 25).map((n) => ({ label: n.slice(0, 100), value: n.slice(0, 100), default: n === selected }))
+        )
+    );
+
+  const rows = names.length > 0 ? [buildNameRow(name), categoryRow, modeRow] : [categoryRow, modeRow];
+  const summary = () =>
+    `Активность: ${name ?? "не выбрана"} · тип: ${category ?? "не выбран"} · режим: ${mode ?? "не выбран"}`;
+
+  let category = null;
+  let mode = null;
+
+  const prompt = await message.reply({ content: summary(), components: rows });
 
   return new Promise((resolve) => {
-    let category = null;
-    let mode = null;
     const collector = prompt.createMessageComponentCollector({
-      componentType: ComponentType.Button,
-      time: 60_000,
+      time: 120_000,
       filter: (i) => i.user.id === message.author.id,
     });
 
     collector.on("collect", async (interaction) => {
-      if (interaction.customId.startsWith("category_")) {
+      if (interaction.isStringSelectMenu()) {
+        name = interaction.values[0];
+      } else if (interaction.customId.startsWith("category_")) {
         category = interaction.customId === "category_prime" ? "Прайм" : "Мини-РБ";
       } else {
         mode = interaction.customId === "mode_pvp" ? "PvP" : "PvE";
       }
-      if (category && mode) {
-        await interaction.update({ content: `Тип: ${category}, режим: ${mode} ✅`, components: [] });
-        collector.stop("done");
-      } else {
-        await interaction.update({
-          content: `Тип: ${category ?? "не выбран"}, режим: ${mode ?? "не выбран"}`,
-          components: [categoryRow, modeRow],
-        });
-      }
+
+      const done = name && category && mode;
+      await interaction.update({
+        content: done ? `${summary()} ✅` : summary(),
+        components: done ? [] : names.length > 0 ? [buildNameRow(name), categoryRow, modeRow] : [categoryRow, modeRow],
+      });
+      if (done) collector.stop("done");
     });
 
     collector.on("end", (_collected, reason) => {
       if (reason !== "done") {
-        prompt
-          .edit({ content: `Время выбора вышло. Тип: ${category ?? "Мини-РБ"}, режим: ${mode ?? "PvE"}.`, components: [] })
-          .catch(() => {});
+        prompt.edit({ content: `Время выбора вышло. ${summary()}`, components: [] }).catch(() => {});
       }
-      resolve({ category: category ?? "Мини-РБ", mode: mode ?? "PvE" });
+      resolve({
+        name: name ?? typedName,
+        category: category ?? "Мини-РБ",
+        mode: mode ?? "PvE",
+      });
     });
   });
 }
@@ -289,6 +316,33 @@ function sniffMediaType(buffer) {
     return "image/webp";
   }
   return null;
+}
+
+/** Канонический список названий активностей; пустой список = откат на текст сообщения. */
+async function fetchActivityNames() {
+  try {
+    const res = await fetch(`${SITE_API_URL}/api/bot/activity-names`, {
+      headers: { Authorization: `Bearer ${BOT_API_SECRET}` },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.names) ? data.names : [];
+  } catch (err) {
+    console.error("Не удалось получить список активностей:", err);
+    return [];
+  }
+}
+
+/** Подсказывает вариант из списка по тому, что человек написал в сообщении. */
+function suggestName(typed, names) {
+  const norm = (v) => v.trim().toLowerCase();
+  const t = norm(typed);
+  if (!t) return null;
+  return (
+    names.find((n) => norm(n) === t) ??
+    names.find((n) => t.startsWith(norm(n)) || norm(n).startsWith(t)) ??
+    null
+  );
 }
 
 // Anthropic блокирует запросы с IP этого VPS, поэтому распознавание идёт через
