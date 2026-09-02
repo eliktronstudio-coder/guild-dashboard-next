@@ -13,6 +13,21 @@ export const RANK_LABELS = [
   "Э. Двенадцати",
 ] as const;
 
+/** CSS-фон насечки для каждого цвета ранга на ползунке шкалы прокачки. */
+export const RANK_COLORS: Record<string, string> = {
+  "Необычный": "#f4f4f5",
+  "Редкий": "#3b82f6",
+  "Уникальный": "#a855f7",
+  "Эпический": "#eab308",
+  "Легендарный": "#b45309",
+  "Реликтовый": "#f87171",
+  "Э. Чудес": "#fb923c",
+  "Э. Сказаний": "#64748b",
+  "Э. Легенд": "#fde047",
+  "Э. Мифов": "#ef4444",
+  "Э. Двенадцати": "repeating-linear-gradient(45deg, #a855f7 0px, #a855f7 5px, #ffffff 5px, #ffffff 10px)",
+};
+
 export type GearRow = { name: string; costs: number[] };
 
 /** "Необходимый опыт для поднятия ранга топ РБ экипировки" — cost of the step INTO each rank. 0 = rank not applicable to this item. */

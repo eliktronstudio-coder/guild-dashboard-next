@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { RANK_LABELS, RB_GEAR_ROWS, buildRankScale } from "@/lib/rbGearData";
+import { RANK_LABELS, RANK_COLORS, RB_GEAR_ROWS, buildRankScale } from "@/lib/rbGearData";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -154,15 +154,43 @@ export default function GearRankCalculator() {
           <p className="text-xs text-muted">Для этого предмета нет данных по опыту.</p>
         ) : (
           <div className="space-y-3 rounded-md border border-border p-3">
-            <input
-              type="range"
-              min={0}
-              max={maxXp}
-              step={1}
-              value={xpAmount}
-              onChange={(e) => setXpAmount(Number(e.target.value))}
-              className="w-full accent-accent"
-            />
+            <div className="relative">
+              <div className="flex h-3 w-full overflow-hidden rounded-full border border-border">
+                {scale.map((r) => (
+                  <div
+                    key={r.label}
+                    title={r.label}
+                    style={{
+                      background: RANK_COLORS[r.label] ?? "#888",
+                      flexGrow: (r.upper === null ? maxXp - r.lower : r.upper - r.lower + 1) || 1,
+                    }}
+                  />
+                ))}
+              </div>
+              {/* Насечки на границах цветов — там, где ранг сменяется. */}
+              {scale.slice(0, -1).map((r) => (
+                <div
+                  key={r.label}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-0 h-3 w-px bg-black/30"
+                  style={{ left: `${Math.min(100, ((r.upper ?? 0) / maxXp) * 100)}%` }}
+                />
+              ))}
+              <input
+                type="range"
+                min={0}
+                max={maxXp}
+                step={1}
+                value={xpAmount}
+                onChange={(e) => setXpAmount(Number(e.target.value))}
+                className="absolute inset-0 h-3 w-full cursor-pointer opacity-0"
+              />
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-accent bg-white shadow"
+                style={{ left: `${maxXp === 0 ? 0 : (xpAmount / maxXp) * 100}%` }}
+              />
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-mono text-sm text-foreground">{numberFmt.format(xpAmount)} XP</span>
               <span className="text-sm font-medium text-accent">{xpRank ? xpRank.label : "Обычный"}</span>
