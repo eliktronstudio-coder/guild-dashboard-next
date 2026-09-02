@@ -109,6 +109,19 @@ client.on(Events.MessageCreate, async (message) => {
     const names = dedupeNames(rosterShots.flatMap((s) => s.names));
     const dropItems = mergeItems(dropShots.flatMap((s) => s.items));
 
+    // Неоднозначный дроп уточняем до выбора активности, пока контекст свежий.
+    const resolved = await resolveDrops(dropItems.map((d) => d.name));
+    const quantityByInput = new Map(dropItems.map((d) => [d.name, d.quantity]));
+    const ambiguous = resolved.filter((r) => r.candidates.length > 1);
+    const chosen = ambiguous.length > 0 ? await askDropChoices(message, ambiguous, quantityByInput) : new Map();
+    const finalDrops = dropItems
+      .map((d) => {
+        const pick = chosen.get(d.name);
+        if (pick === "__skip__") return null;
+        return { name: pick ?? d.name, quantity: d.quantity };
+      })
+      .filter(Boolean);
+
     const canonicalNames = await fetchActivityNames();
     const { name, category, mode } = await askActivityOptions(message, activityName, canonicalNames);
 
@@ -124,7 +137,7 @@ client.on(Events.MessageCreate, async (message) => {
         category,
         mode,
         participants: names,
-        drops: dropItems,
+        drops: finalDrops,
         screenshots,
       }),
     });
@@ -316,6 +329,80 @@ function sniffMediaType(buffer) {
     return "image/webp";
   }
   return null;
+}
+
+/** Разбирает распознанный дроп по реестру: что однозначно, а где нужен выбор. */
+async function resolveDrops(names) {
+  if (names.length === 0) return [];
+  try {
+    const res = await fetch(`${SITE_API_URL}/api/bot/drops/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
+      body: JSON.stringify({ names }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.results) ? data.results : [];
+  } catch (err) {
+    console.error("Не удалось разобрать дроп по реестру:", err);
+    return [];
+  }
+}
+
+/**
+ * Спрашивает точный предмет там, где со скрина читается семейство целиком
+ * («Эссенция ярости» -> х1000 … х12500). Количество не переспрашиваем — оно
+ * уже распознано. Discord держит максимум 5 списков в сообщении.
+ */
+async function askDropChoices(message, ambiguous, quantityByInput) {
+  const chosen = new Map();
+  for (let i = 0; i < ambiguous.length; i += 5) {
+    const batch = ambiguous.slice(i, i + 5);
+    const rows = batch.map((item, k) =>
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`drop_${i + k}`)
+          .setPlaceholder(`${item.input} — какой именно?`)
+          .addOptions([
+            ...item.candidates.map((c) => ({ label: c.name.slice(0, 100), value: c.name.slice(0, 100) })),
+            { label: "Пропустить", value: "__skip__" },
+          ])
+      )
+    );
+
+    const prompt = await message.reply({
+      content: batch
+        .map((b) => `Уточните дроп: ${b.input} ×${quantityByInput.get(b.input) ?? 1}`)
+        .join("\n"),
+      components: rows,
+    });
+
+    await new Promise((resolve) => {
+      const collector = prompt.createMessageComponentCollector({
+        componentType: ComponentType.StringSelect,
+        time: 120_000,
+        filter: (x) => x.user.id === message.author.id,
+      });
+      collector.on("collect", async (interaction) => {
+        const index = Number(interaction.customId.split("_")[1]);
+        const item = ambiguous[index];
+        if (item) chosen.set(item.input, interaction.values[0]);
+        const done = batch.every((b) => chosen.has(b.input));
+        await interaction.update({
+          content: batch
+            .map((b) => {
+              const pick = chosen.get(b.input);
+              return `${b.input} ×${quantityByInput.get(b.input) ?? 1} → ${pick === "__skip__" ? "пропущено" : pick ?? "не выбрано"}`;
+            })
+            .join("\n"),
+          components: done ? [] : rows,
+        });
+        if (done) collector.stop("done");
+      });
+      collector.on("end", () => resolve());
+    });
+  }
+  return chosen;
 }
 
 /** Канонический список названий активностей; пустой список = откат на текст сообщения. */
