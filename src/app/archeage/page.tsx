@@ -1,4 +1,6 @@
 import { ExternalLink } from "lucide-react";
+import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth";
 import GearRankCalculator from "@/components/GearRankCalculator";
 
 function SourceLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -15,7 +17,10 @@ function SourceLink({ href, children }: { href: string; children: React.ReactNod
   );
 }
 
-export default function ArcheAgePage() {
+export default async function ArcheAgePage() {
+  const admin = await requireAdmin();
+  if (!admin) redirect("/dashboard");
+
   return (
     <div className="space-y-4">
       <div>

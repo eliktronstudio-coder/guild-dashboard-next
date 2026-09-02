@@ -44,7 +44,7 @@ export const navSections: NavSection[] = [
     title: "Инструменты",
     items: [
       { href: "/calculator", label: "Калькуляторы", icon: Calculator },
-      { href: "/archeage", label: "ArcheAge", icon: Map },
+      { href: "/archeage", label: "ArcheAge", icon: Map, adminOnly: true },
     ],
   },
   {
