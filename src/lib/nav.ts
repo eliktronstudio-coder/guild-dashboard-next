@@ -8,6 +8,7 @@ import {
   ShieldCheck,
   BookOpen,
   ImagePlay,
+  Map,
   type LucideIcon,
 } from "lucide-react";
 
@@ -43,6 +44,7 @@ export const navSections: NavSection[] = [
     title: "Инструменты",
     items: [
       { href: "/calculator", label: "Калькуляторы", icon: Calculator },
+      { href: "/archeage", label: "ArcheAge", icon: Map },
     ],
   },
   {
