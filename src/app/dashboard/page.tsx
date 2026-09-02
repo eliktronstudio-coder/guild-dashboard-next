@@ -87,7 +87,10 @@ export default async function DashboardPage() {
     const banner = findLabelMatch(name, activityBanners);
     if (banner) scheduleBanners[name] = banner.imageUrl;
   }
-  const recentActivities = allActivities.slice(0, 5);
+  const recentActivities = allActivities.slice(0, 5).map((a) => ({
+    ...a,
+    bannerUrl: findLabelMatch(a.name, activityBanners)?.imageUrl ?? null,
+  }));
   const payoutDays = daysUntilNextPayout();
   const isRandom = user?.role === "random";
 
@@ -327,6 +330,7 @@ export default async function DashboardPage() {
                         participants={a.participants}
                         status={a.status}
                         date={a.date}
+                        bannerUrl={a.bannerUrl}
                       />
                     ))}
                   </div>

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import StatusBadge from "@/components/StatusBadge";
 
@@ -25,6 +26,7 @@ type ActivityRowProps = {
   participants: number;
   status: string;
   date: string;
+  bannerUrl?: string | null;
 };
 
 /**
@@ -32,15 +34,26 @@ type ActivityRowProps = {
  * single line leaves the name only a few pixels once the status badge and date
  * have taken their space.
  */
-export default function ActivityRow({ href, name, participants, status, date }: ActivityRowProps) {
+export default function ActivityRow({ href, name, participants, status, date, bannerUrl }: ActivityRowProps) {
   return (
     <Link
       href={href}
       className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm transition-colors duration-150 hover:border-accent/30"
     >
-      <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-bold text-accent-bright">
-        {abbreviate(name)}
-      </span>
+      {bannerUrl ? (
+        <Image
+          src={bannerUrl}
+          alt=""
+          width={32}
+          height={32}
+          unoptimized
+          className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-bold text-accent-bright">
+          {abbreviate(name)}
+        </span>
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium text-foreground">{name}</span>
         <span className="mt-1 flex items-center gap-2 text-xs text-muted-2">
