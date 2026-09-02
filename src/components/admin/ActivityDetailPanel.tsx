@@ -57,8 +57,9 @@ export default function ActivityDetailPanel({
   isAdmin,
   canManageDrops = isAdmin,
   bannerUrl = null,
-  bannerHeight = 160,
+  bannerHeight = null,
   bannerWidthPct = 100,
+  bannerRatio = null,
 }: {
   activity: Activity;
   players: Player[];
@@ -69,8 +70,11 @@ export default function ActivityDetailPanel({
   /** Фото из «Баннеров активностей», подобранное по названию. */
   bannerUrl?: string | null;
   /** Размер баннера задаётся в разделе «Баннеры активностей». */
-  bannerHeight?: number;
+  /** null — баннер подстраивается под пропорции картинки и показывает её целиком. */
+  bannerHeight?: number | null;
   bannerWidthPct?: number;
+  /** Пропорции картинки, например "16 / 9". */
+  bannerRatio?: string | null;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState(activity.status);
@@ -325,7 +329,15 @@ export default function ActivityDetailPanel({
       <div className="space-y-4 lg:col-span-2">
         <div className="overflow-hidden rounded-lg border border-border bg-surface">
           {bannerUrl && (
-            <div className="relative" style={{ height: `${bannerHeight}px`, width: `${bannerWidthPct}%` }}>
+            <div
+              className="relative"
+              style={{
+                ...(bannerHeight === null
+                  ? { aspectRatio: bannerRatio ?? "16 / 9" }
+                  : { height: `${bannerHeight}px` }),
+                width: `${bannerWidthPct}%`,
+              }}
+            >
               <Image src={bannerUrl} alt="" fill sizes="(max-width: 1024px) 100vw, 66vw" className="object-cover" />
               {/* Затемнение снизу — под ним начинается заголовок с бейджами. */}
               <div

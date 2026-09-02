@@ -7,6 +7,17 @@ const MAX_IMAGE_BYTES = 800_000;
 const MIN_HEIGHT = 60;
 const MAX_HEIGHT = 600;
 
+
+/** Собственные размеры картинки, присланные при загрузке. */
+function readNatural(body: unknown) {
+  const raw = body as { imgWidth?: unknown; imgHeight?: unknown };
+  const positive = (v: unknown) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  return { imgWidth: positive(raw?.imgWidth), imgHeight: positive(raw?.imgHeight) };
+}
+
 /** Высота баннера в px и ширина в % от карточки; null — значения по умолчанию. */
 function readSize(body: unknown) {
   const raw = body as { height?: unknown; widthPct?: unknown };
@@ -27,7 +38,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const { id } = await params;
   const body = await request.json().catch(() => null);
-  const data: { name?: string; imageUrl?: string; height?: number | null; widthPct?: number | null } = {};
+  const data: {
+    name?: string;
+    imageUrl?: string;
+    height?: number | null;
+    widthPct?: number | null;
+    imgWidth?: number | null;
+    imgHeight?: number | null;
+  } = {};
 
   if (body?.name !== undefined) {
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -46,6 +64,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Фото слишком большое или неверного формата (до ~600 КБ)." }, { status: 400 });
     }
     data.imageUrl = imageUrl;
+    // Размеры относятся к конкретному файлу, поэтому обновляются вместе с ним.
+    const natural = readNatural(body);
+    data.imgWidth = natural.imgWidth;
+    data.imgHeight = natural.imgHeight;
   }
 
   if (body?.height !== undefined || body?.widthPct !== undefined) {

@@ -9,5 +9,13 @@ export default async function ActivityBannersPage() {
 
   const banners = await getActivityBanners();
 
-  return <ActivityBannerPanel banners={banners.map((b) => ({ id: b.id, name: b.name, imageUrl: b.imageUrl, height: b.height, widthPct: b.widthPct }))} />;
+  return <ActivityBannerPanel banners={banners.map((b) => ({
+        id: b.id,
+        name: b.name,
+        imageUrl: b.imageUrl,
+        height: b.height,
+        widthPct: b.widthPct,
+        imgWidth: b.imgWidth,
+        imgHeight: b.imgHeight,
+      }))} />;
 }

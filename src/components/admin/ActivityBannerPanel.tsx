@@ -14,14 +14,36 @@ const MAX_IMAGE_BYTES = 800_000;
 const QUALITY_STEPS = [0.94, 0.88, 0.82, 0.75, 0.68];
 const FALLBACK_WIDTHS = [2048, 1600, 1280, 1024, 800];
 
-type Banner = { id: string; name: string; imageUrl: string; height: number | null; widthPct: number | null };
-type FormState = { name: string; imageUrl: string | null; height: string; widthPct: string };
+type Banner = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  height: number | null;
+  widthPct: number | null;
+  imgWidth: number | null;
+  imgHeight: number | null;
+};
+type FormState = {
+  name: string;
+  imageUrl: string | null;
+  /** Пусто — баннер показывает картинку целиком по её пропорциям. */
+  height: string;
+  widthPct: string;
+  imgWidth: number | null;
+  imgHeight: number | null;
+};
 
-/** Значения по умолчанию совпадают с тем, как баннер рисуется без настроек. */
-const DEFAULT_HEIGHT = 160;
 const DEFAULT_WIDTH_PCT = 100;
 
-const emptyForm: FormState = { name: "", imageUrl: null, height: String(DEFAULT_HEIGHT), widthPct: String(DEFAULT_WIDTH_PCT) };
+/** По умолчанию высота не задана — картинка показывается целиком. */
+const emptyForm: FormState = {
+  name: "",
+  imageUrl: null,
+  height: "",
+  widthPct: String(DEFAULT_WIDTH_PCT),
+  imgWidth: null,
+  imgHeight: null,
+};
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -95,8 +117,10 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
     setForm({
       name: banner.name,
       imageUrl: banner.imageUrl,
-      height: String(banner.height ?? DEFAULT_HEIGHT),
+      height: banner.height === null ? "" : String(banner.height),
       widthPct: String(banner.widthPct ?? DEFAULT_WIDTH_PCT),
+      imgWidth: banner.imgWidth,
+      imgHeight: banner.imgHeight,
     });
     setError(null);
     setAdding(false);
@@ -122,7 +146,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
         setError("Фото слишком большое даже после сжатия — возьмите картинку поменьше.");
         return;
       }
-      setForm((f) => ({ ...f, imageUrl: result.dataUrl }));
+      setForm((f) => ({ ...f, imageUrl: result.dataUrl, imgWidth: result.width, imgHeight: result.height }));
       setInfo(
         `${result.width}×${result.height}${result.original ? " (исходное разрешение)" : " (уменьшено, чтобы влезло в лимит)"}, ` +
           `${Math.round(result.dataUrl.length / 1024)} КБ`
@@ -148,8 +172,10 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
         body: JSON.stringify({
           name: form.name,
           imageUrl: form.imageUrl,
-          height: Number(form.height),
+          height: form.height.trim() === "" ? null : Number(form.height),
           widthPct: Number(form.widthPct),
+          imgWidth: form.imgWidth,
+          imgHeight: form.imgHeight,
         }),
       });
       const data = await res.json();
@@ -248,11 +274,12 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
                     type="number"
                     min={60}
                     max={600}
+                    placeholder="авто"
                     value={form.height}
                     onChange={(e) => setForm((f) => ({ ...f, height: e.target.value }))}
                     className="w-20 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm outline-none focus:border-accent"
                   />
-                  px
+                  px — пусто: картинка целиком
                 </label>
                 <label className="flex items-center gap-2 text-xs text-muted">
                   Ширина
@@ -273,7 +300,9 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
                   <div
                     className="relative overflow-hidden rounded"
                     style={{
-                      height: `${Math.min(600, Math.max(60, Number(form.height) || DEFAULT_HEIGHT))}px`,
+                      ...(form.height.trim() === ""
+                        ? { aspectRatio: form.imgWidth && form.imgHeight ? `${form.imgWidth} / ${form.imgHeight}` : "16 / 9" }
+                        : { height: `${Math.min(600, Math.max(60, Number(form.height)))}px` }),
                       width: `${Math.min(100, Math.max(10, Number(form.widthPct) || DEFAULT_WIDTH_PCT))}%`,
                     }}
                   >

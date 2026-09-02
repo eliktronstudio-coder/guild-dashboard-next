@@ -139,7 +139,11 @@ model ActivityBanner {
   name      String   @unique
   imageUrl  String
   /// Размер баннера на странице активности: высота в px, ширина в % от карточки.
+  /// height = null — баннер подстраивается под пропорции картинки и показывает её целиком.
   height    Int?
   widthPct  Int?
+  /// Собственные размеры картинки — нужны, чтобы посчитать пропорции без её загрузки.
+  imgWidth  Int?
+  imgHeight Int?
   createdAt DateTime @default(now())
 }

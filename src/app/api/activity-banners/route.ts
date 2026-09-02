@@ -7,6 +7,17 @@ const MAX_IMAGE_BYTES = 800_000;
 const MIN_HEIGHT = 60;
 const MAX_HEIGHT = 600;
 
+
+/** Собственные размеры картинки, присланные при загрузке. */
+function readNatural(body: unknown) {
+  const raw = body as { imgWidth?: unknown; imgHeight?: unknown };
+  const positive = (v: unknown) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  return { imgWidth: positive(raw?.imgWidth), imgHeight: positive(raw?.imgHeight) };
+}
+
 /** Высота баннера в px и ширина в % от карточки; null — значения по умолчанию. */
 function readSize(body: unknown) {
   const raw = body as { height?: unknown; widthPct?: unknown };
@@ -42,6 +53,9 @@ export async function POST(request: NextRequest) {
   }
 
   const { height, widthPct } = readSize(body);
-  const banner = await prisma.activityBanner.create({ data: { name, imageUrl, height, widthPct } });
+  const { imgWidth, imgHeight } = readNatural(body);
+  const banner = await prisma.activityBanner.create({
+    data: { name, imageUrl, height, widthPct, imgWidth, imgHeight },
+  });
   return NextResponse.json(banner, { status: 201 });
 }

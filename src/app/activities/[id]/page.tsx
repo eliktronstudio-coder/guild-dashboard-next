@@ -39,8 +39,9 @@ export default async function ActivityDetailPage({
           isAdmin={canManageActivitiesRole(user?.role)}
           canManageDrops={isFullAdminRole(user?.role)}
           bannerUrl={banner?.imageUrl ?? null}
-          bannerHeight={banner?.height ?? undefined}
+          bannerHeight={banner?.height ?? null}
           bannerWidthPct={banner?.widthPct ?? undefined}
+          bannerRatio={banner?.imgWidth && banner?.imgHeight ? `${banner.imgWidth} / ${banner.imgHeight}` : null}
         />
       </BlurGate>
     </div>
