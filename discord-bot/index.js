@@ -107,20 +107,29 @@ client.on(Events.MessageCreate, async (message) => {
     const unknownCount = shots.length - rosterShots.length - dropShots.length;
 
     const names = dedupeNames(rosterShots.flatMap((s) => s.names));
-    const dropItems = mergeItems(dropShots.flatMap((s) => s.items));
+    const dropOccurrences = dropShots.flatMap((s) => s.items);
 
     // Неоднозначный дроп уточняем до выбора активности, пока контекст свежий.
-    const resolved = await resolveDrops(dropItems.map((d) => d.name));
-    const quantityByInput = new Map(dropItems.map((d) => [d.name, d.quantity]));
-    const ambiguous = resolved.filter((r) => r.candidates.length > 1);
-    const chosen = ambiguous.length > 0 ? await askDropChoices(message, ambiguous, quantityByInput) : new Map();
-    const finalDrops = dropItems
-      .map((d) => {
-        const pick = chosen.get(d.name);
-        if (pick === "__skip__") return null;
-        return { name: pick ?? d.name, quantity: d.quantity };
-      })
-      .filter(Boolean);
+    const resolved = await resolveDrops([...new Set(dropOccurrences.map((d) => d.name))]);
+    const candidatesByName = new Map(
+      resolved.filter((r) => r.candidates.length > 1).map((r) => [r.input, r.candidates])
+    );
+    const questions = dropOccurrences
+      .map((d, index) => ({ index, name: d.name, quantity: d.quantity, candidates: candidatesByName.get(d.name) }))
+      .filter((q) => q.candidates);
+    const chosen = questions.length > 0 ? await askDropChoices(message, questions) : new Map();
+
+    // Складываем только после выбора: две «Эссенции ярости» могли стать
+    // разными предметами, а два одинаковых — наоборот, одной записью.
+    const finalDrops = mergeItems(
+      dropOccurrences
+        .map((d, index) => {
+          const pick = chosen.get(index);
+          if (pick === "__skip__") return null;
+          return { name: pick ?? d.name, quantity: d.quantity };
+        })
+        .filter(Boolean)
+    );
 
     const canonicalNames = await fetchActivityNames();
     const { name, category, mode } = await askActivityOptions(message, activityName, canonicalNames);
@@ -348,34 +357,39 @@ async function resolveDrops(names) {
     return [];
   }
 }
-
 /**
  * Спрашивает точный предмет там, где со скрина читается семейство целиком
- * («Эссенция ярости» -> х1000 … х12500). Количество не переспрашиваем — оно
- * уже распознано. Discord держит максимум 5 списков в сообщении.
+ * («Эссенция ярости» -> х1000 … х12500). Вопрос задаётся на КАЖДОЕ вхождение,
+ * а не на название: в одном дропе могут упасть и х6000, и х8000, и они
+ * читаются одинаково. Количество не переспрашиваем — оно уже распознано.
+ * Discord держит максимум 5 списков в сообщении.
  */
-async function askDropChoices(message, ambiguous, quantityByInput) {
+async function askDropChoices(message, questions) {
   const chosen = new Map();
-  for (let i = 0; i < ambiguous.length; i += 5) {
-    const batch = ambiguous.slice(i, i + 5);
-    const rows = batch.map((item, k) =>
+  for (let i = 0; i < questions.length; i += 5) {
+    const batch = questions.slice(i, i + 5);
+    const rows = batch.map((q) =>
       new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(`drop_${i + k}`)
-          .setPlaceholder(`${item.input} — какой именно?`)
+          .setCustomId(`drop_${q.index}`)
+          .setPlaceholder(`${q.name} ×${q.quantity} — какой именно?`)
           .addOptions([
-            ...item.candidates.map((c) => ({ label: c.name.slice(0, 100), value: c.name.slice(0, 100) })),
+            ...q.candidates.map((c) => ({ label: c.name.slice(0, 100), value: c.name.slice(0, 100) })),
             { label: "Пропустить", value: "__skip__" },
           ])
       )
     );
 
-    const prompt = await message.reply({
-      content: batch
-        .map((b) => `Уточните дроп: ${b.input} ×${quantityByInput.get(b.input) ?? 1}`)
-        .join("\n"),
-      components: rows,
-    });
+    const describe = () =>
+      batch
+        .map((q) => {
+          const pick = chosen.get(q.index);
+          const suffix = pick === undefined ? "не выбрано" : pick === "__skip__" ? "пропущено" : pick;
+          return `${q.name} ×${q.quantity} → ${suffix}`;
+        })
+        .join("\n");
+
+    const prompt = await message.reply({ content: describe(), components: rows });
 
     await new Promise((resolve) => {
       const collector = prompt.createMessageComponentCollector({
@@ -384,19 +398,9 @@ async function askDropChoices(message, ambiguous, quantityByInput) {
         filter: (x) => x.user.id === message.author.id,
       });
       collector.on("collect", async (interaction) => {
-        const index = Number(interaction.customId.split("_")[1]);
-        const item = ambiguous[index];
-        if (item) chosen.set(item.input, interaction.values[0]);
-        const done = batch.every((b) => chosen.has(b.input));
-        await interaction.update({
-          content: batch
-            .map((b) => {
-              const pick = chosen.get(b.input);
-              return `${b.input} ×${quantityByInput.get(b.input) ?? 1} → ${pick === "__skip__" ? "пропущено" : pick ?? "не выбрано"}`;
-            })
-            .join("\n"),
-          components: done ? [] : rows,
-        });
+        chosen.set(Number(interaction.customId.split("_")[1]), interaction.values[0]);
+        const done = batch.every((q) => chosen.has(q.index));
+        await interaction.update({ content: describe(), components: done ? [] : rows });
         if (done) collector.stop("done");
       });
       collector.on("end", () => resolve());
