@@ -7,14 +7,12 @@ import { Plus, Trash2, Pencil, X, ImageOff, Search } from "lucide-react";
 
 const MAX_IMAGE_BYTES = 800_000;
 /**
- * Баннер на странице активности растягивается на всю ширину карточки, поэтому
- * 1600px хватает и для retina. Больше класть в базу смысла нет: картинки
- * хранятся строками и грузятся вместе со списком баннеров.
- * Варианты перебираются по очереди, пока результат не влезет в лимит:
- * сначала теряем качество, потом разрешение.
+ * Сначала пробуем сохранить исходное разрешение, и только если результат не
+ * влезает в лимит хранения — снижаем качество, а затем разрешение. Так фото
+ * остаётся максимально близким к оригиналу.
  */
-const QUALITY_STEPS = [0.92, 0.85, 0.78, 0.7];
-const WIDTH_STEPS = [1600, 1280, 1024, 800];
+const QUALITY_STEPS = [0.94, 0.88, 0.82, 0.75, 0.68];
+const FALLBACK_WIDTHS = [2048, 1600, 1280, 1024, 800];
 
 type Banner = { id: string; name: string; imageUrl: string; height: number | null; widthPct: number | null };
 type FormState = { name: string; imageUrl: string | null; height: string; widthPct: string };
@@ -52,20 +50,23 @@ function encode(img: HTMLImageElement, width: number, quality: number) {
   if (!ctx) throw new Error("Не удалось обработать изображение.");
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/webp", quality);
+  return { dataUrl: canvas.toDataURL("image/webp", quality), width: canvas.width, height: canvas.height };
 }
 
 /** Берёт самый качественный вариант, который помещается в лимит хранения. */
-async function compress(dataUrl: string): Promise<string> {
+async function compress(dataUrl: string): Promise<{ dataUrl: string; width: number; height: number; original: boolean }> {
   const img = await loadImage(dataUrl);
-  let last = "";
-  for (const width of WIDTH_STEPS) {
+  const widths = [img.width, ...FALLBACK_WIDTHS.filter((w) => w < img.width)];
+  let last = { dataUrl: "", width: img.width, height: img.height };
+  for (const width of widths) {
     for (const quality of QUALITY_STEPS) {
       last = encode(img, width, quality);
-      if (last.length <= MAX_IMAGE_BYTES) return last;
+      if (last.dataUrl.length <= MAX_IMAGE_BYTES) {
+        return { ...last, original: last.width === img.width };
+      }
     }
   }
-  return last;
+  return { ...last, original: false };
 }
 
 export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) {
@@ -74,6 +75,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -115,12 +117,16 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
       return;
     }
     try {
-      const compressed = await compress(await readFileAsDataUrl(file));
-      if (compressed.length > MAX_IMAGE_BYTES) {
+      const result = await compress(await readFileAsDataUrl(file));
+      if (result.dataUrl.length > MAX_IMAGE_BYTES) {
         setError("Фото слишком большое даже после сжатия — возьмите картинку поменьше.");
         return;
       }
-      setForm((f) => ({ ...f, imageUrl: compressed }));
+      setForm((f) => ({ ...f, imageUrl: result.dataUrl }));
+      setInfo(
+        `${result.width}×${result.height}${result.original ? " (исходное разрешение)" : " (уменьшено, чтобы влезло в лимит)"}, ` +
+          `${Math.round(result.dataUrl.length / 1024)} КБ`
+      );
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось обработать фото.");
@@ -277,6 +283,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
               )}
             </div>
 
+            {info && <p className="text-xs text-muted-2 sm:col-span-3">Загружено: {info}</p>}
             {error && <p className="text-xs text-danger sm:col-span-3">{error}</p>}
 
             <div className="flex items-center gap-2 sm:col-span-3">
