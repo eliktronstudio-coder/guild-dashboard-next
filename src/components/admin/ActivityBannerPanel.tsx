@@ -54,6 +54,33 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+/**
+ * GIF-89a: несколько блоков-дескрипторов изображения (0x2C) — значит несколько
+ * кадров, то есть анимация. Статичный GIF (один кадр) можно спокойно сжимать
+ * как обычную картинку.
+ */
+function isAnimatedGif(buffer: ArrayBuffer): boolean {
+  const bytes = new Uint8Array(buffer);
+  let frames = 0;
+  for (let i = 0; i < bytes.length - 1 && frames < 2; i++) {
+    if (bytes[i] === 0x2c) frames++;
+  }
+  return frames >= 2;
+}
+
+/** WEBP хранит анимацию как отдельный чанк ANIM в контейнере RIFF. */
+function isAnimatedWebp(buffer: ArrayBuffer): boolean {
+  const bytes = new Uint8Array(buffer);
+  const text = String.fromCharCode(...bytes.slice(0, 64));
+  return text.includes("ANIM");
+}
+
+async function isAnimated(file: File): Promise<boolean> {
+  if (file.type !== "image/gif" && file.type !== "image/webp") return false;
+  const buffer = await file.arrayBuffer();
+  return file.type === "image/gif" ? isAnimatedGif(buffer) : isAnimatedWebp(buffer);
+}
+
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
@@ -141,6 +168,23 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
       return;
     }
     try {
+      // Пересжатие через canvas всегда схлопывает анимацию в один кадр,
+      // поэтому анимированные GIF/WEBP сохраняются как есть, без пересборки.
+      if (await isAnimated(file)) {
+        const dataUrl = await readFileAsDataUrl(file);
+        if (dataUrl.length > MAX_IMAGE_BYTES) {
+          setError(
+            `Анимация слишком большая (${Math.round(dataUrl.length / 1024)} КБ, лимит ${Math.round(MAX_IMAGE_BYTES / 1024)} КБ) — сожмите файл (меньше кадров/разрешение) и загрузите снова.`
+          );
+          return;
+        }
+        const img = await loadImage(dataUrl);
+        setForm((f) => ({ ...f, imageUrl: dataUrl, imgWidth: img.width, imgHeight: img.height }));
+        setInfo(`${img.width}×${img.height} (анимация, без сжатия), ${Math.round(dataUrl.length / 1024)} КБ`);
+        setError(null);
+        return;
+      }
+
       const result = await compress(await readFileAsDataUrl(file));
       if (result.dataUrl.length > MAX_IMAGE_BYTES) {
         setError("Фото слишком большое даже после сжатия — возьмите картинку поменьше.");
