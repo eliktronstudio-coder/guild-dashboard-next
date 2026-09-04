@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import Image from "next/image";
+import BannerMedia from "@/components/BannerMedia";
 import { DAY_NAMES, formatCountdown, formatSlotTime, mskNow, upcomingSlots } from "@/lib/schedule";
 
 /** Enough slots to scroll through; only the first few are visible at rest. */
@@ -52,7 +52,7 @@ export default function SchedulePanel({ banners = {} }: { banners?: Record<strin
           <div className="relative flex min-h-[92px] items-center gap-4 overflow-hidden rounded-lg border border-border bg-surface px-4 py-3">
             {banners[slot.name] && (
               <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-                <Image src={banners[slot.name]} alt="" fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" />
+                <BannerMedia src={banners[slot.name]} fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" />
                 {/* Текст лежит слева, поэтому картинка раскрывается только справа. */}
                 <div
                   className="absolute inset-0"

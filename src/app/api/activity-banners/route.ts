@@ -43,8 +43,9 @@ export async function POST(request: NextRequest) {
   if (!name || name.length > 60) {
     return NextResponse.json({ error: "Укажите название активности (до 60 символов)." }, { status: 400 });
   }
-  if (!imageUrl.startsWith("data:image/") || imageUrl.length > MAX_IMAGE_BYTES) {
-    return NextResponse.json({ error: "Фото слишком большое или неверного формата (до ~4 МБ)." }, { status: 400 });
+  const isMedia = imageUrl.startsWith("data:image/") || imageUrl.startsWith("data:video/mp4");
+  if (!isMedia || imageUrl.length > MAX_IMAGE_BYTES) {
+    return NextResponse.json({ error: "Файл слишком большой или неверного формата (до ~4 МБ)." }, { status: 400 });
   }
 
   const existing = await prisma.activityBanner.findUnique({ where: { name } });

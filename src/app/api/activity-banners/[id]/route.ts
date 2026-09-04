@@ -60,8 +60,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   if (body?.imageUrl !== undefined) {
     const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl : "";
-    if (!imageUrl.startsWith("data:image/") || imageUrl.length > MAX_IMAGE_BYTES) {
-      return NextResponse.json({ error: "Фото слишком большое или неверного формата (до ~4 МБ)." }, { status: 400 });
+    const isMedia = imageUrl.startsWith("data:image/") || imageUrl.startsWith("data:video/mp4");
+    if (!isMedia || imageUrl.length > MAX_IMAGE_BYTES) {
+      return NextResponse.json({ error: "Файл слишком большой или неверного формата (до ~4 МБ)." }, { status: 400 });
     }
     data.imageUrl = imageUrl;
     // Размеры относятся к конкретному файлу, поэтому обновляются вместе с ним.

@@ -1,5 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
+import BannerMedia from "@/components/BannerMedia";
 import StatusBadge from "@/components/StatusBadge";
 
 const statusTone: Record<string, "accent" | "success" | "danger"> = {
@@ -30,7 +30,7 @@ export default function ActivityRow({ href, name, participants, status, date, ba
     >
       {bannerUrl && (
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <Image src={bannerUrl} alt="" fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" />
+          <BannerMedia src={bannerUrl} fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" />
           <div
             className="absolute inset-0"
             style={{

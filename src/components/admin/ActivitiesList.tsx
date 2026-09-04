@@ -9,6 +9,7 @@ import clsx from "clsx";
 import { ACTIVITY_CATEGORIES, ACTIVITY_MODES, ACTIVITY_DIFFICULTIES, ACTIVITY_STATUSES, statusColor } from "@/lib/activityOptions";
 import StatCard from "@/components/StatCard";
 import EmptyState from "@/components/EmptyState";
+import BannerMedia from "@/components/BannerMedia";
 
 const MAX_IMAGE_BYTES = 800_000;
 const MAX_SCREENSHOTS = 6;
@@ -708,12 +709,10 @@ export default function ActivitiesList({
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       {a.bannerUrl && (
-                        <Image
+                        <BannerMedia
                           src={a.bannerUrl}
-                          alt=""
                           width={44}
                           height={26}
-                          unoptimized
                           className="h-[26px] w-11 flex-shrink-0 rounded object-cover"
                         />
                       )}

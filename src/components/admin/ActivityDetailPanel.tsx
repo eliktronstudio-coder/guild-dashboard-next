@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import BannerMedia from "@/components/BannerMedia";
 import { Pencil, Check, X, Plus, Trash2, Moon, Search, ImageOff } from "lucide-react";
 import clsx from "clsx";
 import {
@@ -338,7 +339,7 @@ export default function ActivityDetailPanel({
                 width: `${bannerWidthPct}%`,
               }}
             >
-              <Image src={bannerUrl} alt="" fill sizes="(max-width: 1024px) 100vw, 66vw" className="object-cover" />
+              <BannerMedia src={bannerUrl} fill sizes="(max-width: 1024px) 100vw, 66vw" className="object-cover" />
               {/* Затемнение снизу — под ним начинается заголовок с бейджами. */}
               <div
                 className="absolute inset-0"

@@ -2,8 +2,8 @@
 
 import { useState, useMemo, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { Plus, Trash2, Pencil, X, ImageOff, Search } from "lucide-react";
+import BannerMedia, { isVideoBannerSrc } from "@/components/BannerMedia";
 
 const MAX_IMAGE_BYTES = 5_000_000;
 /**
@@ -90,6 +90,16 @@ function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   });
 }
 
+function loadVideoSize(dataUrl: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => resolve({ width: video.videoWidth, height: video.videoHeight });
+    video.onerror = () => reject(new Error("Не удалось прочитать видео."));
+    video.src = dataUrl;
+  });
+}
+
 function encode(img: HTMLImageElement, width: number, quality: number) {
   const scale = Math.min(1, width / img.width);
   const canvas = document.createElement("canvas");
@@ -163,11 +173,28 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("Файл должен быть изображением.");
+    if (!file.type.startsWith("image/") && file.type !== "video/mp4") {
+      setError("Файл должен быть изображением, GIF/WEBP-анимацией или MP4-видео.");
       return;
     }
     try {
+      // Видео не проходит через canvas (там не покадровая перерисовка, а
+      // проигрывание) — сохраняется как есть, тот же лимит, что у анимаций.
+      if (file.type === "video/mp4") {
+        const dataUrl = await readFileAsDataUrl(file);
+        if (dataUrl.length > MAX_IMAGE_BYTES) {
+          setError(
+            `Видео слишком большое (${Math.round(dataUrl.length / 1024)} КБ, лимит ${Math.round(MAX_IMAGE_BYTES / 1024)} КБ) — сожмите файл (короче/меньше разрешение/битрейт) и загрузите снова.`
+          );
+          return;
+        }
+        const size = await loadVideoSize(dataUrl);
+        setForm((f) => ({ ...f, imageUrl: dataUrl, imgWidth: size.width, imgHeight: size.height }));
+        setInfo(`${size.width}×${size.height} (видео, без звука), ${Math.round(dataUrl.length / 1024)} КБ`);
+        setError(null);
+        return;
+      }
+
       // Пересжатие через canvas всегда схлопывает анимацию в один кадр,
       // поэтому анимированные GIF/WEBP сохраняются как есть, без пересборки.
       if (await isAnimated(file)) {
@@ -284,15 +311,13 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
               </p>
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted">Фото</label>
+              <label className="mb-1 block text-xs text-muted">Фото или видео</label>
               <div className="flex items-center gap-2">
                 {form.imageUrl ? (
-                  <Image
+                  <BannerMedia
                     src={form.imageUrl}
-                    alt=""
                     width={64}
                     height={38}
-                    unoptimized
                     className="h-[38px] w-16 flex-shrink-0 rounded object-cover"
                   />
                 ) : (
@@ -302,11 +327,12 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
                 )}
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/mp4"
                   onChange={handlePhotoChange}
                   className="w-full text-xs text-muted file:mr-2 file:rounded-md file:border file:border-border file:bg-surface-2 file:px-2 file:py-1 file:text-xs file:text-foreground"
                 />
               </div>
+              <p className="mt-1 text-xs text-muted-2">MP4 проигрывается зациклено и без звука, как фон карточки.</p>
             </div>
 
             <div className="sm:col-span-3">
@@ -350,7 +376,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
                       width: `${Math.min(100, Math.max(10, Number(form.widthPct) || DEFAULT_WIDTH_PCT))}%`,
                     }}
                   >
-                    <Image src={form.imageUrl} alt="" fill sizes="100vw" className="object-cover" />
+                    <BannerMedia src={form.imageUrl} fill sizes="100vw" className="object-cover" />
                   </div>
                 </div>
               )}
@@ -396,15 +422,20 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
             <ul className="divide-y divide-border">
               {filtered.map((banner) => (
                 <li key={banner.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <Image
+                  <BannerMedia
                     src={banner.imageUrl}
-                    alt=""
                     width={64}
                     height={38}
-                    unoptimized
                     className="h-[38px] w-16 flex-shrink-0 rounded object-cover"
                   />
-                  <span className="min-w-0 flex-1 truncate text-sm">{banner.name}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {banner.name}
+                    {isVideoBannerSrc(banner.imageUrl) && (
+                      <span className="ml-1.5 rounded bg-surface-2 px-1 py-0.5 text-[10px] uppercase text-muted-2">
+                        видео
+                      </span>
+                    )}
+                  </span>
                   <button
                     type="button"
                     onClick={() => startEdit(banner)}
