@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getActivityById, getRegisteredPlayers, getDropCatalog, getActivityBanners } from "@/lib/queries";
+import { getActivityById, getRegisteredPlayers, getDropCatalog, getActivityBannerNames, getActivityBannersByIds } from "@/lib/queries";
 import { findLabelMatch } from "@/lib/nameMatch";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageActivitiesRole, isFullAdminRole } from "@/lib/accountRoles";
@@ -13,16 +13,17 @@ export default async function ActivityDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [activity, user, players, catalog, banners] = await Promise.all([
+  const [activity, user, players, catalog, bannerNames] = await Promise.all([
     getActivityById(id),
     getCurrentUser(),
     getRegisteredPlayers(),
     getDropCatalog(),
-    getActivityBanners(),
+    getActivityBannerNames(),
   ]);
   if (!activity) notFound();
 
-  const banner = findLabelMatch(activity.name, banners);
+  const matchedBanner = findLabelMatch(activity.name, bannerNames);
+  const [banner] = matchedBanner ? await getActivityBannersByIds([matchedBanner.id]) : [];
 
   return (
     <div className="space-y-4">

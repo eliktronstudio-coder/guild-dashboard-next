@@ -34,7 +34,7 @@ type ActivityRow = {
   date: string;
   dateIso: string;
   participants: number;
-  bannerUrl: string | null;
+  bannerId: string | null;
 };
 
 type PlayerOption = { id: string; name: string; role: string };
@@ -65,6 +65,7 @@ function todayISO() {
 
 export default function ActivitiesList({
   activities,
+  banners,
   total,
   totalPages,
   filters,
@@ -75,6 +76,8 @@ export default function ActivitiesList({
   summary,
 }: {
   activities: ActivityRow[];
+  /** id баннера -> data URL; только реально нужные на этой странице баннеры. */
+  banners: Record<string, string>;
   total: number;
   totalPages: number;
   filters: Filters;
@@ -703,14 +706,16 @@ export default function ActivitiesList({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {activities.map((a) => (
+              {activities.map((a) => {
+                const bannerUrl = a.bannerId ? banners[a.bannerId] : undefined;
+                return (
                 <tr key={a.id} className="hover:bg-surface-2">
                   <td className="whitespace-nowrap px-4 py-3 text-muted">{a.dateIso}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
-                      {a.bannerUrl && (
+                      {bannerUrl && (
                         <BannerMedia
-                          src={a.bannerUrl}
+                          src={bannerUrl}
                           width={44}
                           height={26}
                           className="h-[26px] w-11 flex-shrink-0 rounded object-cover"
@@ -762,7 +767,8 @@ export default function ActivitiesList({
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
               {activities.length === 0 && (
                 <tr>
                   <td colSpan={isAdmin ? 8 : 7}>

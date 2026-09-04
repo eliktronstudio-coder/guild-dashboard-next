@@ -709,3 +709,19 @@ export async function getAllPayments() {
 export async function getActivityBanners() {
   return prisma.activityBanner.findMany({ orderBy: { name: "asc" } });
 }
+
+/**
+ * Лёгкий список для подбора баннера по названию активности (без тяжёлого
+ * imageUrl — баннеры теперь бывают видео до ~12 МБ каждый, тянуть их все
+ * ради одного текстового сравнения не нужно). Дальше по найденным id
+ * выборочно догружается только реально нужный imageUrl через
+ * getActivityBannersByIds.
+ */
+export async function getActivityBannerNames() {
+  return prisma.activityBanner.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
+}
+
+export async function getActivityBannersByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+  return prisma.activityBanner.findMany({ where: { id: { in: ids } } });
+}

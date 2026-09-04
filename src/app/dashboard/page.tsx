@@ -25,7 +25,8 @@ import {
   getDropGoldGeneralAuto,
   getDropGoldPrimeManual,
   getDropGoldMiniRb,
-  getActivityBanners,
+  getActivityBannerNames,
+  getActivityBannersByIds,
 } from "@/lib/queries";
 import { findLabelMatch } from "@/lib/nameMatch";
 import { SCHEDULE } from "@/lib/schedule";
@@ -64,7 +65,7 @@ export default async function DashboardPage() {
     dropGoldGeneralAuto,
     dropGoldPrimeManual,
     dropGoldMiniRb,
-    activityBanners,
+    bannerNames,
   ] = await Promise.all([
     getCurrentUser(),
     topPlayersByAttendanceCategory("attendancePctPrime", 5),
@@ -77,20 +78,36 @@ export default async function DashboardPage() {
     getDropGoldGeneralAuto(),
     getDropGoldPrimeManual(),
     getDropGoldMiniRb(),
-    getActivityBanners(),
+    getActivityBannerNames(),
   ]);
 
   // Баннеры для расписания подбираются здесь, а не в клиентском компоненте:
   // иначе в браузер уехали бы картинки всех активностей, а не только нужных.
-  const scheduleBanners: Record<string, string> = {};
+  // Сопоставляем по id, а не по готовой картинке: баннеры бывают видео до
+  // ~12 МБ, и хранить одно и то же видео под несколькими ключами (например
+  // "Кошка (утро)" и "Кошка (вечер)" -> один баннер "Кошка") раздувало бы
+  // страницу на каждое повторение.
+  const scheduleBannerIdByName: Record<string, string> = {};
   for (const name of new Set(SCHEDULE.map((s) => s.name))) {
-    const banner = findLabelMatch(name, activityBanners);
-    if (banner) scheduleBanners[name] = banner.imageUrl;
+    const banner = findLabelMatch(name, bannerNames);
+    if (banner) scheduleBannerIdByName[name] = banner.id;
   }
   const recentActivities = allActivities.slice(0, 5).map((a) => ({
     ...a,
-    bannerUrl: findLabelMatch(a.name, activityBanners)?.imageUrl ?? null,
+    bannerId: findLabelMatch(a.name, bannerNames)?.id ?? null,
   }));
+
+  const neededBannerIds = [
+    ...new Set([
+      ...Object.values(scheduleBannerIdByName),
+      ...recentActivities.map((a) => a.bannerId).filter((id): id is string => id !== null),
+    ]),
+  ];
+  const bannerRecords = await getActivityBannersByIds(neededBannerIds);
+  const bannerUrlById = Object.fromEntries(bannerRecords.map((b) => [b.id, b.imageUrl]));
+  const scheduleBanners = Object.fromEntries(
+    Object.entries(scheduleBannerIdByName).map(([name, id]) => [name, bannerUrlById[id]])
+  );
   const payoutDays = daysUntilNextPayout();
   const isRandom = user?.role === "random";
 
@@ -330,7 +347,7 @@ export default async function DashboardPage() {
                         participants={a.participants}
                         status={a.status}
                         date={a.date}
-                        bannerUrl={a.bannerUrl}
+                        bannerUrl={a.bannerId ? (bannerUrlById[a.bannerId] ?? null) : null}
                       />
                     ))}
                   </div>
