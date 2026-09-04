@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 
-const MAX_IMAGE_BYTES = 10_000_000;
+const MAX_IMAGE_BYTES = 12_000_000;
 
 const MIN_HEIGHT = 60;
 const MAX_HEIGHT = 600;
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   }
   const isMedia = imageUrl.startsWith("data:image/") || imageUrl.startsWith("data:video/mp4");
   if (!isMedia || imageUrl.length > MAX_IMAGE_BYTES) {
-    return NextResponse.json({ error: "Файл слишком большой или неверного формата (до ~9 МБ)." }, { status: 400 });
+    return NextResponse.json({ error: "Файл слишком большой или неверного формата (до ~11 МБ)." }, { status: 400 });
   }
 
   const existing = await prisma.activityBanner.findUnique({ where: { name } });
