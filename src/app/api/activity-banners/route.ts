@@ -55,8 +55,9 @@ export async function POST(request: NextRequest) {
 
   const { height, widthPct } = readSize(body);
   const { imgWidth, imgHeight } = readNatural(body);
+  const isVideo = imageUrl.startsWith("data:video/");
   const banner = await prisma.activityBanner.create({
-    data: { name, imageUrl, height, widthPct, imgWidth, imgHeight },
+    data: { name, imageUrl, isVideo, height, widthPct, imgWidth, imgHeight },
   });
   return NextResponse.json(banner, { status: 201 });
 }

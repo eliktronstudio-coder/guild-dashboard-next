@@ -5,7 +5,6 @@ import {
   getAllPlayers,
   getDropCatalog,
   getActivityBannerNames,
-  getActivityBannersByIds,
 } from "@/lib/queries";
 import { findLabelMatch } from "@/lib/nameMatch";
 import { getCurrentUser } from "@/lib/auth";
@@ -44,21 +43,23 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
 
   // Названия активностей приходят из игры вразнобой («АГЛ Т1», «морф»), поэтому
   // баннер ищется тем же подбором, что и ники: точное -> по началу -> опечатка.
-  // Сопоставляем по id, не по картинке — баннеры бывают видео до ~12 МБ, и
-  // встраивать их в каждую строку таблицы (даже дублируя один и тот же
-  // баннер на несколько одноимённых активностей) резко раздувает страницу.
-  const bannerIdByName = new Map<string, string | null>();
-  function resolveBannerId(name: string) {
-    if (!bannerIdByName.has(name)) {
-      bannerIdByName.set(name, findLabelMatch(name, bannerNames)?.id ?? null);
+  // В строку кладём только id + isVideo — сам файл (баннеры бывают видео до
+  // ~12 МБ) отдаётся отдельным HTTP-запросом на /api/activity-banners/[id]/media,
+  // а не встраивается в пропсы: иначе Next дублирует эти байты в
+  // hydration-payload поверх уже отрендеренного HTML.
+  const bannerByName = new Map<string, { id: string; isVideo: boolean } | null>();
+  function resolveBanner(name: string) {
+    if (!bannerByName.has(name)) {
+      const match = findLabelMatch(name, bannerNames);
+      bannerByName.set(name, match ? { id: match.id, isVideo: match.isVideo } : null);
     }
-    return bannerIdByName.get(name) ?? null;
+    return bannerByName.get(name) ?? null;
   }
 
-  const activitiesWithBannerId = result.activities.map((a) => ({ ...a, bannerId: resolveBannerId(a.name) }));
-  const neededBannerIds = [...new Set(activitiesWithBannerId.map((a) => a.bannerId).filter((id): id is string => id !== null))];
-  const bannerRecords = await getActivityBannersByIds(neededBannerIds);
-  const bannerUrlById = Object.fromEntries(bannerRecords.map((b) => [b.id, b.imageUrl]));
+  const activitiesWithBanner = result.activities.map((a) => {
+    const banner = resolveBanner(a.name);
+    return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
+  });
 
   const counts = result.activities.map((a) => a.participants);
   const avgAttendance = counts.length ? Math.round(counts.reduce((s, c) => s + c, 0) / counts.length) : 0;
@@ -68,8 +69,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
   return (
     <BlurGate blurred={user?.role === "random"}>
       <ActivitiesList
-        activities={activitiesWithBannerId}
-        banners={bannerUrlById}
+        activities={activitiesWithBanner}
         total={result.total}
         totalPages={result.totalPages}
         filters={filters}

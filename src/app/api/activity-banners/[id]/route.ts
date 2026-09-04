@@ -41,6 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const data: {
     name?: string;
     imageUrl?: string;
+    isVideo?: boolean;
     height?: number | null;
     widthPct?: number | null;
     imgWidth?: number | null;
@@ -65,6 +66,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       return NextResponse.json({ error: "Файл слишком большой или неверного формата (до ~11 МБ)." }, { status: 400 });
     }
     data.imageUrl = imageUrl;
+    data.isVideo = imageUrl.startsWith("data:video/");
     // Размеры относятся к конкретному файлу, поэтому обновляются вместе с ним.
     const natural = readNatural(body);
     data.imgWidth = natural.imgWidth;

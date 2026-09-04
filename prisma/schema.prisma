@@ -138,6 +138,9 @@ model ActivityBanner {
   id        String   @id @default(cuid())
   name      String   @unique
   imageUrl  String
+  /// true, если imageUrl — data:video/... (не грузим тело картинки только
+  /// чтобы понять, <video> рендерить или <img>).
+  isVideo   Boolean  @default(false)
   /// Размер баннера на странице активности: высота в px, ширина в % от карточки.
   /// height = null — баннер подстраивается под пропорции картинки и показывает её целиком.
   height    Int?

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getActivityById, getRegisteredPlayers, getDropCatalog, getActivityBannerNames, getActivityBannersByIds } from "@/lib/queries";
+import { getActivityById, getRegisteredPlayers, getDropCatalog, getActivityBannerNames } from "@/lib/queries";
 import { findLabelMatch } from "@/lib/nameMatch";
 import { getCurrentUser } from "@/lib/auth";
 import { canManageActivitiesRole, isFullAdminRole } from "@/lib/accountRoles";
@@ -22,8 +22,7 @@ export default async function ActivityDetailPage({
   ]);
   if (!activity) notFound();
 
-  const matchedBanner = findLabelMatch(activity.name, bannerNames);
-  const [banner] = matchedBanner ? await getActivityBannersByIds([matchedBanner.id]) : [];
+  const banner = findLabelMatch(activity.name, bannerNames);
 
   return (
     <div className="space-y-4">
@@ -39,7 +38,8 @@ export default async function ActivityDetailPage({
           catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price, imageUrl: c.imageUrl }))}
           isAdmin={canManageActivitiesRole(user?.role)}
           canManageDrops={isFullAdminRole(user?.role)}
-          bannerUrl={banner?.imageUrl ?? null}
+          bannerUrl={banner ? `/api/activity-banners/${banner.id}/media` : null}
+          bannerIsVideo={banner?.isVideo ?? false}
           bannerHeight={banner?.height ?? null}
           bannerWidthPct={banner?.widthPct ?? undefined}
           bannerRatio={banner?.imgWidth && banner?.imgHeight ? `${banner.imgWidth} / ${banner.imgHeight}` : null}

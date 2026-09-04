@@ -3,7 +3,7 @@
 import { useState, useMemo, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Pencil, X, ImageOff, Search } from "lucide-react";
-import BannerMedia, { isVideoBannerSrc } from "@/components/BannerMedia";
+import BannerMedia from "@/components/BannerMedia";
 
 const MAX_IMAGE_BYTES = 12_000_000;
 /**
@@ -17,7 +17,7 @@ const FALLBACK_WIDTHS = [2048, 1600, 1280, 1024, 800];
 type Banner = {
   id: string;
   name: string;
-  imageUrl: string;
+  isVideo: boolean;
   height: number | null;
   widthPct: number | null;
   imgWidth: number | null;
@@ -25,7 +25,10 @@ type Banner = {
 };
 type FormState = {
   name: string;
+  /** Заполняется, только когда выбран НОВЫЙ файл — иначе при сохранении
+   * imageUrl не отправляется и на сервере остаётся прежний файл. */
   imageUrl: string | null;
+  isVideo: boolean;
   /** Пусто — баннер показывает картинку целиком по её пропорциям. */
   height: string;
   widthPct: string;
@@ -39,6 +42,7 @@ const DEFAULT_WIDTH_PCT = 100;
 const emptyForm: FormState = {
   name: "",
   imageUrl: null,
+  isVideo: false,
   height: "",
   widthPct: String(DEFAULT_WIDTH_PCT),
   imgWidth: null,
@@ -153,7 +157,11 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
   function startEdit(banner: Banner) {
     setForm({
       name: banner.name,
-      imageUrl: banner.imageUrl,
+      // Null — файл не менялся, при сохранении не переотправляем: он уже
+      // на сервере, а тянуть его в браузер сюда ради предпросмотра не нужно,
+      // превью показывается через media-эндпоинт по id.
+      imageUrl: null,
+      isVideo: banner.isVideo,
       height: banner.height === null ? "" : String(banner.height),
       widthPct: String(banner.widthPct ?? DEFAULT_WIDTH_PCT),
       imgWidth: banner.imgWidth,
@@ -189,7 +197,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
           return;
         }
         const size = await loadVideoSize(dataUrl);
-        setForm((f) => ({ ...f, imageUrl: dataUrl, imgWidth: size.width, imgHeight: size.height }));
+        setForm((f) => ({ ...f, imageUrl: dataUrl, isVideo: true, imgWidth: size.width, imgHeight: size.height }));
         setInfo(`${size.width}×${size.height} (видео, без звука), ${Math.round(dataUrl.length / 1024)} КБ`);
         setError(null);
         return;
@@ -206,7 +214,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
           return;
         }
         const img = await loadImage(dataUrl);
-        setForm((f) => ({ ...f, imageUrl: dataUrl, imgWidth: img.width, imgHeight: img.height }));
+        setForm((f) => ({ ...f, imageUrl: dataUrl, isVideo: false, imgWidth: img.width, imgHeight: img.height }));
         setInfo(`${img.width}×${img.height} (анимация, без сжатия), ${Math.round(dataUrl.length / 1024)} КБ`);
         setError(null);
         return;
@@ -217,7 +225,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
         setError("Фото слишком большое даже после сжатия — возьмите картинку поменьше.");
         return;
       }
-      setForm((f) => ({ ...f, imageUrl: result.dataUrl, imgWidth: result.width, imgHeight: result.height }));
+      setForm((f) => ({ ...f, imageUrl: result.dataUrl, isVideo: false, imgWidth: result.width, imgHeight: result.height }));
       setInfo(
         `${result.width}×${result.height}${result.original ? " (исходное разрешение)" : " (уменьшено, чтобы влезло в лимит)"}, ` +
           `${Math.round(result.dataUrl.length / 1024)} КБ`
@@ -231,7 +239,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!form.imageUrl) {
+    if (!editingId && !form.imageUrl) {
       setError("Загрузите фото.");
       return;
     }
@@ -242,7 +250,9 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
-          imageUrl: form.imageUrl,
+          // При редактировании без выбора нового файла imageUrl не шлём —
+          // сервер тогда не трогает уже сохранённый файл.
+          ...(form.imageUrl ? { imageUrl: form.imageUrl } : {}),
           height: form.height.trim() === "" ? null : Number(form.height),
           widthPct: Number(form.widthPct),
           imgWidth: form.imgWidth,
@@ -273,6 +283,10 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
   }
 
   const formOpen = adding || editingId !== null;
+  // Новый выбранный файл (data: URL) важнее уже сохранённого — иначе, пока
+  // редактируем, показываем текущий файл через media-эндпоинт по id.
+  const previewSrc = form.imageUrl ?? (editingId ? `/api/activity-banners/${editingId}/media` : null);
+  const previewIsVideo = form.imageUrl ? undefined : form.isVideo;
 
   return (
     <div className="space-y-4">
@@ -313,9 +327,10 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
             <div>
               <label className="mb-1 block text-xs text-muted">Фото или видео</label>
               <div className="flex items-center gap-2">
-                {form.imageUrl ? (
+                {previewSrc ? (
                   <BannerMedia
-                    src={form.imageUrl}
+                    src={previewSrc}
+                    isVideo={previewIsVideo}
                     width={64}
                     height={38}
                     className="h-[38px] w-16 flex-shrink-0 rounded object-cover"
@@ -364,7 +379,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
                   % от карточки
                 </label>
               </div>
-              {form.imageUrl && (
+              {previewSrc && (
                 <div className="mt-2 rounded-md border border-border bg-surface-2 p-2">
                   <p className="mb-1.5 text-xs text-muted-2">Предпросмотр</p>
                   <div
@@ -376,7 +391,7 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
                       width: `${Math.min(100, Math.max(10, Number(form.widthPct) || DEFAULT_WIDTH_PCT))}%`,
                     }}
                   >
-                    <BannerMedia src={form.imageUrl} fill sizes="100vw" className="object-cover" />
+                    <BannerMedia src={previewSrc} isVideo={previewIsVideo} fill sizes="100vw" className="object-cover" />
                   </div>
                 </div>
               )}
@@ -423,14 +438,15 @@ export default function ActivityBannerPanel({ banners }: { banners: Banner[] }) 
               {filtered.map((banner) => (
                 <li key={banner.id} className="flex items-center gap-3 px-4 py-2.5">
                   <BannerMedia
-                    src={banner.imageUrl}
+                    src={`/api/activity-banners/${banner.id}/media`}
+                    isVideo={banner.isVideo}
                     width={64}
                     height={38}
                     className="h-[38px] w-16 flex-shrink-0 rounded object-cover"
                   />
                   <span className="min-w-0 flex-1 truncate text-sm">
                     {banner.name}
-                    {isVideoBannerSrc(banner.imageUrl) && (
+                    {banner.isVideo && (
                       <span className="ml-1.5 rounded bg-surface-2 px-1 py-0.5 text-[10px] uppercase text-muted-2">
                         видео
                       </span>

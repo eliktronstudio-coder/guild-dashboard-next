@@ -706,22 +706,24 @@ export async function getAllPayments() {
   return prisma.payment.findMany({ orderBy: { date: "desc" }, include: { player: true } });
 }
 
-export async function getActivityBanners() {
-  return prisma.activityBanner.findMany({ orderBy: { name: "asc" } });
-}
-
 /**
  * Лёгкий список для подбора баннера по названию активности (без тяжёлого
- * imageUrl — баннеры теперь бывают видео до ~12 МБ каждый, тянуть их все
- * ради одного текстового сравнения не нужно). Дальше по найденным id
- * выборочно догружается только реально нужный imageUrl через
- * getActivityBannersByIds.
+ * imageUrl — баннеры теперь бывают видео до ~12 МБ каждый). isVideo нужен
+ * только чтобы решить, рендерить <video> или <img> — сам imageUrl потребители
+ * не встраивают в страницу вовсе, а ссылаются на /api/activity-banners/[id]/media,
+ * иначе Next заново дублирует эти пропсы в hydration-payload поверх HTML.
  */
 export async function getActivityBannerNames() {
-  return prisma.activityBanner.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } });
-}
-
-export async function getActivityBannersByIds(ids: string[]) {
-  if (ids.length === 0) return [];
-  return prisma.activityBanner.findMany({ where: { id: { in: ids } } });
+  return prisma.activityBanner.findMany({
+    select: {
+      id: true,
+      name: true,
+      isVideo: true,
+      height: true,
+      widthPct: true,
+      imgWidth: true,
+      imgHeight: true,
+    },
+    orderBy: { name: "asc" },
+  });
 }

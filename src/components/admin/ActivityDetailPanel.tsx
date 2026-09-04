@@ -58,6 +58,7 @@ export default function ActivityDetailPanel({
   isAdmin,
   canManageDrops = isAdmin,
   bannerUrl = null,
+  bannerIsVideo = false,
   bannerHeight = null,
   bannerWidthPct = 100,
   bannerRatio = null,
@@ -70,6 +71,7 @@ export default function ActivityDetailPanel({
   canManageDrops?: boolean;
   /** Фото из «Баннеров активностей», подобранное по названию. */
   bannerUrl?: string | null;
+  bannerIsVideo?: boolean;
   /** Размер баннера задаётся в разделе «Баннеры активностей». */
   /** null — баннер подстраивается под пропорции картинки и показывает её целиком. */
   bannerHeight?: number | null;
@@ -339,7 +341,13 @@ export default function ActivityDetailPanel({
                 width: `${bannerWidthPct}%`,
               }}
             >
-              <BannerMedia src={bannerUrl} fill sizes="(max-width: 1024px) 100vw, 66vw" className="object-cover" />
+              <BannerMedia
+                src={bannerUrl}
+                isVideo={bannerIsVideo}
+                fill
+                sizes="(max-width: 1024px) 100vw, 66vw"
+                className="object-cover"
+              />
               {/* Затемнение снизу — под ним начинается заголовок с бейджами. */}
               <div
                 className="absolute inset-0"

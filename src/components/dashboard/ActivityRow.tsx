@@ -15,6 +15,7 @@ type ActivityRowProps = {
   status: string;
   date: string;
   bannerUrl?: string | null;
+  bannerIsVideo?: boolean;
 };
 
 /**
@@ -22,7 +23,7 @@ type ActivityRowProps = {
  * the schedule panel rows — the text sits on the opaque left side, the
  * artwork reveals on the right.
  */
-export default function ActivityRow({ href, name, participants, status, date, bannerUrl }: ActivityRowProps) {
+export default function ActivityRow({ href, name, participants, status, date, bannerUrl, bannerIsVideo }: ActivityRowProps) {
   return (
     <Link
       href={href}
@@ -30,7 +31,13 @@ export default function ActivityRow({ href, name, participants, status, date, ba
     >
       {bannerUrl && (
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <BannerMedia src={bannerUrl} fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" />
+          <BannerMedia
+            src={bannerUrl}
+            isVideo={bannerIsVideo}
+            fill
+            sizes="(max-width: 1024px) 100vw, 33vw"
+            className="object-cover"
+          />
           <div
             className="absolute inset-0"
             style={{

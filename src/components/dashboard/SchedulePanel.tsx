@@ -26,8 +26,14 @@ function dayLabel(slotDay: number, todayDay: number) {
   return DAY_NAMES[slotDay];
 }
 
-/** name -> фото баннера; подбирается на сервере, чтобы не тащить в браузер все картинки. */
-export default function SchedulePanel({ banners = {} }: { banners?: Record<string, string> }) {
+type BannerRef = { id: string; isVideo: boolean };
+
+/**
+ * name -> {id, isVideo}; подбирается на сервере. Сам файл не передаётся через
+ * пропсы (баннеры бывают видео до ~12 МБ) — картинка/видео запрашивается
+ * браузером напрямую с /api/activity-banners/[id]/media как обычный <img>/<video src>.
+ */
+export default function SchedulePanel({ banners = {} }: { banners?: Record<string, BannerRef> }) {
   // null on the server: the countdown depends on the current time, which the
   // server and the browser would disagree on during hydration.
   const nowMs = useSyncExternalStore(subscribe, getSnapshot, () => null);
@@ -52,7 +58,13 @@ export default function SchedulePanel({ banners = {} }: { banners?: Record<strin
           <div className="relative flex min-h-[92px] items-center gap-4 overflow-hidden rounded-lg border border-border bg-surface px-4 py-3">
             {banners[slot.name] && (
               <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-                <BannerMedia src={banners[slot.name]} fill sizes="(max-width: 1024px) 100vw, 33vw" className="object-cover" />
+                <BannerMedia
+                  src={`/api/activity-banners/${banners[slot.name].id}/media`}
+                  isVideo={banners[slot.name].isVideo}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 33vw"
+                  className="object-cover"
+                />
                 {/* Текст лежит слева, поэтому картинка раскрывается только справа. */}
                 <div
                   className="absolute inset-0"

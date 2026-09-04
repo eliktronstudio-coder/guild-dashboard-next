@@ -7,6 +7,12 @@ export function isVideoBannerSrc(src: string) {
 
 type Props = {
   src: string;
+  /**
+   * Когда src — не data: URL, а ссылка на /api/activity-banners/[id]/media,
+   * по строке уже не определить тип — вызывающий код должен передать явно
+   * (известно из лёгкого списка баннеров, см. getActivityBannerNames).
+   */
+  isVideo?: boolean;
   alt?: string;
   className?: string;
   sizes?: string;
@@ -16,8 +22,8 @@ type Props = {
  * MP4-баннеры проигрываются беззвучно и зациклены, как GIF — это фон
  * карточки, а не видео с управлением, поэтому убраны controls и звук.
  */
-export default function BannerMedia({ src, alt = "", className, sizes, fill, width, height }: Props) {
-  if (isVideoBannerSrc(src)) {
+export default function BannerMedia({ src, isVideo, alt = "", className, sizes, fill, width, height }: Props) {
+  if (isVideo ?? isVideoBannerSrc(src)) {
     return (
       <video
         src={src}
