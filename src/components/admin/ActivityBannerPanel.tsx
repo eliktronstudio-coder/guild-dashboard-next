@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, Pencil, X, ImageOff, Search } from "lucide-react";
 import BannerMedia, { isVideoBannerSrc } from "@/components/BannerMedia";
 
-const MAX_IMAGE_BYTES = 5_000_000;
+const MAX_IMAGE_BYTES = 10_000_000;
 /**
  * Сначала пробуем сохранить исходное разрешение, и только если результат не
  * влезает в лимит хранения — снижаем качество, а затем разрешение. Так фото
