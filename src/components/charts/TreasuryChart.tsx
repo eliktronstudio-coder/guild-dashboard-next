@@ -20,8 +20,6 @@ export type TreasuryChartPoint = {
   gold: number;
   goldMiniRb?: number;
   goldPrime?: number;
-  /** true — в этот день была операция с казной (пополнение/списание). */
-  hasDeposit?: boolean;
 };
 
 const seriesLabel: Record<string, string> = {
@@ -29,17 +27,6 @@ const seriesLabel: Record<string, string> = {
   goldMiniRb: "Мини-РБ",
   goldPrime: "Прайм",
 };
-
-/** Яркая точка — был приток/списание в этот день, тусклая — операций не было. */
-function depositDot(props: { cx?: number; cy?: number; index?: number; payload?: TreasuryChartPoint }) {
-  const { cx, cy, index, payload } = props;
-  if (cx === undefined || cy === undefined) return <g key={index} />;
-  return payload?.hasDeposit ? (
-    <circle key={index} cx={cx} cy={cy} r={4} fill="var(--accent-bright)" stroke="var(--surface)" strokeWidth={2} />
-  ) : (
-    <circle key={index} cx={cx} cy={cy} r={2} fill="var(--muted-2)" fillOpacity={0.5} />
-  );
-}
 
 export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) {
   if (data.length === 0) {
@@ -86,11 +73,6 @@ export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) 
               `${numberFmt.format(Number(value))} золота`,
               seriesLabel[String(name)] ?? String(name),
             ]}
-            labelFormatter={(label, payload) => {
-              const point = payload?.[0]?.payload as TreasuryChartPoint | undefined;
-              const suffix = point?.hasDeposit ? " — было пополнение" : " — без операций";
-              return `${label}${suffix}`;
-            }}
           />
           {hasCategories && (
             <Legend
@@ -105,7 +87,7 @@ export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) 
             stroke="var(--accent)"
             strokeWidth={2}
             fill="url(#goldFill)"
-            dot={depositDot}
+            dot={{ r: 3, fill: "var(--accent-bright)", strokeWidth: 0 }}
             activeDot={{ r: 5, fill: "var(--accent-bright)", stroke: "var(--surface)", strokeWidth: 2 }}
           />
           {hasCategories && (
@@ -132,16 +114,6 @@ export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) 
           )}
         </AreaChart>
       </ResponsiveContainer>
-      <div className="mt-1 flex items-center gap-3 text-[11px] text-muted">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full" style={{ background: "var(--accent-bright)" }} />
-          было пополнение
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-1.5 w-1.5 rounded-full opacity-50" style={{ background: "var(--muted-2)" }} />
-          без операций
-        </span>
-      </div>
     </div>
   );
 }

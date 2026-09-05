@@ -540,44 +540,19 @@ async function getCategoryDailyDeltas(category: string): Promise<Map<string, num
 }
 
 // "Динамика казны" для Статистики: общая казна плюс отдельные линии
-// притока золота с Мини-РБ и Прайм, накопительный итог по дням за
-// последние `days` дней — сплошной шкалой (дни без операций тоже
-// показываются, линия просто идёт горизонтально), с отметкой, в какие
-// дни реально было пополнение.
-export async function getTreasuryChartCombined(days = 30) {
+// притока золота с Мини-РБ и Прайм, все как накопительный итог по дням.
+export async function getTreasuryChartCombined() {
   const [total, miniRb, prime] = await Promise.all([
     getTreasuryDailyDeltas(),
     getCategoryDailyDeltas("Мини-РБ"),
     getCategoryDailyDeltas("Прайм"),
   ]);
-
-  const now = new Date();
-  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const windowKeys: string[] = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(todayUTC);
-    d.setUTCDate(d.getUTCDate() - i);
-    windowKeys.push(d.toISOString().slice(0, 10));
-  }
-  const windowStart = windowKeys[0];
-
-  // Баланс на начало окна — сумма всех операций ДО него, чтобы кривая
-  // показывала реальный текущий баланс, а не обнулялась на границе окна.
-  function baselineBefore(deltas: Map<string, number>) {
-    let sum = 0;
-    for (const [key, delta] of deltas) {
-      if (key < windowStart) sum += delta;
-    }
-    return sum;
-  }
-
-  let runningTotal = baselineBefore(total);
-  let runningMiniRb = baselineBefore(miniRb);
-  let runningPrime = baselineBefore(prime);
-
-  return windowKeys.map((key) => {
-    const deltaTotal = total.get(key) ?? 0;
-    runningTotal += deltaTotal;
+  const days = [...new Set([...total.keys(), ...miniRb.keys(), ...prime.keys()])].sort();
+  let runningTotal = 0;
+  let runningMiniRb = 0;
+  let runningPrime = 0;
+  return days.map((key) => {
+    runningTotal += total.get(key) ?? 0;
     runningMiniRb += miniRb.get(key) ?? 0;
     runningPrime += prime.get(key) ?? 0;
     return {
@@ -585,7 +560,6 @@ export async function getTreasuryChartCombined(days = 30) {
       gold: runningTotal,
       goldMiniRb: runningMiniRb,
       goldPrime: runningPrime,
-      hasDeposit: deltaTotal !== 0,
     };
   });
 }
