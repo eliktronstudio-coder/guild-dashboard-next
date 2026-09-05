@@ -8,7 +8,7 @@ type Player = {
   id: string;
   name: string;
   role: string;
-  attendancePctMiniRb: number;
+  attendancePct: number;
   salaryCoefficient: number;
 };
 
@@ -52,11 +52,11 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
     const price = Number(pricePer1000) || 0;
     const totalGold = (xp / 1000) * price;
 
-    // Та же логика, что и в расчёте зарплаты с Мини-РБ: доля пропорциональна
-    // посещаемости Мини-РБ, скорректированной индивидуальным коэффициентом.
+    // Та же логика, что и в расчёте зарплаты: доля пропорциональна общей
+    // посещаемости, скорректированной индивидуальным коэффициентом.
     const weights = participants.map((p) => ({
       player: p,
-      weight: p.attendancePctMiniRb * p.salaryCoefficient,
+      weight: p.attendancePct * p.salaryCoefficient,
     }));
     const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
 
@@ -77,7 +77,7 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
         <h1 className="text-lg font-semibold">Расчёт покупки РБ</h1>
         <p className="text-sm text-muted">
           Выберите участников, укажите объём купленного РБ опыта — стоимость разделится между выбранными
-          пропорционально их посещаемости Мини-РБ (с учётом индивидуального коэффициента, как в расчёте зарплаты).
+          пропорционально их общей посещаемости (с учётом индивидуального коэффициента, как в расчёте зарплаты).
         </p>
       </div>
 
@@ -119,7 +119,7 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
             <EmptyState title="Никто не выбран" hint="Отметьте игроков в списке слева." />
           ) : result.totalWeight === 0 ? (
             <p className="text-sm text-muted">
-              У выбранных участников посещаемость Мини-РБ 0% — распределить стоимость пропорционально нечем.
+              У выбранных участников общая посещаемость 0% — распределить стоимость пропорционально нечем.
             </p>
           ) : (
             <ul className="max-h-[280px] space-y-1 overflow-y-auto text-sm">
@@ -127,7 +127,7 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
                 <li key={s.player.id} className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-surface-2">
                   <span className="min-w-0 truncate">{s.player.name}</span>
                   <span className="flex flex-shrink-0 items-center gap-3">
-                    <span className="font-mono text-xs text-muted">{s.player.attendancePctMiniRb}% М-РБ</span>
+                    <span className="font-mono text-xs text-muted">{s.player.attendancePct}%</span>
                     <span className="w-14 text-right font-mono text-xs text-muted">{s.sharePct.toFixed(1)}%</span>
                     <span className="w-24 text-right font-mono font-semibold tabular-nums">
                       {numberFmt.format(s.gold)}
@@ -185,7 +185,7 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
                   <span className="min-w-0 flex-1 truncate font-medium">{p.name}</span>
                   <span className="text-xs text-muted">{p.role}</span>
                   <span className="w-16 flex-shrink-0 text-right font-mono text-xs text-muted">
-                    {p.attendancePctMiniRb}% М-РБ
+                    {p.attendancePct}%
                   </span>
                 </label>
               </li>
