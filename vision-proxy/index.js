@@ -15,7 +15,9 @@ app.use(express.json({ limit: "5mb" }));
 async function askVision(image, mediaType, prompt) {
   const response = await anthropic.messages.create({
     model: "claude-sonnet-5",
-    max_tokens: 1024,
+    // Длинный лог дропа (после отказа от схлопывания повторов) легко выходит
+    // за 1024 токена — ответ обрезался посреди JSON-массива, JSON.parse падал.
+    max_tokens: 4096,
     messages: [
       {
         role: "user",
@@ -29,7 +31,12 @@ async function askVision(image, mediaType, prompt) {
   const text = response.content.find((c) => c.type === "text")?.text ?? "";
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) return null;
-  return JSON.parse(jsonMatch[0]);
+  try {
+    return JSON.parse(jsonMatch[0]);
+  } catch (err) {
+    console.error("Модель вернула невалидный JSON (вероятно, обрезан по длине):", text.slice(0, 200));
+    throw new Error("Не удалось разобрать ответ распознавания — попробуйте прислать скрин ещё раз.");
+  }
 }
 
 function requireAuth(req, res) {
