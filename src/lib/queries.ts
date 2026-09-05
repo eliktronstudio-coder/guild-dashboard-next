@@ -164,6 +164,16 @@ export async function getPlayerById(id: string) {
   return withDerived([player], derived)[0];
 }
 
+/** Для «Моего профиля» — карточка игрока, привязанная к своему аккаунту. */
+export async function getPlayerByUserId(userId: string) {
+  const [player, derived] = await Promise.all([
+    prisma.player.findUnique({ where: { userId } }),
+    getDerivedPlayerMaps(),
+  ]);
+  if (!player) return null;
+  return withDerived([player], derived)[0];
+}
+
 export async function getPlayerActivityHistory(playerId: string, limit = 8) {
   const rows = await prisma.activityParticipant.findMany({
     where: { playerId },

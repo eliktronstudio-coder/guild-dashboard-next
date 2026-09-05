@@ -9,6 +9,7 @@ import {
   BookOpen,
   ImagePlay,
   Map,
+  UserCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ export const navSections: NavSection[] = [
       { href: "/dashboard", label: "Статистика", icon: LayoutDashboard },
       { href: "/activities", label: "Активность", icon: Swords },
       { href: "/players", label: "Состав", icon: Users },
+      { href: "/profile", label: "Мой профиль", icon: UserCircle },
     ],
   },
   {
