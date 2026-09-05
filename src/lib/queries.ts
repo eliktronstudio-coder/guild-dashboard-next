@@ -215,27 +215,38 @@ export async function getPlayerAttendanceChartData(playerId: string, weeks = 10)
 }
 
 /**
- * Посещаемость по дням за последние `days` дней. В дни без участия — 0,
- * график идёт сплошной линией до конца периода, не обрываясь.
+ * Посещаемость по дням за последние `days` дней, отдельно по Прайм, Мини-РБ
+ * и PvP (категория и режим — независимые признаки активности, поэтому это
+ * три отдельных счётчика, а не взаимоисключающие доли одного). В дни без
+ * участия — 0, график идёт сплошной линией до конца периода, не обрываясь.
  */
 export async function getPlayerDailyAttendance(playerId: string, days = 30) {
   const rows = await prisma.activityParticipant.findMany({
     where: { playerId },
-    select: { activity: { select: { date: true } } },
+    select: { activity: { select: { date: true, category: true, mode: true } } },
   });
-  const byDay = new Map<string, number>();
+  const byDayPrime = new Map<string, number>();
+  const byDayMiniRb = new Map<string, number>();
+  const byDayPvp = new Map<string, number>();
   for (const r of rows) {
     const key = dayKey(r.activity.date);
-    byDay.set(key, (byDay.get(key) ?? 0) + 1);
+    if (r.activity.category === "Прайм") byDayPrime.set(key, (byDayPrime.get(key) ?? 0) + 1);
+    if (r.activity.category === "Мини-РБ") byDayMiniRb.set(key, (byDayMiniRb.get(key) ?? 0) + 1);
+    if (r.activity.mode === "PvP") byDayPvp.set(key, (byDayPvp.get(key) ?? 0) + 1);
   }
   const now = new Date();
   const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const result: { date: string; count: number }[] = [];
+  const result: { date: string; prime: number; miniRb: number; pvp: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(todayUTC);
     d.setUTCDate(d.getUTCDate() - i);
     const key = d.toISOString().slice(0, 10);
-    result.push({ date: shortDateFmt.format(d), count: byDay.get(key) ?? 0 });
+    result.push({
+      date: shortDateFmt.format(d),
+      prime: byDayPrime.get(key) ?? 0,
+      miniRb: byDayMiniRb.get(key) ?? 0,
+      pvp: byDayPvp.get(key) ?? 0,
+    });
   }
   return result;
 }

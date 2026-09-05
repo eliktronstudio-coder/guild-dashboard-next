@@ -1,11 +1,19 @@
 "use client";
 
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import EmptyState from "@/components/EmptyState";
 
 export type DailyAttendancePoint = {
   date: string;
-  count: number;
+  prime: number;
+  miniRb: number;
+  pvp: number;
+};
+
+const seriesLabel: Record<string, string> = {
+  prime: "Прайм",
+  miniRb: "Мини-РБ",
+  pvp: "PvP",
 };
 
 export default function DailyAttendanceChart({ data }: { data: DailyAttendancePoint[] }) {
@@ -43,15 +51,38 @@ export default function DailyAttendanceChart({ data }: { data: DailyAttendancePo
               fontSize: 12,
             }}
             labelStyle={{ color: "var(--foreground)" }}
-            formatter={(value) => [`${value} участий`, "Активность"]}
+            formatter={(value, name) => [`${value} участий`, seriesLabel[String(name)] ?? String(name)]}
+          />
+          <Legend
+            formatter={(value) => seriesLabel[value] ?? value}
+            wrapperStyle={{ fontSize: 11, color: "var(--muted)" }}
           />
           <Line
             type="monotone"
-            dataKey="count"
+            dataKey="prime"
+            name="prime"
+            stroke="var(--jade)"
+            strokeWidth={2}
+            dot={{ r: 2, fill: "var(--jade)", strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: "var(--jade)", stroke: "var(--surface)", strokeWidth: 2 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="miniRb"
+            name="miniRb"
+            stroke="var(--info)"
+            strokeWidth={2}
+            dot={{ r: 2, fill: "var(--info)", strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: "var(--info)", stroke: "var(--surface)", strokeWidth: 2 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="pvp"
+            name="pvp"
             stroke="var(--accent)"
             strokeWidth={2}
-            dot={{ r: 3, fill: "var(--accent-bright)", strokeWidth: 0 }}
-            activeDot={{ r: 5, fill: "var(--accent-bright)", stroke: "var(--surface)", strokeWidth: 2 }}
+            dot={{ r: 2, fill: "var(--accent-bright)", strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: "var(--accent-bright)", stroke: "var(--surface)", strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>
