@@ -30,7 +30,7 @@ type FormState = {
   salaryCoefficient: string;
 };
 
-type SortKey = "name" | "attendance" | "salary";
+type SortKey = "name" | "attendance" | "attendancePrime" | "attendanceMiniRb" | "pvp" | "salary";
 
 const emptyForm: FormState = { name: "", role: ROLES[0], salaryCoefficient: "1" };
 
@@ -73,6 +73,9 @@ export default function PlayersTable({
     list = [...list].sort((a, b) => {
       if (sortKey === "name") return a.name.localeCompare(b.name, "ru");
       if (sortKey === "salary") return b.salary - a.salary;
+      if (sortKey === "attendancePrime") return b.attendancePctPrime - a.attendancePctPrime;
+      if (sortKey === "attendanceMiniRb") return b.attendancePctMiniRb - a.attendancePctMiniRb;
+      if (sortKey === "pvp") return b.pvpCount - a.pvpCount;
       return b.attendancePct - a.attendancePct;
     });
     return list;
@@ -249,6 +252,9 @@ export default function PlayersTable({
           className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
         >
           <option value="attendance">Сортировка: посещаемость</option>
+          <option value="attendancePrime">Сортировка: Прайм</option>
+          <option value="attendanceMiniRb">Сортировка: Мини-РБ</option>
+          <option value="pvp">Сортировка: PvP</option>
           <option value="salary">Сортировка: зарплата</option>
           <option value="name">Сортировка: имя</option>
         </select>
