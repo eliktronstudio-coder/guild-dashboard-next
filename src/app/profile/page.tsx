@@ -3,7 +3,7 @@ import {
   getPlayerByUserId,
   getPlayerActivityHistory,
   getPlayerPayments,
-  getPlayerAttendanceChartData,
+  getPlayerDailyAttendance,
 } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import PlayerProfileView from "@/components/players/PlayerProfileView";
@@ -25,10 +25,10 @@ export default async function MyProfilePage() {
     );
   }
 
-  const [activities, payments, attendanceChart] = await Promise.all([
+  const [activities, payments, dailyAttendance] = await Promise.all([
     getPlayerActivityHistory(player.id, 20),
     getPlayerPayments(player.id, 20),
-    getPlayerAttendanceChartData(player.id),
+    getPlayerDailyAttendance(player.id, 30),
   ]);
   const isRandom = user.role === "random";
 
@@ -37,7 +37,7 @@ export default async function MyProfilePage() {
       player={player}
       activities={activities}
       payments={payments}
-      attendanceChart={attendanceChart}
+      dailyAttendance={dailyAttendance}
       isRandom={isRandom}
     />
   );

@@ -4,6 +4,7 @@ import StatusBadge from "@/components/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import BlurValue from "@/components/BlurValue";
 import AttendanceChart from "@/components/charts/AttendanceChart";
+import DailyAttendanceChart, { type DailyAttendancePoint } from "@/components/charts/DailyAttendanceChart";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -37,7 +38,10 @@ export type PlayerProfileData = {
   };
   activities: { id: string; name: string; date: string; status: string }[];
   payments: { id: string; amount: number; status: string; date: string }[];
-  attendanceChart: { date: string; count: number }[];
+  /** Недельный график — не нужен, если задан dailyAttendance. */
+  attendanceChart?: { date: string; count: number }[];
+  /** За 30 дней, с разрывами в дни без участия — если задано, заменяет недельный график. */
+  dailyAttendance?: DailyAttendancePoint[];
   isRandom: boolean;
   /** Ссылка "назад" вверху страницы; пусто — без неё (например, на «Моём профиле»). */
   backHref?: string;
@@ -49,7 +53,8 @@ export default function PlayerProfileView({
   player,
   activities,
   payments,
-  attendanceChart,
+  attendanceChart = [],
+  dailyAttendance,
   isRandom,
   backHref,
   backLabel = "← Состав",
@@ -99,9 +104,15 @@ export default function PlayerProfileView({
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4">
-        <h3 className="mb-3 text-sm font-semibold">Посещаемость по неделям</h3>
+        <h3 className="mb-3 text-sm font-semibold">
+          {dailyAttendance ? "Посещаемость за последние 30 дней" : "Посещаемость по неделям"}
+        </h3>
         <BlurValue blurred={isRandom}>
-          <AttendanceChart data={attendanceChart} />
+          {dailyAttendance ? (
+            <DailyAttendanceChart data={dailyAttendance} />
+          ) : (
+            <AttendanceChart data={attendanceChart} />
+          )}
         </BlurValue>
       </div>
 

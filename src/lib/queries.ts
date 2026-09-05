@@ -214,6 +214,32 @@ export async function getPlayerAttendanceChartData(playerId: string, weeks = 10)
   return result;
 }
 
+/**
+ * Посещаемость по дням за последние `days` дней. В дни без участия — null
+ * (а не 0), чтобы график рисовал пробел, а не проваливался к нулевой линии.
+ */
+export async function getPlayerDailyAttendance(playerId: string, days = 30) {
+  const rows = await prisma.activityParticipant.findMany({
+    where: { playerId },
+    select: { activity: { select: { date: true } } },
+  });
+  const byDay = new Map<string, number>();
+  for (const r of rows) {
+    const key = dayKey(r.activity.date);
+    byDay.set(key, (byDay.get(key) ?? 0) + 1);
+  }
+  const now = new Date();
+  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const result: { date: string; count: number | null }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(todayUTC);
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    result.push({ date: shortDateFmt.format(d), count: byDay.get(key) ?? null });
+  }
+  return result;
+}
+
 export async function getPlayerPayments(playerId: string, limit = 8) {
   const rows = await prisma.payment.findMany({
     where: { playerId },
