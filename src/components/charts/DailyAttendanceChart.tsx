@@ -5,8 +5,7 @@ import EmptyState from "@/components/EmptyState";
 
 export type DailyAttendancePoint = {
   date: string;
-  /** null — в этот день не было участия, график рисует разрыв, а не 0. */
-  count: number | null;
+  count: number;
 };
 
 export default function DailyAttendanceChart({ data }: { data: DailyAttendancePoint[] }) {
@@ -44,14 +43,13 @@ export default function DailyAttendanceChart({ data }: { data: DailyAttendancePo
               fontSize: 12,
             }}
             labelStyle={{ color: "var(--foreground)" }}
-            formatter={(value) => [value === null ? "не был" : `${value} участий`, "Активность"]}
+            formatter={(value) => [`${value} участий`, "Активность"]}
           />
           <Line
             type="monotone"
             dataKey="count"
             stroke="var(--accent)"
             strokeWidth={2}
-            connectNulls={false}
             dot={{ r: 3, fill: "var(--accent-bright)", strokeWidth: 0 }}
             activeDot={{ r: 5, fill: "var(--accent-bright)", stroke: "var(--surface)", strokeWidth: 2 }}
           />
