@@ -10,6 +10,7 @@ import {
   ImagePlay,
   Map,
   UserCircle,
+  Coins,
   type LucideIcon,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ export const navSections: NavSection[] = [
       { href: "/users", label: "Пользователи", icon: ShieldCheck, adminOnly: true },
       { href: "/drop-catalog", label: "Реестр дропа", icon: BookOpen, adminOnly: true },
       { href: "/activity-banners", label: "Баннеры активностей", icon: ImagePlay, adminOnly: true },
+      { href: "/rb-purchase", label: "Расчёт покупки РБ", icon: Coins, adminOnly: true },
     ],
   },
 ];
