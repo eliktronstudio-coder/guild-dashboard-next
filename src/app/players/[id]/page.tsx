@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getPlayerById, getPlayerActivityHistory, getPlayerPayments } from "@/lib/queries";
+import { getPlayerById, getPlayerActivityHistory, getPlayerPayments, getPlayerAttendanceChartData } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import StatCard from "@/components/StatCard";
 import StatusBadge from "@/components/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import BlurValue from "@/components/BlurValue";
+import AttendanceChart from "@/components/charts/AttendanceChart";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -29,10 +30,11 @@ export default async function PlayerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [player, activities, payments, user] = await Promise.all([
+  const [player, activities, payments, attendanceChart, user] = await Promise.all([
     getPlayerById(id),
     getPlayerActivityHistory(id, 20),
     getPlayerPayments(id, 20),
+    getPlayerAttendanceChartData(id),
     getCurrentUser(),
   ]);
   if (!player) notFound();
@@ -78,6 +80,13 @@ export default async function PlayerDetailPage({
         <StatCard label="Уровень" value={String(player.level)} hint="текущий уровень" />
         <StatCard label="Опыт" value={`${numberFmt.format(player.xp)} XP`} hint="накоплено" />
         <StatCard label="Коэффициент" value={coefficientFmt.format(player.salaryCoefficient)} hint="настраивает админ" />
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-4">
+        <h3 className="mb-3 text-sm font-semibold">Посещаемость по неделям</h3>
+        <BlurValue blurred={isRandom}>
+          <AttendanceChart data={attendanceChart} />
+        </BlurValue>
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

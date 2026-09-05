@@ -10,6 +10,7 @@ import Drawer from "@/components/Drawer";
 import EmptyState from "@/components/EmptyState";
 import StatusBadge from "@/components/StatusBadge";
 import BlurValue from "@/components/BlurValue";
+import AttendanceChart from "@/components/charts/AttendanceChart";
 
 type Player = {
   id: string;
@@ -38,6 +39,7 @@ type PlayerDetail = {
   player: Player & { level: number; xp: number };
   activities: { id: string; name: string; date: string; status: string }[];
   payments: { id: string; amount: number; status: string; date: string }[];
+  attendanceChart: { date: string; count: number }[];
 };
 
 const emptyForm: FormState = { name: "", role: ROLES[0], salaryCoefficient: "1" };
@@ -531,6 +533,13 @@ export default function PlayersTable({
                 <p className="text-[11px] uppercase tracking-wide text-muted">Опыт</p>
                 <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.xp)} XP</p>
               </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Посещаемость по неделям</h3>
+              <BlurValue blurred={isRandom}>
+                <AttendanceChart data={detail.attendanceChart} />
+              </BlurValue>
             </div>
 
             <div>

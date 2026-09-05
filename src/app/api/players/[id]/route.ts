@@ -2,21 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
 import { ROLES } from "@/lib/roles";
-import { getPlayerById, getPlayerActivityHistory, getPlayerPayments } from "@/lib/queries";
+import { getPlayerById, getPlayerActivityHistory, getPlayerPayments, getPlayerAttendanceChartData } from "@/lib/queries";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const { id } = await params;
-  const [player, activities, payments] = await Promise.all([
+  const [player, activities, payments, attendanceChart] = await Promise.all([
     getPlayerById(id),
     getPlayerActivityHistory(id),
     getPlayerPayments(id),
+    getPlayerAttendanceChartData(id),
   ]);
   if (!player) return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
 
-  return NextResponse.json({ player, activities, payments });
+  return NextResponse.json({ player, activities, payments, attendanceChart });
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -7,6 +7,14 @@ function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+/** Начало недели (понедельник, UTC), в виде YYYY-MM-DD. */
+function weekKey(d: Date) {
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const isoDay = date.getUTCDay() || 7; // Вс=0 -> 7, чтобы неделя начиналась с Пн.
+  if (isoDay !== 1) date.setUTCDate(date.getUTCDate() - (isoDay - 1));
+  return date.toISOString().slice(0, 10);
+}
+
 // Посещаемость считается динамически: доля активностей, в которых игрок
 // реально участвовал. Считается отдельно для всех активностей и отдельно
 // по каждой категории (Прайм / Мини-РБ), чтобы можно было смотреть
@@ -169,6 +177,31 @@ export async function getPlayerActivityHistory(playerId: string, limit = 8) {
     date: dateFmt.format(r.activity.date),
     status: r.activity.status,
   }));
+}
+
+/**
+ * Участия игрока по неделям за последние `weeks` недель, включая недели без
+ * посещений (0), чтобы график шёл сплошной шкалой, а не перескакивал через
+ * пропуски.
+ */
+export async function getPlayerAttendanceChartData(playerId: string, weeks = 10) {
+  const rows = await prisma.activityParticipant.findMany({
+    where: { playerId },
+    select: { activity: { select: { date: true } } },
+  });
+  const byWeek = new Map<string, number>();
+  for (const r of rows) {
+    const key = weekKey(r.activity.date);
+    byWeek.set(key, (byWeek.get(key) ?? 0) + 1);
+  }
+  const currentWeekStart = new Date(weekKey(new Date()));
+  const result: { date: string; count: number }[] = [];
+  for (let i = weeks - 1; i >= 0; i--) {
+    const d = new Date(currentWeekStart);
+    d.setUTCDate(d.getUTCDate() - i * 7);
+    result.push({ date: shortDateFmt.format(d), count: byWeek.get(dayKey(d)) ?? 0 });
+  }
+  return result;
 }
 
 export async function getPlayerPayments(playerId: string, limit = 8) {
