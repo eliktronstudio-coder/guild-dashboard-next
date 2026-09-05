@@ -1,16 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2, Plus, X, Search } from "lucide-react";
 import clsx from "clsx";
 import { ROLES } from "@/lib/roles";
-import Drawer from "@/components/Drawer";
 import EmptyState from "@/components/EmptyState";
-import StatusBadge from "@/components/StatusBadge";
 import BlurValue from "@/components/BlurValue";
-import AttendanceChart from "@/components/charts/AttendanceChart";
 
 type Player = {
   id: string;
@@ -35,13 +32,6 @@ type FormState = {
 
 type SortKey = "name" | "attendance" | "salary";
 
-type PlayerDetail = {
-  player: Player & { level: number; xp: number };
-  activities: { id: string; name: string; date: string; status: string }[];
-  payments: { id: string; amount: number; status: string; date: string }[];
-  attendanceChart: { date: string; count: number }[];
-};
-
 const emptyForm: FormState = { name: "", role: ROLES[0], salaryCoefficient: "1" };
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -52,19 +42,6 @@ function attendanceColor(pct: number) {
   if (pct <= 50) return { text: "text-amber-500", bar: "bg-amber-500" };
   return { text: "text-success", bar: "bg-success" };
 }
-
-const activityStatusTone: Record<string, "accent" | "success" | "danger"> = {
-  "К выплате": "accent",
-  Выплачено: "success",
-  Отменено: "danger",
-};
-
-const paymentStatusTone: Record<string, "accent" | "success" | "danger"> = {
-  Ожидает: "accent",
-  Подтверждено: "accent",
-  Выплачено: "success",
-  Отклонено: "danger",
-};
 
 export default function PlayersTable({
   players,
@@ -87,40 +64,6 @@ export default function PlayersTable({
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("attendance");
-
-  const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<PlayerDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
-
-  function openPlayer(id: string) {
-    setOpenPlayerId(id);
-    setDetail(null);
-    setDetailError(null);
-    setDetailLoading(true);
-  }
-
-  useEffect(() => {
-    if (!openPlayerId) return;
-    let cancelled = false;
-    fetch(`/api/players/${openPlayerId}`)
-      .then((res) => {
-        if (!res.ok) throw new Error();
-        return res.json();
-      })
-      .then((data) => {
-        if (!cancelled) setDetail(data);
-      })
-      .catch(() => {
-        if (!cancelled) setDetailError("Не удалось загрузить данные игрока.");
-      })
-      .finally(() => {
-        if (!cancelled) setDetailLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [openPlayerId]);
 
   const maxPvpCount = useMemo(() => Math.max(1, ...players.map((p) => p.pvpCount)), [players]);
 
@@ -346,11 +289,11 @@ export default function PlayersTable({
                 return (
                   <tr
                     key={p.id}
-                    onClick={() => openPlayer(p.id)}
+                    onClick={() => router.push(`/players/${p.id}`)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        openPlayer(p.id);
+                        router.push(`/players/${p.id}`);
                       }
                     }}
                     role="button"
@@ -477,111 +420,6 @@ export default function PlayersTable({
         </div>
       )}
 
-      <Drawer open={openPlayerId !== null} onClose={() => setOpenPlayerId(null)} title="Профиль игрока">
-        {detailLoading && (
-          <div className="space-y-3">
-            <div className="h-16 animate-pulse rounded-lg bg-surface-2" />
-            <div className="h-24 animate-pulse rounded-lg bg-surface-2" />
-            <div className="h-24 animate-pulse rounded-lg bg-surface-2" />
-          </div>
-        )}
-        {detailError && <p className="text-sm text-danger">{detailError}</p>}
-        {detail && (
-          <div className="space-y-5">
-            <div className="flex items-center gap-3">
-              <span className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-accent-soft text-lg font-semibold text-accent-bright">
-                {detail.player.name.charAt(0).toUpperCase()}
-              </span>
-              <div>
-                <p className="text-base font-semibold">{detail.player.name}</p>
-                <p className="text-xs text-muted">{detail.player.role}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border border-border bg-surface-2 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted">Посещаемость</p>
-                <BlurValue blurred={isRandom}>
-                  <p className={clsx("mt-1 text-lg font-semibold", attendanceColor(detail.player.attendancePct).text)}>
-                    {detail.player.attendancePct}%
-                  </p>
-                </BlurValue>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата</p>
-                <BlurValue blurred={isRandom}>
-                  <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salary)}</p>
-                </BlurValue>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата: Прайм</p>
-                <BlurValue blurred={isRandom}>
-                  <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salaryPrime)}</p>
-                </BlurValue>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted">Зарплата: Мини-РБ</p>
-                <BlurValue blurred={isRandom}>
-                  <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.salaryMiniRb)}</p>
-                </BlurValue>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted">Достижения</p>
-                <p className="mt-1 text-lg font-semibold">{detail.player.level} ур.</p>
-              </div>
-              <div className="rounded-lg border border-border bg-surface-2 p-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted">Опыт</p>
-                <p className="mt-1 text-lg font-semibold font-mono tabular-nums">{numberFmt.format(detail.player.xp)} XP</p>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Посещаемость по неделям</h3>
-              <BlurValue blurred={isRandom}>
-                <AttendanceChart data={detail.attendanceChart} />
-              </BlurValue>
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">История активностей</h3>
-              {detail.activities.length === 0 ? (
-                <EmptyState title="Нет данных за выбранный период" hint="Игрок ещё не участвовал в активностях." />
-              ) : (
-                <ul className="divide-y divide-border rounded-lg border border-border">
-                  {detail.activities.map((a) => (
-                    <li key={a.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                      <div>
-                        <p className="font-medium">{a.name}</p>
-                        <p className="text-xs text-muted">{a.date}</p>
-                      </div>
-                      <StatusBadge label={a.status} tone={activityStatusTone[a.status] ?? "muted"} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div>
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">История выплат</h3>
-              {detail.payments.length === 0 ? (
-                <EmptyState title="Нет данных за выбранный период" hint="Выплат этому игроку ещё не было." />
-              ) : (
-                <ul className="divide-y divide-border rounded-lg border border-border">
-                  {detail.payments.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                      <div>
-                        <p className="font-mono font-medium tabular-nums">{numberFmt.format(p.amount)} золота</p>
-                        <p className="text-xs text-muted">{p.date}</p>
-                      </div>
-                      <StatusBadge label={p.status} tone={paymentStatusTone[p.status] ?? "muted"} />
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
-      </Drawer>
     </div>
   );
 }
