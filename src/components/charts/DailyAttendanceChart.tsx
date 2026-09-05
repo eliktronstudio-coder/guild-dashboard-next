@@ -8,12 +8,15 @@ export type DailyAttendancePoint = {
   prime: number;
   miniRb: number;
   pvp: number;
+  /** Сколько всего активностей (Прайм + Мини-РБ) провела гильдия в этот день. */
+  total: number;
 };
 
 const seriesLabel: Record<string, string> = {
   prime: "Прайм",
   miniRb: "Мини-РБ",
   pvp: "PvP",
+  total: "Всего по гильдии (Прайм+Мини-РБ)",
 };
 
 export default function DailyAttendanceChart({ data }: { data: DailyAttendancePoint[] }) {
@@ -83,6 +86,16 @@ export default function DailyAttendanceChart({ data }: { data: DailyAttendancePo
             strokeWidth={2}
             dot={{ r: 2, fill: "var(--accent-bright)", strokeWidth: 0 }}
             activeDot={{ r: 4, fill: "var(--accent-bright)", stroke: "var(--surface)", strokeWidth: 2 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="total"
+            name="total"
+            stroke="var(--danger)"
+            strokeWidth={2}
+            strokeDasharray="4 3"
+            dot={{ r: 2, fill: "var(--danger)", strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: "var(--danger)", stroke: "var(--surface)", strokeWidth: 2 }}
           />
         </LineChart>
       </ResponsiveContainer>

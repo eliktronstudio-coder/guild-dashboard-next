@@ -219,12 +219,20 @@ export async function getPlayerAttendanceChartData(playerId: string, weeks = 10)
  * и PvP (категория и режим — независимые признаки активности, поэтому это
  * три отдельных счётчика, а не взаимоисключающие доли одного). В дни без
  * участия — 0, график идёт сплошной линией до конца периода, не обрываясь.
+ * total — сколько всего активностей (Прайм + Мини-РБ) провела гильдия в
+ * этот день, для сравнения личного участия с общим количеством.
  */
 export async function getPlayerDailyAttendance(playerId: string, days = 30) {
-  const rows = await prisma.activityParticipant.findMany({
-    where: { playerId },
-    select: { activity: { select: { date: true, category: true, mode: true } } },
-  });
+  const [rows, guildActivities] = await Promise.all([
+    prisma.activityParticipant.findMany({
+      where: { playerId },
+      select: { activity: { select: { date: true, category: true, mode: true } } },
+    }),
+    prisma.activity.findMany({
+      where: { category: { in: ["Прайм", "Мини-РБ"] } },
+      select: { date: true },
+    }),
+  ]);
   const byDayPrime = new Map<string, number>();
   const byDayMiniRb = new Map<string, number>();
   const byDayPvp = new Map<string, number>();
@@ -234,9 +242,14 @@ export async function getPlayerDailyAttendance(playerId: string, days = 30) {
     if (r.activity.category === "Мини-РБ") byDayMiniRb.set(key, (byDayMiniRb.get(key) ?? 0) + 1);
     if (r.activity.mode === "PvP") byDayPvp.set(key, (byDayPvp.get(key) ?? 0) + 1);
   }
+  const byDayTotal = new Map<string, number>();
+  for (const a of guildActivities) {
+    const key = dayKey(a.date);
+    byDayTotal.set(key, (byDayTotal.get(key) ?? 0) + 1);
+  }
   const now = new Date();
   const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const result: { date: string; prime: number; miniRb: number; pvp: number }[] = [];
+  const result: { date: string; prime: number; miniRb: number; pvp: number; total: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(todayUTC);
     d.setUTCDate(d.getUTCDate() - i);
@@ -246,6 +259,7 @@ export async function getPlayerDailyAttendance(playerId: string, days = 30) {
       prime: byDayPrime.get(key) ?? 0,
       miniRb: byDayMiniRb.get(key) ?? 0,
       pvp: byDayPvp.get(key) ?? 0,
+      total: byDayTotal.get(key) ?? 0,
     });
   }
   return result;
