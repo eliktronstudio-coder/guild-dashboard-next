@@ -91,6 +91,24 @@ export function findBestMatch<T extends Named>(raw: string, candidates: T[], use
 }
 
 /**
+ * Похожие варианты, когда findBestMatch не смог однозначно определить ник
+ * (скрин распознан плохо, опечатка больше обычного порога, или несколько
+ * кандидатов совпали с одинаковой опечаткой). Порог шире, чем в
+ * matchByFuzzy, — тут не автопринятие, а подсказка человеку на выбор.
+ */
+export function findCandidates<T extends Named>(raw: string, candidates: T[], limit = 5): T[] {
+  const normalized = normalizeName(raw);
+  if (!normalized) return [];
+  const threshold = Math.max(2, fuzzyThreshold(normalized.length) + 2);
+  return candidates
+    .map((c) => ({ item: c, distance: levenshtein(normalized, normalizeName(c.name)) }))
+    .filter((c) => c.distance <= threshold)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, limit)
+    .map((c) => c.item);
+}
+
+/**
  * Сопоставляет список названий со списком записей. Каждая запись занимается
  * не более одного раза — один игрок не может дважды попасть в один ростер.
  */

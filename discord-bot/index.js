@@ -108,8 +108,24 @@ client.on(Events.MessageCreate, async (message) => {
     const dropShots = shots.filter((s) => s.kind === "drop");
     const unknownCount = shots.length - rosterShots.length - dropShots.length;
 
-    const names = dedupeNames(rosterShots.flatMap((s) => s.names));
+    const rawNames = dedupeNames(rosterShots.flatMap((s) => s.names));
     const dropOccurrences = dropShots.flatMap((s) => s.items);
+
+    // Нечётко распознанные ники (плохой скрин, мелкий шрифт) уточняем сразу,
+    // а не молча записываем в гости — реальных гостей (без похожих в составе)
+    // это не касается, для них candidates будет пустым.
+    const nameResolved = rawNames.length > 0 ? await resolvePlayers(rawNames) : [];
+    const nameCandidatesByInput = new Map(
+      nameResolved.filter((r) => !r.matched && r.candidates.length > 0).map((r) => [r.input, r.candidates])
+    );
+    const nameQuestions = rawNames
+      .map((n, index) => ({ index, name: n, candidates: nameCandidatesByInput.get(n) }))
+      .filter((q) => q.candidates);
+    const nameChoices = nameQuestions.length > 0 ? await askNameChoices(message, nameQuestions) : new Map();
+    const names = rawNames.map((n, index) => {
+      const pick = nameChoices.get(index);
+      return pick && pick !== "__skip__" ? pick : n;
+    });
 
     // Неоднозначный дроп уточняем до выбора активности, пока контекст свежий.
     const resolved = await resolveDrops([...new Set(dropOccurrences.map((d) => d.name))]);
@@ -388,6 +404,74 @@ async function askDropChoices(message, questions) {
           const pick = chosen.get(q.index);
           const suffix = pick === undefined ? "не выбрано" : pick === "__skip__" ? "пропущено" : pick;
           return `${q.name} ×${q.quantity} → ${suffix}`;
+        })
+        .join("\n");
+
+    const prompt = await message.reply({ content: describe(), components: rows });
+
+    await new Promise((resolve) => {
+      const collector = prompt.createMessageComponentCollector({
+        componentType: ComponentType.StringSelect,
+        time: 120_000,
+        filter: (x) => x.user.id === message.author.id,
+      });
+      collector.on("collect", async (interaction) => {
+        chosen.set(Number(interaction.customId.split("_")[1]), interaction.values[0]);
+        const done = batch.every((q) => chosen.has(q.index));
+        await interaction.update({ content: describe(), components: done ? [] : rows });
+        if (done) collector.stop("done");
+      });
+      collector.on("end", () => resolve());
+    });
+  }
+  return chosen;
+}
+
+/** Разбирает распознанные ники по составу: что однозначно, а где нужен выбор. */
+async function resolvePlayers(names) {
+  if (names.length === 0) return [];
+  try {
+    const res = await fetch(`${SITE_API_URL}/api/bot/players/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${BOT_API_SECRET}` },
+      body: JSON.stringify({ names }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.results) ? data.results : [];
+  } catch (err) {
+    console.error("Не удалось разобрать ники по составу:", err);
+    return [];
+  }
+}
+
+/**
+ * Спрашивает точный ник там, где скрин распознан нечётко и совпадение с
+ * составом неоднозначно. «Пропустить» оставляет ник как есть — тогда он
+ * уйдёт в гости на сайте, как и раньше для по-настоящему новых игроков.
+ */
+async function askNameChoices(message, questions) {
+  const chosen = new Map();
+  for (let i = 0; i < questions.length; i += 5) {
+    const batch = questions.slice(i, i + 5);
+    const rows = batch.map((q) =>
+      new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(`name_${q.index}`)
+          .setPlaceholder(`«${q.name}» — это кто из состава?`)
+          .addOptions([
+            ...q.candidates.map((c) => ({ label: c.name.slice(0, 100), value: c.name.slice(0, 100) })),
+            { label: "Пропустить (это гость)", value: "__skip__" },
+          ])
+      )
+    );
+
+    const describe = () =>
+      batch
+        .map((q) => {
+          const pick = chosen.get(q.index);
+          const suffix = pick === undefined ? "не выбрано" : pick === "__skip__" ? "гость" : pick;
+          return `«${q.name}» → ${suffix}`;
         })
         .join("\n");
 
