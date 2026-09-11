@@ -15,7 +15,7 @@ export default async function RbPurchasePage() {
         id: p.id,
         name: p.name,
         role: p.role,
-        attendancePct: p.attendancePct,
+        attendancePct: p.attendancePctMiniRb,
         salaryCoefficient: p.salaryCoefficient,
       }))}
     />
