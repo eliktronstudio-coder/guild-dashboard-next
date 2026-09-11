@@ -11,6 +11,7 @@ import {
   Map,
   UserCircle,
   Coins,
+  House,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,6 +31,7 @@ export const navSections: NavSection[] = [
   {
     title: "Обзор",
     items: [
+      { href: "/", label: "Главная", icon: House },
       { href: "/dashboard", label: "Статистика", icon: LayoutDashboard },
       { href: "/activities", label: "Активность", icon: Swords },
       { href: "/players", label: "Состав", icon: Users },
