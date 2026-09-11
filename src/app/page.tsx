@@ -151,17 +151,29 @@ export default async function HomePage() {
           <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
         ) : (
           <div className="space-y-[5px]">
-            {recentActivities.map((a) => (
-              <ActivityRow
-                key={a.id}
-                href={`/activities/${a.id}`}
-                name={a.name}
-                participants={a.participants}
-                status={a.status}
-                date={a.date}
-                bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
-                bannerIsVideo={a.bannerIsVideo}
-              />
+            {recentActivities.map((a, i) => (
+              // Обёртка повторяет строение «До активностей»: там заголовок дня
+              // лежит внутри обёртки строки, а не отдельным ребёнком списка,
+              // иначе space-y добавил бы лишние 5px.
+              <div key={a.id}>
+                {i === 0 && (
+                  /* Пустая метка высотой с заголовок дня («Сегодня») в
+                     «До активностей» — без неё первая строка этой панели
+                     встаёт на 20px выше и баннеры панелей не совпадают. */
+                  <p aria-hidden="true" className="invisible px-1 pb-1 text-[11px] uppercase tracking-wider">
+                    &nbsp;
+                  </p>
+                )}
+                <ActivityRow
+                  href={`/activities/${a.id}`}
+                  name={a.name}
+                  participants={a.participants}
+                  status={a.status}
+                  date={a.date}
+                  bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
+                  bannerIsVideo={a.bannerIsVideo}
+                />
+              </div>
             ))}
           </div>
         )}
