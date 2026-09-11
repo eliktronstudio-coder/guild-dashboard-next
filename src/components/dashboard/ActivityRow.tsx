@@ -27,7 +27,7 @@ export default function ActivityRow({ href, name, participants, status, date, ba
   return (
     <Link
       href={href}
-      className="relative flex min-h-[64px] items-center gap-3 overflow-hidden rounded-lg border border-border bg-surface px-4 py-2.5 text-sm transition-colors duration-150 hover:border-accent/30"
+      className="relative flex min-h-[92px] items-center gap-4 overflow-hidden rounded-lg border border-border bg-surface px-4 py-3 text-sm transition-colors duration-150 hover:border-accent/30"
     >
       {bannerUrl && (
         <div aria-hidden="true" className="pointer-events-none absolute inset-0">
@@ -48,8 +48,8 @@ export default function ActivityRow({ href, name, participants, status, date, ba
         </div>
       )}
       <span className="relative min-w-0 flex-1">
-        <span className="block truncate font-medium text-foreground">{name}</span>
-        <span className="mt-1 flex items-center gap-2 text-xs text-muted-2">
+        <span className="block truncate text-[15px] font-medium text-foreground">{name}</span>
+        <span className="mt-1 flex items-center gap-2 text-[15px] text-muted">
           <span className="whitespace-nowrap">{date}</span>
           <span aria-hidden="true">·</span>
           <span className="whitespace-nowrap">{participants} уч.</span>
