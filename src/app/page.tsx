@@ -62,7 +62,7 @@ export default async function HomePage() {
     const banner = findLabelMatch(name, bannerNames);
     if (banner) scheduleBanners[name] = { id: banner.id, isVideo: banner.isVideo };
   }
-  const recentActivities = allActivities.slice(0, 5).map((a) => {
+  const recentActivities = allActivities.slice(0, 3).map((a) => {
     const banner = findLabelMatch(a.name, bannerNames);
     return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
   });
