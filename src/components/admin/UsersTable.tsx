@@ -3,6 +3,7 @@
 import { Fragment, useState, useMemo, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, UserPlus, KeyRound, X, Search } from "lucide-react";
+import PasswordInput from "@/components/PasswordInput";
 
 type UserRow = {
   id: string;
@@ -190,8 +191,7 @@ export default function UsersTable({ users, currentUserId }: { users: UserRow[];
                     <td colSpan={4} className="bg-surface-2 px-4 py-3">
                       <form onSubmit={(e) => handleResetPassword(e, u.id)} className="flex flex-wrap items-center gap-2">
                         <span className="text-xs text-muted">Новый пароль для {u.username}:</span>
-                        <input
-                          type="password"
+                        <PasswordInput
                           value={newPassword}
                           onChange={(e) => setNewPassword(e.target.value)}
                           required

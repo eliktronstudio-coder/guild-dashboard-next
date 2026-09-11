@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import clsx from "clsx";
+import PasswordInput from "@/components/PasswordInput";
 import { ROLES } from "@/lib/roles";
 
 type LoginDialogProps = {
@@ -138,9 +139,8 @@ export default function LoginDialog({ open, onClose }: LoginDialogProps) {
             <label htmlFor="password" className="mb-1.5 block text-xs text-muted">
               Пароль
             </label>
-            <input
+            <PasswordInput
               id="password"
-              type="password"
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -155,9 +155,8 @@ export default function LoginDialog({ open, onClose }: LoginDialogProps) {
                 <label htmlFor="confirmPassword" className="mb-1.5 block text-xs text-muted">
                   Повторите пароль
                 </label>
-                <input
+                <PasswordInput
                   id="confirmPassword"
-                  type="password"
                   autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
