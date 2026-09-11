@@ -14,11 +14,44 @@ type Player = {
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
+/**
+ * Делит целое количество опыта пропорционально весам методом наибольшего
+ * остатка: сначала всем достаётся целая часть доли, затем оставшиеся
+ * единицы уходят тем, у кого дробный хвост больше. Обычное округление
+ * каждой доли по отдельности давало бы сумму, не совпадающую с введённым
+ * опытом (при большом составе расхождение — десятки единиц).
+ */
+function splitProportionally<T>(items: { item: T; weight: number }[], total: number) {
+  const totalWeight = items.reduce((sum, i) => sum + i.weight, 0);
+  if (totalWeight <= 0 || total <= 0) {
+    return items.map((i) => ({ item: i.item, weight: i.weight, sharePct: 0, amount: 0 }));
+  }
+
+  const exact = items.map((i) => {
+    const value = (i.weight / totalWeight) * total;
+    const floor = Math.floor(value);
+    return { item: i.item, weight: i.weight, sharePct: (i.weight / totalWeight) * 100, floor, frac: value - floor };
+  });
+
+  let rest = total - exact.reduce((sum, e) => sum + e.floor, 0);
+  const byFrac = [...exact].sort((a, b) => b.frac - a.frac);
+  const bonus = new Map<number, number>();
+  for (let i = 0; i < byFrac.length && rest > 0; i++, rest--) {
+    bonus.set(exact.indexOf(byFrac[i]), 1);
+  }
+
+  return exact.map((e, idx) => ({
+    item: e.item,
+    weight: e.weight,
+    sharePct: e.sharePct,
+    amount: e.floor + (bonus.get(idx) ?? 0),
+  }));
+}
+
 export default function RbPurchaseCalculator({ players }: { players: Player[] }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [xpAmount, setXpAmount] = useState("");
-  const [pricePer1000, setPricePer1000] = useState("100");
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -48,36 +81,28 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
 
   const result = useMemo(() => {
     const participants = players.filter((p) => selected.has(p.id));
-    const xp = Number(xpAmount) || 0;
-    const price = Number(pricePer1000) || 0;
-    const totalGold = (xp / 1000) * price;
+    const totalXp = Math.max(0, Math.round(Number(xpAmount) || 0));
 
-    // Та же логика, что и в расчёте зарплаты: доля пропорциональна общей
-    // посещаемости, скорректированной индивидуальным коэффициентом.
-    const weights = participants.map((p) => ({
-      player: p,
-      weight: p.attendancePct * p.salaryCoefficient,
-    }));
-    const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
+    // Та же логика, что и в расчёте зарплаты: доля пропорциональна
+    // посещаемости Мини-РБ, скорректированной индивидуальным коэффициентом.
+    const weighted = participants.map((p) => ({ item: p, weight: p.attendancePct * p.salaryCoefficient }));
+    const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
 
-    const shares = weights.map((w) => ({
-      player: w.player,
-      weight: w.weight,
-      sharePct: totalWeight > 0 ? (w.weight / totalWeight) * 100 : 0,
-      gold: totalWeight > 0 ? Math.round((w.weight / totalWeight) * totalGold) : 0,
-    }));
-    shares.sort((a, b) => b.gold - a.gold);
+    const shares = splitProportionally(weighted, totalXp)
+      .map((s) => ({ player: s.item, sharePct: s.sharePct, xp: s.amount }))
+      .sort((a, b) => b.xp - a.xp);
 
-    return { totalGold, totalWeight, shares };
-  }, [players, selected, xpAmount, pricePer1000]);
+    return { totalXp, totalWeight, shares };
+  }, [players, selected, xpAmount]);
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-semibold">Расчёт покупки РБ</h1>
         <p className="text-sm text-muted">
-          Выберите участников, укажите объём купленного РБ опыта — стоимость разделится между выбранными
+          Выберите участников и укажите объём купленного РБ опыта — он разделится между выбранными
           пропорционально их посещаемости Мини-РБ (с учётом индивидуального коэффициента, как в расчёте зарплаты).
+          В списке только игроки с посещаемостью Мини-РБ от 20%.
         </p>
       </div>
 
@@ -94,20 +119,10 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
               className="mt-1 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
             />
           </label>
-          <label className="block text-xs text-muted">
-            Цена опыта, золота за 1000 ед.
-            <input
-              type="number"
-              min={0}
-              value={pricePer1000}
-              onChange={(e) => setPricePer1000(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-            />
-          </label>
           <div className="flex items-baseline justify-between rounded-md bg-surface-2 px-3 py-2.5">
-            <span className="text-xs text-muted">Общая стоимость</span>
+            <span className="text-xs text-muted">К распределению</span>
             <span className="font-mono text-lg font-semibold text-accent-bright">
-              {numberFmt.format(Math.round(result.totalGold))} золота
+              {numberFmt.format(result.totalXp)} опыта
             </span>
           </div>
           <p className="text-xs text-muted-2">Выбрано участников: {selected.size}</p>
@@ -119,7 +134,7 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
             <EmptyState title="Никто не выбран" hint="Отметьте игроков в списке слева." />
           ) : result.totalWeight === 0 ? (
             <p className="text-sm text-muted">
-              У выбранных участников общая посещаемость 0% — распределить стоимость пропорционально нечем.
+              У выбранных участников посещаемость Мини-РБ 0% — распределить опыт пропорционально нечем.
             </p>
           ) : (
             <ul className="max-h-[280px] space-y-1 overflow-y-auto text-sm">
@@ -130,7 +145,7 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
                     <span className="font-mono text-xs text-muted">{s.player.attendancePct}%</span>
                     <span className="w-14 text-right font-mono text-xs text-muted">{s.sharePct.toFixed(1)}%</span>
                     <span className="w-24 text-right font-mono font-semibold tabular-nums">
-                      {numberFmt.format(s.gold)}
+                      {numberFmt.format(s.xp)}
                     </span>
                   </span>
                 </li>
