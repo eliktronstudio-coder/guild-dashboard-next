@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Unbounded } from "next/font/google";
 import AppShell from "@/components/AppShell";
-import DesignStyles, { resolveDesign } from "@/components/design/DesignStyles";
+import DesignStyles from "@/components/design/DesignStyles";
+import DesignBlocks from "@/components/design/DesignBlocks";
+import { resolveDesign } from "@/lib/design/resolve";
 import { guild } from "@/lib/config";
 import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
@@ -48,7 +50,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         data-design-preview={design.isPreview ? "1" : undefined}
         className="min-h-full flex flex-col bg-background text-foreground"
       >
-        <AppShell user={user}>{children}</AppShell>
+        <AppShell user={user} texts={design.texts}>
+          {/* Слоты для блоков, добавленных в редакторе «Дизайн». */}
+          <DesignBlocks slot="top" />
+          {children}
+          <DesignBlocks slot="bottom" />
+        </AppShell>
       </body>
     </html>
   );

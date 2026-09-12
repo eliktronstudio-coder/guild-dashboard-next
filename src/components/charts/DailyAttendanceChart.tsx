@@ -25,7 +25,7 @@ export default function DailyAttendanceChart({ data }: { data: DailyAttendancePo
   }
 
   return (
-    <div className="min-w-0">
+    <div data-design-el="shared.chart" className="min-w-0">
       <ResponsiveContainer width="100%" height={220}>
         <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />

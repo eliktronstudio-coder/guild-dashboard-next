@@ -9,7 +9,20 @@ import BottomNav from "./BottomNav";
 import { guild } from "@/lib/config";
 import type { SessionPayload } from "@/lib/auth";
 
-export default function AppShell({ children, user }: { children: ReactNode; user: SessionPayload | null }) {
+export default function AppShell({
+  children,
+  user,
+  texts = {},
+}: {
+  children: ReactNode;
+  user: SessionPayload | null;
+  /**
+   * Переопределения статических подписей из редактора «Дизайн». Каркас —
+   * клиентский компонент, поэтому подписи приходят пропсом из layout, а не
+   * читаются из серверного контекста.
+   */
+  texts?: Record<string, string>;
+}) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
 
@@ -21,6 +34,7 @@ export default function AppShell({ children, user }: { children: ReactNode; user
         onCloseMobile={() => setMobileOpen(false)}
         onLoginClick={() => setLoginOpen(true)}
         user={user}
+        texts={texts}
       />
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
@@ -32,7 +46,7 @@ export default function AppShell({ children, user }: { children: ReactNode; user
           data-design-el="shared.footer"
           className="hidden border-t border-border px-4 py-3 text-center text-xs text-muted sm:px-6 lg:block"
         >
-          {guild.version}
+          {texts["shared.footerText"] ?? guild.version}
         </footer>
       </div>
 

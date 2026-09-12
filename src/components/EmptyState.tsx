@@ -14,7 +14,7 @@ export default function EmptyState({
 }) {
   if (variant === "dashboard") {
     return (
-      <div className="relative flex flex-col items-center justify-center gap-2 overflow-hidden px-4 py-10 text-center">
+      <div data-design-el="shared.emptyState" className="relative flex flex-col items-center justify-center gap-2 overflow-hidden px-4 py-10 text-center">
         <JapaneseWavePattern className="left-0 bottom-0 h-16 w-24 text-accent" opacity={0.035} />
         <JapaneseWavePattern className="right-0 bottom-0 h-16 w-24 text-accent" opacity={0.035} />
         <span className="relative flex h-12 w-12 items-center justify-center text-accent-dim">
@@ -28,7 +28,7 @@ export default function EmptyState({
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
+    <div data-design-el="shared.emptyState" className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
       <Inbox size={22} className="text-muted-2" />
       <p className="text-sm font-medium text-foreground/80">{title}</p>
       <p className="text-xs text-muted">{hint}</p>

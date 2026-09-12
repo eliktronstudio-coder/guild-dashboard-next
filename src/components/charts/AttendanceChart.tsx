@@ -22,7 +22,7 @@ export default function AttendanceChart({ data }: { data: AttendanceChartPoint[]
   }
 
   return (
-    <div className="min-w-0">
+    <div data-design-el="shared.chart" className="min-w-0">
       <ResponsiveContainer width="100%" height={260}>
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>

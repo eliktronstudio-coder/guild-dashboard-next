@@ -37,15 +37,15 @@ after(() => {
 });
 
 const redPanel = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   elements: { "home.myChart": { color: { base: { normal: "#ff0000" } } } },
-  tokens: {},
+  tokens: { dark: {}, light: {} },
 };
 
 const bluePanel = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   elements: { "shared.panel": { borderRadius: { base: { normal: "20px" } } } },
-  tokens: {},
+  tokens: { dark: {}, light: {} },
 };
 
 test("черновик сохраняется и читается обратно", async () => {
@@ -121,17 +121,64 @@ test("история ведётся по страницам и восстано�
 
 test("общие настройки попадают в CSS любой страницы", async () => {
   const sharedConfig = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     elements: { "shared.sidebar": { backgroundColor: { base: { normal: "#101010" } } } },
-    tokens: { accent: "#00ff00" },
+    tokens: { dark: { accent: "#00ff00" }, light: { accent: "#0000ff" } },
   };
   const sharedState = await store.getDesignState("__shared__");
   await store.saveDraft("__shared__", sharedConfig as never, "admin");
   await store.publishPage("__shared__", "admin", sharedState.revision, "тема");
 
   const css = await store.getPublishedCss("players");
-  assert.match(css, /--accent: #00ff00/);
+  assert.match(css, /:root\{--accent: #00ff00\}/);
+  assert.match(css, /:root\[data-theme="light"\]\{--accent: #0000ff\}/);
   assert.match(css, /\[data-design-el="shared\.sidebar"\]/);
+});
+
+test("подписи и блоки отдаются для рендера только после публикации", async () => {
+  const withContent = {
+    schemaVersion: 2,
+    elements: {},
+    tokens: { dark: {}, light: {} },
+    texts: { "home.titleSchedule": "Ближайшее" },
+    blocks: { top: [{ id: "blk1", type: "heading", text: "Объявление" }], bottom: [] },
+  };
+  await store.saveDraft("home", withContent as never, "admin");
+
+  // Черновик не должен просачиваться в публичный рендер.
+  const published = await store.getPublishedContent("home");
+  assert.equal(published.texts["home.titleSchedule"], undefined);
+  assert.equal((published.blocks.top ?? []).length, 0);
+
+  // В предпросмотре черновика — виден.
+  const draft = await store.getDraftContent("home", false);
+  assert.equal(draft.texts["home.titleSchedule"], "Ближайшее");
+  assert.equal(draft.blocks.top?.[0].text, "Объявление");
+
+  const state = await store.getDesignState("home");
+  await store.publishPage("home", "admin", state.revision, "с блоком");
+
+  const after = await store.getPublishedContent("home");
+  assert.equal(after.texts["home.titleSchedule"], "Ближайшее");
+  assert.equal(after.blocks.top?.[0].text, "Объявление");
+});
+
+test("используемый медиафайл считается занятым, свободный — нет", async () => {
+  const mediaId = "abcdefghijklmnopqrst";
+  const config = {
+    schemaVersion: 2,
+    elements: { "players.__none": {} },
+    tokens: { dark: {}, light: {} },
+    blocks: { top: [{ id: "img1", type: "image", mediaId }], bottom: [] },
+  };
+  await store.saveDraft("players", config as never, "admin");
+
+  const usage = await store.findMediaUsage(mediaId);
+  assert.ok(usage.length > 0, "файл в черновике должен считаться используемым");
+  assert.ok(usage.some((u) => u.includes("черновик")), `ожидалась отметка о черновике, получено: ${usage.join(", ")}`);
+
+  const free = await store.findMediaUsage("zzzzzzzzzzzzzzzzzzzz");
+  assert.deepEqual(free, [], "неиспользуемый файл должен быть свободен");
 });
 
 test("неизвестный ключ страницы отвергается", async () => {

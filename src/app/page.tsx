@@ -75,6 +75,7 @@ export default async function HomePage() {
       <DashboardPanel designId="home.myAttendance" className="min-w-0">
         <SectionHeader
           title="Моя посещаемость"
+          textId="home.titleMyAttendance"
           right={
             player ? (
               <Link href="/profile" className="text-xs text-accent hover:underline">
@@ -118,6 +119,7 @@ export default async function HomePage() {
       <DashboardPanel designId="home.myChart" className="min-w-0">
         <SectionHeader
           title="Мой график посещаемости"
+          textId="home.titleMyChart"
           right={<span className="text-xs text-muted">за 30 дней</span>}
         />
         {!player ? (
@@ -133,7 +135,11 @@ export default async function HomePage() {
 
       {/* Слева ниже статистики — ближайшие активности. */}
       <DashboardPanel designId="home.schedule" className="min-w-0">
-        <SectionHeader title="До активностей" right={<span className="text-xs text-muted">по МСК</span>} />
+        <SectionHeader
+          title="До активностей"
+          textId="home.titleSchedule"
+          right={<span className="text-xs text-muted">по МСК</span>}
+        />
         <SchedulePanel banners={scheduleBanners} />
       </DashboardPanel>
 
@@ -141,6 +147,7 @@ export default async function HomePage() {
       <DashboardPanel designId="home.recent" className="min-w-0">
         <SectionHeader
           title="Последние активности"
+          textId="home.titleRecent"
           right={
             <Link href="/activities" className="text-xs text-accent hover:underline">
               Все
@@ -183,6 +190,7 @@ export default async function HomePage() {
       <DashboardPanel designId="home.leadersPrime" className="min-w-0">
         <SectionHeader
           title="Посещаемость: Прайм"
+          textId="home.titlePrime"
           right={
             <div className="flex items-center gap-3">
               <span className="text-xs text-muted">за всё время</span>
@@ -215,6 +223,7 @@ export default async function HomePage() {
       <DashboardPanel designId="home.leadersMiniRb" className="min-w-0">
         <SectionHeader
           title="Посещаемость: Мини-РБ"
+          textId="home.titleMiniRb"
           right={
             <div className="flex items-center gap-3">
               <span className="text-xs text-muted">за всё время</span>

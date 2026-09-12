@@ -154,6 +154,23 @@ model PageDesign {
   versions      DesignVersion[]
 }
 
+/// Медиатека редактора оформления. Файл лежит в БД как data:-URL — так же,
+/// как баннеры активностей; наружу отдаётся через /api/design/media/[id]/file
+/// обычными байтами, чтобы не попадать в hydration-payload страницы.
+model DesignMedia {
+  id        String   @id @default(cuid())
+  name      String
+  mimeType  String
+  byteSize  Int
+  width     Int?
+  height    Int?
+  dataUrl   String
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  @@index([createdAt])
+}
+
 /// История опубликованных версий оформления: отдельная на каждую страницу,
 /// поэтому восстановление одной страницы не откатывает остальные.
 model DesignVersion {

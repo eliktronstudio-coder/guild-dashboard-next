@@ -15,9 +15,19 @@ type SidebarProps = {
   onCloseMobile: () => void;
   onLoginClick: () => void;
   user: SessionPayload | null;
+  /** Переопределения подписей из редактора «Дизайн». */
+  texts?: Record<string, string>;
 };
 
-export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user }: SidebarProps) {
+/** id подписи раздела меню в реестре оформления. */
+const SECTION_TEXT_ID: Record<string, string> = {
+  Обзор: "shared.navSectionOverview",
+  Экономика: "shared.navSectionEconomy",
+  Инструменты: "shared.navSectionTools",
+  Администрирование: "shared.navSectionAdmin",
+};
+
+export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user, texts = {} }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -59,7 +69,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
                 data-design-el="shared.sidebarSection"
                 className="px-3 pb-2 text-[11px] font-medium uppercase tracking-widest text-muted-2"
               >
-                {section.title}
+                {texts[SECTION_TEXT_ID[section.title] ?? ""] ?? section.title}
               </p>
               <ul className="space-y-0.5">
                 {items.map((item) => {
@@ -127,7 +137,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
                 disabled={loggingOut}
                 className="w-full rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground/80 transition-colors hover:bg-surface-2 hover:text-foreground disabled:opacity-60"
               >
-                Выйти
+                {texts["shared.logoutButton"] ?? "Выйти"}
               </button>
             </div>
           ) : (
@@ -136,7 +146,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
               onClick={onLoginClick}
               className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-black transition-opacity hover:opacity-90"
             >
-              Войти
+              {texts["shared.loginButton"] ?? "Войти"}
             </button>
           )}
         </div>

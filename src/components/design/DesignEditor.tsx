@@ -22,19 +22,37 @@ import {
   MousePointer2,
   Hand,
   RotateCcw,
+  Images,
+  Layers,
+  Type as TypeIcon,
+  Boxes,
 } from "lucide-react";
 import clsx from "clsx";
 import PreviewFrame, { type PreviewMode } from "./PreviewFrame";
 import PropertyPanel from "./PropertyPanel";
-import { PAGES, SHARED_ELEMENTS, SHARED_KEY, THEME_TOKENS, type ElementDef } from "@/lib/design/registry";
+import MediaLibrary from "./MediaLibrary";
+import BlocksPanel, { BlockSettings, type BlocksState } from "./BlocksPanel";
+import {
+  PAGES,
+  SHARED_ELEMENTS,
+  SHARED_KEY,
+  THEME_TOKENS,
+  textsFor,
+  type ElementDef,
+} from "@/lib/design/registry";
 import { isValidValue } from "@/lib/design/properties";
 import {
   BREAKPOINTS,
+  SLOTS,
   STATES,
-  emptyConfig,
+  THEME_MODES,
+  walkBlocks,
   type Breakpoint,
+  type DesignBlock,
   type PageConfig,
+  type SlotKey,
   type StateKey,
+  type ThemeMode,
 } from "@/lib/design/types";
 
 type DesignState = {
@@ -49,8 +67,8 @@ type DesignState = {
 };
 
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
-
 type Version = { id: string; note: string; author: string; createdAt: string };
+type LeftTab = "elements" | "blocks" | "texts";
 
 const DEVICE_WIDTH: Record<Breakpoint | "custom", number | null> = {
   base: null,
@@ -61,7 +79,6 @@ const DEVICE_WIDTH: Record<Breakpoint | "custom", number | null> = {
 
 const DEVICE_ICON = { base: Monitor, tablet: Tablet, mobile: Smartphone } as const;
 
-/** Группировка подвкладок по разделам меню, в порядке реестра. */
 function groupedPages() {
   const sections: { title: string; pages: typeof PAGES }[] = [];
   for (const page of PAGES) {
@@ -81,19 +98,21 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
   const [loading, setLoading] = useState(true);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; undo?: () => void } | null>(null);
   const [unpublished, setUnpublished] = useState(initialUnpublished);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [breakpoint, setBreakpoint] = useState<Breakpoint>("base");
   const [elementState, setElementState] = useState<StateKey>("normal");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [device, setDevice] = useState<Breakpoint | "custom">("base");
   const [customWidth, setCustomWidth] = useState(1280);
   const [mode, setMode] = useState<PreviewMode>("select");
   const [search, setSearch] = useState("");
+  const [leftTab, setLeftTab] = useState<LeftTab>("elements");
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
   const [presentIds, setPresentIds] = useState<Set<string>>(new Set());
-  const [locked, setLocked] = useState<Set<string>>(new Set());
   const [previewSharedDraft, setPreviewSharedDraft] = useState(false);
 
   const [samples, setSamples] = useState<{ id: string; label: string }[]>([]);
@@ -102,7 +121,10 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
 
-  // Undo/redo: стек снимков черновика. Локальный — история публикаций отдельно.
+  const [mediaOpen, setMediaOpen] = useState(false);
+  /** Куда положить выбранный файл: свойство элемента или картинка блока. */
+  const mediaTarget = useRef<{ kind: "prop"; prop: string } | { kind: "block"; blockId: string } | null>(null);
+
   const undoStack = useRef<PageConfig[]>([]);
   const redoStack = useRef<PageConfig[]>([]);
   const [stackSizes, setStackSizes] = useState({ undo: 0, redo: 0 });
@@ -113,9 +135,6 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
   const page = PAGES.find((p) => p.key === pageKey);
   const isShared = pageKey === SHARED_KEY;
 
-  const pageElements: ElementDef[] = useMemo(() => (isShared ? SHARED_ELEMENTS : page?.elements ?? []), [isShared, page]);
-
-  /** Загрузка состояния выбранной подвкладки. */
   const load = useCallback(async (key: string) => {
     setLoading(true);
     setError(null);
@@ -138,9 +157,9 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
   useEffect(() => {
     void load(pageKey);
     setSelectedId(null);
+    setLeftTab(pageKey === SHARED_KEY ? "elements" : "elements");
   }, [pageKey, load]);
 
-  // Примеры записей для шаблонных страниц.
   useEffect(() => {
     if (!page?.template) {
       setSamples([]);
@@ -161,30 +180,27 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     };
   }, [page]);
 
-  /** Сохраняет черновик на сервер. Локально ничего не теряется при ошибке. */
-  const persist = useCallback(
-    async (config: PageConfig, key: string) => {
-      setSaveStatus("saving");
-      try {
-        const res = await fetch(`/api/design/${key}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ config }),
-        });
-        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Не удалось сохранить черновик.");
-        const data = (await res.json()) as DesignState;
-        setState((prev) => (prev && prev.pageKey === key ? { ...data, draft: prev.draft } : data));
-        setUnpublished((prev) => ({ ...prev, [key]: data.hasUnpublished }));
-        setSaveStatus("saved");
-      } catch (e) {
-        setSaveStatus("error");
-        setError(e instanceof Error ? e.message : "Ошибка сохранения.");
-      }
-    },
-    []
-  );
+  const persist = useCallback(async (config: PageConfig, key: string) => {
+    setSaveStatus("saving");
+    try {
+      const res = await fetch(`/api/design/${key}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ config }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Не удалось сохранить черновик.");
+      const data = (await res.json()) as DesignState;
+      // Черновик оставляем локальный: сервер мог отбросить значение, которое
+      // администратор ещё правит, и подмена поля «прыгала» бы под курсором.
+      setState((prev) => (prev && prev.pageKey === key ? { ...data, draft: prev.draft } : data));
+      setUnpublished((prev) => ({ ...prev, [key]: data.hasUnpublished }));
+      setSaveStatus("saved");
+    } catch (e) {
+      setSaveStatus("error");
+      setError(e instanceof Error ? e.message : "Ошибка сохранения.");
+    }
+  }, []);
 
-  /** Меняет черновик: снимок в undo, автосохранение через пазу. */
   const mutate = useCallback(
     (next: PageConfig) => {
       setState((prev) => {
@@ -205,15 +221,12 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     [pageKey, persist]
   );
 
-  /** Сбрасывает отложенное сохранение при уходе со подвкладки — иначе правка
-      одной страницы могла бы записаться после переключения на другую. */
   useEffect(() => {
     return () => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, [pageKey]);
 
-  // Предупреждение при выходе с незавершённым сохранением.
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (saveStatus === "dirty" || saveStatus === "saving") {
@@ -225,13 +238,12 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     return () => window.removeEventListener("beforeunload", handler);
   }, [saveStatus]);
 
+  const lockedSet = useMemo(() => new Set(state?.draft.locks ?? []), [state]);
+
   function setProperty(prop: string, raw: string) {
-    if (!state || !selectedId || locked.has(selectedId)) return;
+    if (!state || !selectedId || lockedSet.has(selectedId)) return;
     const value = raw.trim();
-    const next: PageConfig = {
-      ...state.draft,
-      elements: { ...state.draft.elements },
-    };
+    const next: PageConfig = { ...state.draft, elements: { ...state.draft.elements } };
     const values = { ...(next.elements[selectedId] ?? {}) };
     const byBp = { ...(values[prop] ?? {}) };
     const byState = { ...(byBp[breakpoint] ?? {}) };
@@ -251,10 +263,6 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     mutate(next);
   }
 
-  function resetProperty(prop: string) {
-    setProperty(prop, "");
-  }
-
   function resetElement() {
     if (!state || !selectedId) return;
     const next: PageConfig = { ...state.draft, elements: { ...state.draft.elements } };
@@ -262,13 +270,54 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     mutate(next);
   }
 
+  function toggleLock() {
+    if (!state || !selectedId) return;
+    const locks = new Set(state.draft.locks ?? []);
+    if (locks.has(selectedId)) locks.delete(selectedId);
+    else locks.add(selectedId);
+    mutate({ ...state.draft, locks: [...locks] });
+  }
+
   function setToken(token: string, raw: string) {
     if (!state) return;
     const value = raw.trim();
     const tokens = { ...(state.draft.tokens ?? {}) };
-    if (value === "") delete tokens[token];
-    else tokens[token] = value;
+    const byMode = { ...(tokens[themeMode] ?? {}) };
+    if (value === "") delete byMode[token];
+    else byMode[token] = value;
+    tokens[themeMode] = byMode;
     mutate({ ...state.draft, tokens });
+  }
+
+  function setText(id: string, raw: string) {
+    if (!state) return;
+    const texts = { ...(state.draft.texts ?? {}) };
+    const value = raw.trim();
+    if (value === "") delete texts[id];
+    else texts[id] = value;
+    mutate({ ...state.draft, texts });
+  }
+
+  function setBlocks(next: BlocksState) {
+    if (!state) return;
+    mutate({ ...state.draft, blocks: next });
+  }
+
+  function patchBlock(blockId: string, changes: Partial<DesignBlock>) {
+    if (!state) return;
+    const blocks: BlocksState = {};
+    for (const slot of SLOTS) {
+      blocks[slot.key] = patchIn(state.draft.blocks?.[slot.key] ?? [], blockId, changes);
+    }
+    mutate({ ...state.draft, blocks });
+  }
+
+  function patchIn(list: DesignBlock[], id: string, changes: Partial<DesignBlock>): DesignBlock[] {
+    return list.map((item) => {
+      if (item.id === id) return { ...item, ...changes };
+      if (item.children?.length) return { ...item, children: patchIn(item.children, id, changes) };
+      return item;
+    });
   }
 
   function undo() {
@@ -277,10 +326,7 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     redoStack.current.push(state.draft);
     setStackSizes({ undo: undoStack.current.length, redo: redoStack.current.length });
     setState({ ...state, draft: prev });
-    setSaveStatus("dirty");
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    const key = pageKey;
-    saveTimer.current = setTimeout(() => void persist(prev, key), 400);
+    scheduleSave(prev);
   }
 
   function redo() {
@@ -289,10 +335,14 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     undoStack.current.push(state.draft);
     setStackSizes({ undo: undoStack.current.length, redo: redoStack.current.length });
     setState({ ...state, draft: next });
+    scheduleSave(next);
+  }
+
+  function scheduleSave(config: PageConfig) {
     setSaveStatus("dirty");
     if (saveTimer.current) clearTimeout(saveTimer.current);
     const key = pageKey;
-    saveTimer.current = setTimeout(() => void persist(next, key), 400);
+    saveTimer.current = setTimeout(() => void persist(config, key), 400);
   }
 
   async function flushThen(action: () => Promise<void>) {
@@ -324,6 +374,7 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
       setState(data as DesignState);
       setUnpublished((prev) => ({ ...prev, [pageKey]: false }));
       setSaveStatus("saved");
+      setNotice({ text: "Изменения опубликованы." });
       reloadPreview.current();
     });
   }
@@ -370,6 +421,7 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     setState(data);
     setUnpublished((prev) => ({ ...prev, [pageKey]: data.hasUnpublished }));
     setHistoryOpen(false);
+    setNotice({ text: "Версия положена в черновик. Нажмите «Применить», чтобы опубликовать." });
     reloadPreview.current();
   }
 
@@ -377,7 +429,15 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     return key === SHARED_KEY ? "Общие элементы и тема" : PAGES.find((p) => p.key === key)?.label ?? key;
   }
 
-  /** Адрес кадра предпросмотра: черновик выбранной страницы. */
+  function pickMedia(id: string) {
+    const target = mediaTarget.current;
+    setMediaOpen(false);
+    mediaTarget.current = null;
+    if (!target) return;
+    if (target.kind === "prop") setProperty(target.prop, id);
+    else patchBlock(target.blockId, { mediaId: id });
+  }
+
   const previewSrc = useMemo(() => {
     const base =
       page?.template && sampleId
@@ -390,26 +450,36 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     return `${base}?${params.toString()}`;
   }, [page, sampleId, isShared, pageKey, previewSharedDraft]);
 
-  /** Чистый предпросмотр — та же страница в новой вкладке, без панелей. */
-  function openCleanPreview() {
-    window.open(previewSrc, "_blank", "noopener");
-  }
+  /** Все блоки текущего черновика — для дерева и настроек. */
+  const blockIndex = useMemo(() => {
+    const map = new Map<string, { block: DesignBlock; slot: SlotKey }>();
+    for (const slot of SLOTS) {
+      walkBlocks(state?.draft.blocks?.[slot.key] ?? [], (block) => {
+        map.set(`block.${block.id}`, { block, slot: slot.key });
+      });
+    }
+    return map;
+  }, [state]);
 
   const visibleElements = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = [...pageElements];
-    // На странице (не в общих) дополнительно показываем общие элементы —
-    // их правка здесь создаёт переопределение только для этой страницы.
-    const sharedForPage = isShared ? [] : SHARED_ELEMENTS;
-    const all = [...list.map((e) => ({ ...e, shared: false })), ...sharedForPage.map((e) => ({ ...e, shared: true }))];
+    const own: (ElementDef & { shared: boolean })[] = (isShared ? SHARED_ELEMENTS : page?.elements ?? []).map((e) => ({
+      ...e,
+      shared: isShared,
+    }));
+    const sharedForPage = isShared ? [] : SHARED_ELEMENTS.map((e) => ({ ...e, shared: true }));
+    const all = [...own, ...sharedForPage];
     if (!q) return all;
     return all.filter((e) => e.label.toLowerCase().includes(q) || e.id.toLowerCase().includes(q));
-  }, [pageElements, search, isShared]);
+  }, [page, search, isShared]);
 
+  const selectedBlock = selectedId ? blockIndex.get(selectedId) : undefined;
   const selectedDef = visibleElements.find((e) => e.id === selectedId) ?? null;
-  const selectedIsShared = Boolean(selectedDef?.shared);
+  const selectedIsShared = Boolean(selectedDef?.shared) && !isShared;
+  const selectedLocked = selectedId ? lockedSet.has(selectedId) || Boolean(selectedBlock?.block.locked) : false;
 
   const sections = useMemo(groupedPages, []);
+  const texts = textsFor(pageKey);
 
   const statusText: Record<SaveStatus, string> = {
     idle: "Изменений нет",
@@ -419,8 +489,12 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     error: "Ошибка сохранения",
   };
 
+  const selectedLabel = selectedBlock
+    ? selectedBlock.block.name || "Добавленный блок"
+    : selectedDef?.label ?? "";
+
   return (
-    <div className="flex h-[calc(100vh-8rem)] min-h-[600px] flex-col gap-3">
+    <div className="flex h-[calc(100vh-8rem)] min-h-[620px] flex-col gap-3">
       {/* Подвкладки страниц */}
       <div className="rounded-lg border border-border bg-surface p-2">
         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -436,6 +510,16 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
             {unpublished[SHARED_KEY] && (
               <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent" title="Есть неопубликованные изменения" />
             )}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              mediaTarget.current = null;
+              setMediaOpen(true);
+            }}
+            className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-muted hover:text-foreground"
+          >
+            <Images size={13} /> Медиатека
           </button>
         </div>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -484,7 +568,6 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          {/* Устройство */}
           <div className="flex items-center rounded-md border border-border">
             {(["base", "tablet", "mobile"] as const).map((d) => {
               const Icon = DEVICE_ICON[d];
@@ -522,7 +605,6 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
             />
           )}
 
-          {/* Режим */}
           <div className="flex items-center rounded-md border border-border">
             <button
               type="button"
@@ -562,7 +644,7 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
             className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:text-foreground">
             <History size={13} /> История
           </button>
-          <button type="button" onClick={openCleanPreview}
+          <button type="button" onClick={() => window.open(previewSrc, "_blank", "noopener")}
             className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:text-foreground">
             <ExternalLink size={13} /> Предпросмотр
           </button>
@@ -590,67 +672,169 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
           </button>
         </div>
       )}
+      {notice && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-xs text-muted">
+          <span className="min-w-0 flex-1">{notice.text}</span>
+          {notice.undo && (
+            <button
+              type="button"
+              onClick={() => {
+                notice.undo?.();
+                setNotice(null);
+              }}
+              className="flex-shrink-0 text-accent underline"
+            >
+              Вернуть
+            </button>
+          )}
+          <button type="button" onClick={() => setNotice(null)} className="flex-shrink-0 underline">
+            Скрыть
+          </button>
+        </div>
+      )}
 
       {/* Рабочая область */}
       <div className="flex min-h-0 flex-1 gap-3">
-        {/* Дерево элементов */}
         {leftOpen ? (
-          <div className="flex w-[260px] flex-shrink-0 flex-col rounded-lg border border-border bg-surface">
-            <div className="flex items-center gap-1.5 border-b border-border p-2">
-              <div className="relative min-w-0 flex-1">
-                <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Поиск элемента…"
-                  className="w-full rounded-md border border-border bg-surface-2 py-1.5 pl-7 pr-2 text-xs outline-none focus:border-accent"
-                />
-              </div>
-              <button type="button" onClick={() => setLeftOpen(false)} title="Свернуть панель" className="p-1 text-muted hover:text-foreground">
+          <div className="flex w-[272px] flex-shrink-0 flex-col rounded-lg border border-border bg-surface">
+            <div className="flex items-center gap-0.5 border-b border-border p-1">
+              {([
+                { key: "elements" as LeftTab, label: "Элементы", Icon: Layers },
+                { key: "blocks" as LeftTab, label: "Блоки", Icon: Boxes },
+                { key: "texts" as LeftTab, label: "Тексты", Icon: TypeIcon },
+              ]).map(({ key, label: l, Icon }) => {
+                const disabled = key === "blocks" && isShared;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    disabled={disabled}
+                    title={disabled ? "Блоки добавляются на страницы, а не в общие элементы" : l}
+                    onClick={() => setLeftTab(key)}
+                    className={clsx(
+                      "flex flex-1 items-center justify-center gap-1 rounded px-1.5 py-1.5 text-[11px]",
+                      leftTab === key ? "bg-accent-soft text-accent" : "text-muted hover:text-foreground",
+                      disabled && "opacity-40"
+                    )}
+                  >
+                    <Icon size={12} /> {l}
+                  </button>
+                );
+              })}
+              <button type="button" onClick={() => setLeftOpen(false)} title="Свернуть панель"
+                className="p-1 text-muted hover:text-foreground">
                 <PanelLeftClose size={15} />
               </button>
             </div>
 
-            <div className="scroll-slim min-h-0 flex-1 overflow-y-auto p-1.5">
-              {visibleElements.length === 0 && (
-                <p className="px-2 py-3 text-[11px] text-muted-2">
-                  У этой страницы нет собственных размеченных элементов. Используйте общие элементы ниже — их правка
-                  здесь действует только на эту страницу.
+            {leftTab === "elements" && (
+              <>
+                <div className="border-b border-border p-2">
+                  <div className="relative">
+                    <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Поиск элемента…"
+                      className="w-full rounded-md border border-border bg-surface-2 py-1.5 pl-7 pr-2 text-xs outline-none focus:border-accent"
+                    />
+                  </div>
+                </div>
+                <div className="scroll-slim min-h-0 flex-1 overflow-y-auto p-1.5">
+                  {visibleElements.length === 0 && (
+                    <p className="px-2 py-3 text-[11px] text-muted-2">
+                      У этой страницы нет собственных размеченных элементов. Ниже — общие элементы; их правка здесь
+                      действует только на эту страницу.
+                    </p>
+                  )}
+                  {visibleElements.map((el) => {
+                    const isPresent = presentIds.size === 0 || presentIds.has(el.id);
+                    const hasValues = Boolean(state?.draft.elements[el.id]);
+                    return (
+                      <button
+                        key={el.id}
+                        type="button"
+                        onClick={() => setSelectedId(el.id)}
+                        className={clsx(
+                          "mb-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs",
+                          selectedId === el.id ? "bg-accent-soft text-accent" : "text-foreground/80 hover:bg-surface-2",
+                          el.parent && "pl-5"
+                        )}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{el.label}</span>
+                        {lockedSet.has(el.id) && <Lock size={10} className="flex-shrink-0 text-muted-2" />}
+                        {el.shared && !isShared && (
+                          <span className="flex-shrink-0 rounded bg-surface px-1 text-[9px] text-muted-2">общий</span>
+                        )}
+                        {hasValues && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent" />}
+                        {!isPresent && (
+                          <span className="flex-shrink-0 text-[9px] text-muted-2" title="Не найден в предпросмотре">
+                            нет
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+
+            {leftTab === "blocks" && !isShared && state && (
+              <div className="scroll-slim min-h-0 flex-1 overflow-y-auto p-2">
+                <p className="mb-2 text-[10px] text-muted-2">
+                  Блоки добавляются над и под содержимым страницы. Удаление блока не затрагивает данные в базе.
                 </p>
-              )}
-              {visibleElements.map((el) => {
-                const isPresent = presentIds.size === 0 || presentIds.has(el.id);
-                const hasValues = Boolean(state?.draft.elements[el.id]);
-                return (
-                  <button
-                    key={el.id}
-                    type="button"
-                    onClick={() => setSelectedId(el.id)}
-                    className={clsx(
-                      "mb-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs",
-                      selectedId === el.id ? "bg-accent-soft text-accent" : "text-foreground/80 hover:bg-surface-2",
-                      el.parent && "pl-5"
-                    )}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{el.label}</span>
-                    {el.shared && (
-                      <span className="flex-shrink-0 rounded bg-surface px-1 text-[9px] text-muted-2" title="Общий элемент">
-                        общий
-                      </span>
-                    )}
-                    {hasValues && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent" />}
-                    {!isPresent && (
-                      <span className="flex-shrink-0 text-[9px] text-muted-2" title="Не найден в предпросмотре">
-                        нет
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                <BlocksPanel
+                  blocks={state.draft.blocks ?? {}}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onChange={setBlocks}
+                  onDeleted={(restoreFn) => setNotice({ text: "Блок удалён.", undo: restoreFn })}
+                />
+              </div>
+            )}
+
+            {leftTab === "texts" && state && (
+              <div className="scroll-slim min-h-0 flex-1 overflow-y-auto p-2">
+                {texts.length === 0 ? (
+                  <p className="px-1 py-2 text-[11px] text-muted-2">
+                    У этой страницы нет подключённых статических подписей.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-2 text-[10px] text-muted-2">
+                      Это только статические подписи. Имена игроков, суммы и статистика берутся из базы и здесь не
+                      меняются.
+                    </p>
+                    <div className="space-y-2.5">
+                      {texts.map((t) => {
+                        const value = state.draft.texts?.[t.id] ?? "";
+                        return (
+                          <label key={t.id} className="block text-[11px] text-muted">
+                            {t.label}
+                            <input
+                              defaultValue={value}
+                              key={`${pageKey}-${t.id}-${value}`}
+                              placeholder={t.fallback}
+                              onBlur={(e) => setText(t.id, e.target.value)}
+                              className="mt-1 w-full rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs outline-none focus:border-accent"
+                            />
+                            {value === "" && (
+                              <span className="mt-0.5 block text-[10px] text-muted-2">
+                                В коде: «{t.fallback}»
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ) : (
-          <button type="button" onClick={() => setLeftOpen(true)} title="Показать дерево"
+          <button type="button" onClick={() => setLeftOpen(true)} title="Показать панель"
             className="h-9 flex-shrink-0 rounded-lg border border-border bg-surface px-2 text-muted hover:text-foreground">
             <PanelLeftOpen size={15} />
           </button>
@@ -709,8 +893,8 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
 
         {/* Настройки */}
         {rightOpen ? (
-          <div className="flex w-[300px] flex-shrink-0 flex-col rounded-lg border border-border bg-surface">
-            <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1.5">
+          <div className="flex w-[304px] flex-shrink-0 flex-col rounded-lg border border-border bg-surface">
+            <div className="flex items-center justify-between gap-1 border-b border-border px-2 py-1.5">
               <div className="flex items-center rounded-md border border-border">
                 {BREAKPOINTS.map((b) => (
                   <button
@@ -723,29 +907,43 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                   </button>
                 ))}
               </div>
-              <div className="flex items-center rounded-md border border-border">
+              <select
+                value={elementState}
+                onChange={(e) => setElementState(e.target.value as StateKey)}
+                className="rounded-md border border-border bg-surface-2 px-1 py-1 text-[10px]"
+              >
                 {STATES.map((s) => (
-                  <button
-                    key={s.key}
-                    type="button"
-                    onClick={() => setElementState(s.key)}
-                    className={clsx("px-1.5 py-1 text-[10px]", elementState === s.key ? "bg-accent-soft text-accent" : "text-muted")}
-                  >
+                  <option key={s.key} value={s.key}>
                     {s.label}
-                  </button>
+                  </option>
                 ))}
-              </div>
+              </select>
               <button type="button" onClick={() => setRightOpen(false)} title="Свернуть" className="p-1 text-muted hover:text-foreground">
                 <PanelRightClose size={15} />
               </button>
             </div>
 
-            {isShared && (
+            {isShared && state && (
               <details className="border-b border-border" open>
                 <summary className="cursor-pointer px-3 py-2 text-xs font-medium">Палитра и токены темы</summary>
                 <div className="space-y-2 px-3 pb-3">
+                  <div className="flex items-center gap-1 rounded-md border border-border p-0.5">
+                    {THEME_MODES.map((m) => (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => setThemeMode(m.key)}
+                        className={clsx(
+                          "flex-1 rounded px-2 py-1 text-[10px]",
+                          themeMode === m.key ? "bg-accent-soft text-accent" : "text-muted hover:text-foreground"
+                        )}
+                      >
+                        {m.label} тема
+                      </button>
+                    ))}
+                  </div>
                   {THEME_TOKENS.map((t) => {
-                    const value = state?.draft.tokens?.[t.key] ?? "";
+                    const value = state.draft.tokens?.[themeMode]?.[t.key] ?? "";
                     const invalid =
                       value !== "" &&
                       !isValidValue({ key: t.key, label: t.label, css: t.key, kind: "color", group: "colors" }, value);
@@ -758,7 +956,7 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                         <div className="flex items-center gap-1.5">
                           <input
                             defaultValue={value}
-                            key={`${pageKey}-${t.key}-${value}`}
+                            key={`${pageKey}-${themeMode}-${t.key}-${value}`}
                             placeholder="не задано"
                             onBlur={(e) => setToken(t.key, e.target.value)}
                             className={clsx(
@@ -779,7 +977,19 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
               </details>
             )}
 
-            {selectedDef && state ? (
+            {selectedBlock && state && (
+              <BlockSettings
+                block={selectedBlock.block}
+                slot={selectedBlock.slot}
+                onPatch={(changes) => patchBlock(selectedBlock.block.id, changes)}
+                onPickMedia={() => {
+                  mediaTarget.current = { kind: "block", blockId: selectedBlock.block.id };
+                  setMediaOpen(true);
+                }}
+              />
+            )}
+
+            {selectedId && state ? (
               <>
                 {selectedIsShared && (
                   <div className="border-b border-border bg-surface-2 px-3 py-2 text-[11px] text-muted">
@@ -790,53 +1000,48 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                   </div>
                 )}
                 <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setLocked((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(selectedDef.id)) next.delete(selectedDef.id);
-                        else next.add(selectedDef.id);
-                        return next;
-                      })
-                    }
-                    className="flex items-center gap-1 text-[11px] text-muted hover:text-foreground"
-                  >
-                    {locked.has(selectedDef.id) ? <Lock size={12} /> : <Unlock size={12} />}
-                    {locked.has(selectedDef.id) ? "Разблокировать" : "Заблокировать"}
+                  <button type="button" onClick={toggleLock}
+                    className="flex items-center gap-1 text-[11px] text-muted hover:text-foreground">
+                    {lockedSet.has(selectedId) ? <Lock size={12} /> : <Unlock size={12} />}
+                    {lockedSet.has(selectedId) ? "Разблокировать" : "Заблокировать"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={resetElement}
-                    className="flex items-center gap-1 text-[11px] text-muted hover:text-danger"
-                  >
+                  <button type="button" onClick={resetElement}
+                    className="flex items-center gap-1 text-[11px] text-muted hover:text-danger">
                     <RotateCcw size={12} /> Сбросить элемент
                   </button>
                 </div>
                 <div className="min-h-0 flex-1">
                   <PropertyPanel
-                    elementId={selectedDef.id}
-                    elementLabel={selectedDef.label}
+                    elementId={selectedId}
+                    elementLabel={selectedLabel}
                     scopeLabel={
-                      isShared
-                        ? "Область: весь сайт"
-                        : selectedIsShared
-                          ? `Область: только страница «${label(pageKey)}»`
-                          : `Область: страница «${label(pageKey)}»`
+                      selectedBlock
+                        ? `Область: блок на странице «${label(pageKey)}»`
+                        : isShared
+                          ? "Область: весь сайт"
+                          : selectedIsShared
+                            ? `Область: только страница «${label(pageKey)}»`
+                            : `Область: страница «${label(pageKey)}»`
                     }
-                    values={state.draft.elements[selectedDef.id]}
+                    values={state.draft.elements[selectedId]}
                     breakpoint={breakpoint}
                     state={elementState}
                     onChange={setProperty}
-                    onResetProp={resetProperty}
-                    locked={locked.has(selectedDef.id)}
+                    onResetProp={(prop) => setProperty(prop, "")}
+                    locked={selectedLocked}
+                    onPickMedia={(prop) => {
+                      mediaTarget.current = { kind: "prop", prop };
+                      setMediaOpen(true);
+                    }}
                   />
                 </div>
               </>
             ) : (
-              <p className="p-3 text-xs text-muted">
-                Выберите элемент — кликом в предпросмотре или в дереве слева.
-              </p>
+              !isShared && (
+                <p className="p-3 text-xs text-muted">
+                  Выберите элемент — кликом в предпросмотре, в дереве слева или во вкладке «Блоки».
+                </p>
+              )
             )}
           </div>
         ) : (
@@ -847,7 +1052,15 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
         )}
       </div>
 
-      {/* История версий */}
+      <MediaLibrary
+        open={mediaOpen}
+        onClose={() => {
+          setMediaOpen(false);
+          mediaTarget.current = null;
+        }}
+        onPick={mediaTarget.current ? pickMedia : undefined}
+      />
+
       {historyOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setHistoryOpen(false)}>
           <div className="max-h-[80vh] w-full max-w-lg overflow-hidden rounded-lg border border-border bg-surface" onClick={(e) => e.stopPropagation()}>
@@ -870,11 +1083,8 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                         {new Date(v.createdAt).toLocaleString("ru-RU")} · {v.author || "—"}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void restore(v.id)}
-                      className="flex-shrink-0 rounded-md border border-border px-2 py-1 text-[11px] text-muted hover:text-foreground"
-                    >
+                    <button type="button" onClick={() => void restore(v.id)}
+                      className="flex-shrink-0 rounded-md border border-border px-2 py-1 text-[11px] text-muted hover:text-foreground">
                       Восстановить
                     </button>
                   </div>

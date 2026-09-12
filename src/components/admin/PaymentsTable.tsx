@@ -276,7 +276,7 @@ export default function PaymentsTable({
           <EmptyState title="Нет данных за выбранный период" hint="Записей о выплатах пока нет." />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table data-design-el="shared.table" className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
                   <th className="px-4 py-3 font-medium">Игрок</th>

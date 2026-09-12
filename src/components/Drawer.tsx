@@ -41,6 +41,7 @@ export default function Drawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby="drawer-title"
+        data-design-el="shared.drawer"
         className="absolute inset-y-0 right-0 flex w-full flex-col border-l border-border-strong bg-surface shadow-2xl sm:w-[420px] sm:rounded-l-lg"
       >
         <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-4">

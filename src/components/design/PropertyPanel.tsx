@@ -22,6 +22,7 @@ type Props = {
   onChange: (prop: string, value: string) => void;
   onResetProp: (prop: string) => void;
   locked: boolean;
+  onPickMedia?: (prop: string) => void;
 };
 
 /** Цветовое поле: палитра проекта + произвольное значение. */
@@ -48,6 +49,7 @@ function Field({
   onChange,
   onReset,
   disabled,
+  onPickMedia,
 }: {
   def: PropertyDef;
   current: string;
@@ -55,6 +57,7 @@ function Field({
   onChange: (value: string) => void;
   onReset: () => void;
   disabled: boolean;
+  onPickMedia?: () => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const shown = draft ?? current;
@@ -92,7 +95,33 @@ function Field({
         </div>
       </div>
 
-      {def.kind === "select" ? (
+      {def.kind === "media" ? (
+        <div className="flex items-center gap-1.5">
+          {shown ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`/api/design/media/${shown}/file`}
+                alt=""
+                className="h-8 w-8 flex-shrink-0 rounded border border-border object-cover"
+              />
+              <button type="button" onClick={onPickMedia} disabled={disabled}
+                className="rounded-md border border-border px-2 py-1 text-[10px] hover:text-accent disabled:opacity-50">
+                Заменить
+              </button>
+              <button type="button" onClick={() => commit("")} disabled={disabled}
+                className="text-[10px] text-muted hover:text-danger disabled:opacity-50">
+                Убрать
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={onPickMedia} disabled={disabled}
+              className="rounded-md border border-border px-2 py-1 text-[10px] hover:text-accent disabled:opacity-50">
+              Выбрать из медиатеки
+            </button>
+          )}
+        </div>
+      ) : def.kind === "select" ? (
         <select
           value={shown}
           disabled={disabled}
@@ -161,6 +190,7 @@ export default function PropertyPanel({
   onChange,
   onResetProp,
   locked,
+  onPickMedia,
 }: Props) {
   const [openGroups, setOpenGroups] = useState<Set<PropertyGroupKey>>(new Set(["text", "colors", "spacing"]));
 
@@ -247,6 +277,7 @@ export default function PropertyPanel({
                         disabled={locked}
                         onChange={(v) => onChange(def.key, v)}
                         onReset={() => onResetProp(def.key)}
+                        onPickMedia={onPickMedia ? () => onPickMedia(def.key) : undefined}
                       />
                     );
                   })}

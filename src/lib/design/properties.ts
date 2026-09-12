@@ -8,7 +8,7 @@
  * скобку, ломающую правило.
  */
 
-export type PropertyKind = "color" | "length" | "number" | "select" | "text" | "shadow";
+export type PropertyKind = "color" | "length" | "number" | "select" | "text" | "shadow" | "media" | "ratio";
 
 export type PropertyDef = {
   key: string;
@@ -24,16 +24,29 @@ export type PropertyDef = {
   stateful?: boolean;
 };
 
-export type PropertyGroupKey = "text" | "colors" | "spacing" | "border" | "size" | "effects" | "layout";
+export type PropertyGroupKey =
+  | "text"
+  | "colors"
+  | "background"
+  | "spacing"
+  | "border"
+  | "size"
+  | "effects"
+  | "layout"
+  | "position"
+  | "motion";
 
 export const PROPERTY_GROUPS: { key: PropertyGroupKey; label: string }[] = [
   { key: "text", label: "Текст и типографика" },
-  { key: "colors", label: "Цвета и фон" },
+  { key: "colors", label: "Цвета" },
+  { key: "background", label: "Фон и изображение" },
   { key: "spacing", label: "Отступы" },
   { key: "border", label: "Границы и скругления" },
   { key: "size", label: "Размеры" },
   { key: "layout", label: "Расположение" },
+  { key: "position", label: "Позиционирование и наложение" },
   { key: "effects", label: "Эффекты" },
+  { key: "motion", label: "Анимация" },
 ];
 
 /** Длина: число с допустимой единицей, либо auto/none/ключевые слова. */
@@ -48,12 +61,21 @@ const SHADOW_RE = /^(none|(-?\d+(\.\d+)?(px|rem)\s+){2,3}(rgba?\([\d.\s,%/]+\)|#
 
 const NUMBER_RE = /^-?\d+(\.\d+)?$/;
 
+/** Пропорция: «16 / 9», «1 / 1», «auto». */
+const RATIO_RE = /^auto$|^\d+(\.\d+)?\s*\/\s*\d+(\.\d+)?$/;
+
+/** id медиафайла — cuid из БД, только буквы и цифры. */
+const MEDIA_ID_RE = /^[a-z0-9]{20,40}$/i;
+
 export function isValidValue(def: PropertyDef, raw: string): boolean {
   const value = raw.trim();
   if (value === "") return true; // пусто = «не задано», допустимо
   // Общая защита: ни один вариант не должен уметь закрыть правило или начать новое.
   if (/[;{}<>\\]/.test(value)) return false;
-  if (/javascript:|expression\(|@import|url\(/i.test(value)) return false;
+  // url( ) разрешаем только для медиа-свойства и только в виде, который
+  // собирает сам компилятор, — см. ветку "media" ниже.
+  if (/javascript:|expression\(|@import/i.test(value)) return false;
+  if (def.kind !== "media" && /url\(/i.test(value)) return false;
 
   switch (def.kind) {
     case "color":
@@ -64,6 +86,12 @@ export function isValidValue(def: PropertyDef, raw: string): boolean {
       return NUMBER_RE.test(value);
     case "shadow":
       return SHADOW_RE.test(value);
+    case "ratio":
+      return RATIO_RE.test(value);
+    case "media":
+      // Хранится не CSS, а идентификатор файла: адрес формирует компилятор,
+      // поэтому подставить произвольный url() через настройку нельзя.
+      return MEDIA_ID_RE.test(value);
     case "select":
       return (def.options ?? []).some((o) => o.value === value);
     case "text":
@@ -195,17 +223,98 @@ export const PROPERTIES: PropertyDef[] = [
     group: "colors",
     stateful: true,
   },
+  { key: "iconColor", label: "Цвет иконок", css: "--icon-color", kind: "color", group: "colors", stateful: true },
+
+  // --- Фон и изображение ---
   {
-    key: "backgroundImage",
+    key: "backgroundGradient",
     label: "Градиент фона",
     css: "background-image",
     kind: "select",
-    group: "colors",
+    group: "background",
     options: [
       { value: "none", label: "Нет" },
       { value: "linear-gradient(90deg, var(--accent-soft), transparent)", label: "Акцент слева направо" },
       { value: "linear-gradient(180deg, var(--surface-2), var(--surface))", label: "Поверхность сверху вниз" },
       { value: "linear-gradient(135deg, var(--accent-soft), var(--surface-2))", label: "Акцент по диагонали" },
+      { value: "linear-gradient(180deg, transparent, rgba(0,0,0,.55))", label: "Затемнение снизу" },
+    ],
+  },
+  {
+    key: "backgroundMedia",
+    label: "Фоновое изображение",
+    css: "background-image",
+    kind: "media",
+    group: "background",
+    hint: "Выберите файл из медиатеки.",
+  },
+  {
+    key: "backgroundSize",
+    label: "Вписывание фона",
+    css: "background-size",
+    kind: "select",
+    group: "background",
+    options: [
+      { value: "cover", label: "Заполнить (cover)" },
+      { value: "contain", label: "Вписать (contain)" },
+      { value: "auto", label: "Исходный размер" },
+      { value: "100% 100%", label: "Растянуть" },
+    ],
+  },
+  {
+    key: "backgroundPosition",
+    label: "Фокус фона",
+    css: "background-position",
+    kind: "select",
+    group: "background",
+    options: [
+      { value: "center", label: "По центру" },
+      { value: "top", label: "Сверху" },
+      { value: "bottom", label: "Снизу" },
+      { value: "left", label: "Слева" },
+      { value: "right", label: "Справа" },
+      { value: "center 25%", label: "Выше центра" },
+      { value: "center 75%", label: "Ниже центра" },
+    ],
+  },
+  {
+    key: "backgroundRepeat",
+    label: "Повтор фона",
+    css: "background-repeat",
+    kind: "select",
+    group: "background",
+    options: [
+      { value: "no-repeat", label: "Без повтора" },
+      { value: "repeat", label: "Повторять" },
+      { value: "repeat-x", label: "По горизонтали" },
+      { value: "repeat-y", label: "По вертикали" },
+    ],
+  },
+  {
+    key: "objectFit",
+    label: "Вписывание картинки",
+    css: "object-fit",
+    kind: "select",
+    group: "background",
+    options: [
+      { value: "cover", label: "Заполнить" },
+      { value: "contain", label: "Вписать целиком" },
+      { value: "fill", label: "Растянуть" },
+      { value: "none", label: "Не масштабировать" },
+    ],
+  },
+  {
+    key: "objectPosition",
+    label: "Фокусная точка картинки",
+    css: "object-position",
+    kind: "select",
+    group: "background",
+    options: [
+      { value: "center", label: "По центру" },
+      { value: "top", label: "Сверху" },
+      { value: "bottom", label: "Снизу" },
+      { value: "left", label: "Слева" },
+      { value: "right", label: "Справа" },
     ],
   },
 
@@ -364,12 +473,73 @@ export const PROPERTIES: PropertyDef[] = [
     ],
   },
   { key: "order", label: "Порядок", css: "order", kind: "number", group: "layout" },
+  { key: "gridTemplateRows", label: "Строки сетки", css: "grid-template-rows", kind: "select", group: "layout",
+    options: [
+      { value: "auto", label: "По содержимому" },
+      { value: "repeat(2, minmax(0, 1fr))", label: "2 равные строки" },
+      { value: "repeat(3, minmax(0, 1fr))", label: "3 равные строки" },
+    ],
+  },
+  { key: "flexGrow", label: "Растягивание (flex-grow)", css: "flex-grow", kind: "number", group: "layout" },
+  { key: "flexShrink", label: "Сжатие (flex-shrink)", css: "flex-shrink", kind: "number", group: "layout" },
+  { key: "flexBasis", label: "Базовый размер (flex-basis)", css: "flex-basis", kind: "length", group: "layout" },
+  {
+    key: "alignSelf",
+    label: "Своё выравнивание",
+    css: "align-self",
+    kind: "select",
+    group: "layout",
+    options: [
+      { value: "auto", label: "Как у контейнера" },
+      { value: "flex-start", label: "В начало" },
+      { value: "center", label: "По центру" },
+      { value: "flex-end", label: "В конец" },
+      { value: "stretch", label: "Растянуть" },
+    ],
+  },
+  { key: "overflowX", label: "Переполнение по X", css: "overflow-x", kind: "select", group: "layout",
+    options: [
+      { value: "visible", label: "Показывать" },
+      { value: "hidden", label: "Обрезать" },
+      { value: "auto", label: "Прокрутка" },
+    ],
+  },
+  { key: "overflowY", label: "Переполнение по Y", css: "overflow-y", kind: "select", group: "layout",
+    options: [
+      { value: "visible", label: "Показывать" },
+      { value: "hidden", label: "Обрезать" },
+      { value: "auto", label: "Прокрутка" },
+    ],
+  },
+  { key: "aspectRatio", label: "Соотношение сторон", css: "aspect-ratio", kind: "ratio", group: "layout",
+    hint: "Например: 16 / 9" },
+
+  // --- Позиционирование ---
+  {
+    key: "position",
+    label: "Тип позиционирования",
+    css: "position",
+    kind: "select",
+    group: "position",
+    options: [
+      { value: "static", label: "Обычное" },
+      { value: "relative", label: "Относительное" },
+      { value: "absolute", label: "Абсолютное" },
+      { value: "sticky", label: "Прилипающее" },
+      { value: "fixed", label: "Фиксированное" },
+    ],
+  },
+  { key: "top", label: "Сверху", css: "top", kind: "length", group: "position" },
+  { key: "right", label: "Справа", css: "right", kind: "length", group: "position" },
+  { key: "bottom", label: "Снизу", css: "bottom", kind: "length", group: "position" },
+  { key: "left", label: "Слева", css: "left", kind: "length", group: "position" },
+  { key: "zIndex", label: "Порядок наложения", css: "z-index", kind: "number", group: "position" },
 
   // --- Эффекты ---
   { key: "opacity", label: "Прозрачность", css: "opacity", kind: "number", group: "effects", stateful: true },
   {
     key: "boxShadow",
-    label: "Тень",
+    label: "Тень блока",
     css: "box-shadow",
     kind: "shadow",
     group: "effects",
@@ -377,19 +547,182 @@ export const PROPERTIES: PropertyDef[] = [
     hint: "Например: 0 4px 12px rgba(0,0,0,0.35)",
   },
   {
+    key: "textShadow",
+    label: "Тень текста",
+    css: "text-shadow",
+    kind: "shadow",
+    group: "effects",
+    stateful: true,
+    hint: "Например: 0 1px 2px rgba(0,0,0,0.6)",
+  },
+  {
+    key: "backdropBlur",
+    label: "Размытие за элементом",
+    css: "backdrop-filter",
+    kind: "select",
+    group: "effects",
+    options: [
+      { value: "none", label: "Нет" },
+      { value: "blur(4px)", label: "Слабое" },
+      { value: "blur(8px)", label: "Среднее" },
+      { value: "blur(16px)", label: "Сильное" },
+    ],
+  },
+  {
+    key: "filterBlur",
+    label: "Размытие элемента",
+    css: "filter",
+    kind: "select",
+    group: "effects",
+    options: [
+      { value: "none", label: "Нет" },
+      { value: "blur(2px)", label: "Слабое" },
+      { value: "blur(6px)", label: "Среднее" },
+      { value: "grayscale(1)", label: "Чёрно-белое" },
+      { value: "brightness(1.15)", label: "Ярче" },
+      { value: "brightness(0.85)", label: "Темнее" },
+    ],
+  },
+  {
+    key: "cursor",
+    label: "Курсор",
+    css: "cursor",
+    kind: "select",
+    group: "effects",
+    options: [
+      { value: "auto", label: "Обычный" },
+      { value: "pointer", label: "Палец" },
+      { value: "not-allowed", label: "Запрещено" },
+      { value: "default", label: "Стрелка" },
+    ],
+  },
+
+  // --- Анимация ---
+  {
+    key: "transitionProperty",
+    label: "Что анимировать",
+    css: "transition-property",
+    kind: "select",
+    group: "motion",
+    options: [
+      { value: "all", label: "Все свойства" },
+      { value: "colors", label: "Только цвета" },
+      { value: "transform", label: "Только сдвиг/масштаб" },
+      { value: "opacity", label: "Только прозрачность" },
+      { value: "none", label: "Ничего" },
+    ],
+  },
+  {
     key: "transitionDuration",
     label: "Длительность перехода",
     css: "transition-duration",
     kind: "select",
-    group: "effects",
+    group: "motion",
     options: [
       { value: "0ms", label: "Без анимации" },
       { value: "120ms", label: "120 мс" },
       { value: "180ms", label: "180 мс" },
       { value: "300ms", label: "300 мс" },
       { value: "500ms", label: "500 мс" },
+      { value: "800ms", label: "800 мс" },
+    ],
+  },
+  {
+    key: "transitionDelay",
+    label: "Задержка перехода",
+    css: "transition-delay",
+    kind: "select",
+    group: "motion",
+    options: [
+      { value: "0ms", label: "Без задержки" },
+      { value: "100ms", label: "100 мс" },
+      { value: "200ms", label: "200 мс" },
+      { value: "400ms", label: "400 мс" },
+    ],
+  },
+  {
+    key: "transitionTimingFunction",
+    label: "Плавность",
+    css: "transition-timing-function",
+    kind: "select",
+    group: "motion",
+    options: [
+      { value: "linear", label: "Равномерно" },
+      { value: "ease", label: "Плавно" },
+      { value: "ease-in", label: "Разгон" },
+      { value: "ease-out", label: "Торможение" },
+      { value: "ease-in-out", label: "Разгон и торможение" },
+      { value: "cubic-bezier(0.34, 1.56, 0.64, 1)", label: "С отскоком" },
+    ],
+  },
+  {
+    key: "hoverTransform",
+    label: "Сдвиг при наведении",
+    css: "transform",
+    kind: "select",
+    group: "motion",
+    stateful: true,
+    options: [
+      { value: "none", label: "Нет" },
+      { value: "translateY(-2px)", label: "Приподнять" },
+      { value: "translateY(2px)", label: "Опустить" },
+      { value: "scale(1.02)", label: "Чуть увеличить" },
+      { value: "scale(0.98)", label: "Чуть уменьшить" },
+    ],
+  },
+  {
+    key: "appearAnimation",
+    label: "Появление",
+    css: "animation-name",
+    kind: "select",
+    group: "motion",
+    hint: "Учитывает системную настройку «уменьшить анимацию».",
+    options: [
+      { value: "none", label: "Нет" },
+      { value: "xd-fade-in", label: "Проявление" },
+      { value: "xd-slide-up", label: "Снизу вверх" },
+      { value: "xd-slide-down", label: "Сверху вниз" },
+      { value: "xd-zoom-in", label: "Увеличение" },
+    ],
+  },
+  {
+    key: "appearDuration",
+    label: "Длительность появления",
+    css: "animation-duration",
+    kind: "select",
+    group: "motion",
+    options: [
+      { value: "200ms", label: "200 мс" },
+      { value: "400ms", label: "400 мс" },
+      { value: "700ms", label: "700 мс" },
+      { value: "1200ms", label: "1200 мс" },
+    ],
+  },
+  {
+    key: "appearDelay",
+    label: "Задержка появления",
+    css: "animation-delay",
+    kind: "select",
+    group: "motion",
+    options: [
+      { value: "0ms", label: "Без задержки" },
+      { value: "150ms", label: "150 мс" },
+      { value: "300ms", label: "300 мс" },
+      { value: "600ms", label: "600 мс" },
     ],
   },
 ];
+
+/** Свойства появления объединяются в один animation — их нужно знать компилятору. */
+export const APPEAR_PROPS = new Set(["appearAnimation", "appearDuration", "appearDelay"]);
+
+/** Значения transition-property, которые раскрываются в список свойств. */
+export const TRANSITION_PROPERTY_MAP: Record<string, string> = {
+  colors: "background-color, border-color, color, box-shadow",
+  all: "all",
+  transform: "transform",
+  opacity: "opacity",
+  none: "none",
+};
 
 export const PROPERTY_BY_KEY = new Map(PROPERTIES.map((p) => [p.key, p]));

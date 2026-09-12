@@ -31,12 +31,14 @@ export default function Modal({
         type="button"
         aria-label="Закрыть"
         onClick={onClose}
+        data-design-el="shared.modalOverlay"
         className="absolute inset-0 bg-black/60 backdrop-blur-sm"
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
+        data-design-el="shared.modal"
         className="relative w-full max-w-sm rounded-lg border border-border-strong bg-surface p-5 shadow-2xl"
       >
         <div className="mb-3 flex items-center justify-between gap-3">

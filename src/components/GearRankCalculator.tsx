@@ -233,7 +233,7 @@ export default function GearRankCalculator() {
         </button>
         {showTable && (
           <div className="mt-3 overflow-x-auto rounded-md border border-border">
-            <table className="w-full min-w-[900px] text-xs">
+            <table data-design-el="shared.table" className="w-full min-w-[900px] text-xs">
               <thead>
                 <tr className="border-b border-border bg-surface-2 text-left text-muted">
                   <th className="whitespace-nowrap px-2 py-2 font-medium">Экипировка</th>

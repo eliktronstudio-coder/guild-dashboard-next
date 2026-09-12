@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { compileConfig, parseConfig, stableStringify } from "./compile";
-import { isKnownPageKey, SHARED_KEY } from "./registry";
-import { emptyConfig, type PageConfig } from "./types";
+import { isKnownPageKey, PAGE_BY_KEY, SHARED_KEY } from "./registry";
+import { SLOTS, emptyConfig, walkBlocks, type DesignBlock, type PageConfig, type SlotKey } from "./types";
 
 /** Читает (и при необходимости создаёт) запись оформления страницы. */
 async function ensureRow(pageKey: string) {
@@ -184,6 +184,101 @@ export async function getPublishedCss(pageKey: string | null): Promise<string> {
     .map((row) => compileConfig(parseConfig(row.publishedJson, row.pageKey), row.pageKey))
     .filter(Boolean)
     .join("");
+}
+
+/**
+ * Где используется медиафайл. Проверяются и публикации, и черновики, и
+ * сохранённые версии: файл, на который ссылается хоть что-то из этого,
+ * удалять нельзя.
+ */
+export async function findMediaUsage(mediaId: string): Promise<string[]> {
+  const usage: string[] = [];
+
+  const rows = await prisma.pageDesign.findMany({
+    select: { pageKey: true, draftJson: true, publishedJson: true },
+  });
+  for (const row of rows) {
+    if (!isKnownPageKey(row.pageKey)) continue;
+    const label = row.pageKey === SHARED_KEY ? "Общие элементы" : PAGE_BY_KEY.get(row.pageKey)?.label ?? row.pageKey;
+    if (configUsesMedia(parseConfig(row.publishedJson, row.pageKey), mediaId)) usage.push(`${label} (опубликовано)`);
+    else if (configUsesMedia(parseConfig(row.draftJson, row.pageKey), mediaId)) usage.push(`${label} (черновик)`);
+  }
+
+  const versions = await prisma.designVersion.findMany({
+    select: { configJson: true, pageDesign: { select: { pageKey: true } } },
+  });
+  for (const version of versions) {
+    const key = version.pageDesign.pageKey;
+    if (!isKnownPageKey(key)) continue;
+    if (configUsesMedia(parseConfig(version.configJson, key), mediaId)) {
+      usage.push("сохранённая версия");
+      break;
+    }
+  }
+
+  return [...new Set(usage)];
+}
+
+function configUsesMedia(config: PageConfig, mediaId: string): boolean {
+  for (const values of Object.values(config.elements)) {
+    const byBp = values.backgroundMedia;
+    if (!byBp) continue;
+    for (const byState of Object.values(byBp)) {
+      for (const value of Object.values(byState ?? {})) {
+        if (value === mediaId) return true;
+      }
+    }
+  }
+  let used = false;
+  for (const slot of SLOTS) {
+    walkBlocks(config.blocks?.[slot.key] ?? [], (block) => {
+      if (block.mediaId === mediaId) used = true;
+    });
+  }
+  return used;
+}
+
+/** Подписи и блоки для публичного рендера страницы. */
+export async function getPublishedContent(pageKey: string | null): Promise<{
+  texts: Record<string, string>;
+  blocks: Partial<Record<SlotKey, DesignBlock[]>>;
+}> {
+  const keys = pageKey ? [SHARED_KEY, pageKey] : [SHARED_KEY];
+  const rows = await prisma.pageDesign.findMany({
+    where: { pageKey: { in: keys } },
+    select: { pageKey: true, publishedJson: true },
+  });
+
+  const texts: Record<string, string> = {};
+  let blocks: Partial<Record<SlotKey, DesignBlock[]>> = {};
+  for (const key of keys) {
+    const row = rows.find((r) => r.pageKey === key);
+    if (!row) continue;
+    const config = parseConfig(row.publishedJson, key);
+    Object.assign(texts, config.texts ?? {});
+    if (key !== SHARED_KEY) blocks = config.blocks ?? {};
+  }
+  return { texts, blocks };
+}
+
+/** То же для предпросмотра черновика. */
+export async function getDraftContent(
+  pageKey: string,
+  includeSharedDraft: boolean
+): Promise<{ texts: Record<string, string>; blocks: Partial<Record<SlotKey, DesignBlock[]>> }> {
+  const sharedRow = await prisma.pageDesign.findUnique({ where: { pageKey: SHARED_KEY } });
+  const sharedJson = includeSharedDraft ? sharedRow?.draftJson : sharedRow?.publishedJson;
+  const texts: Record<string, string> = sharedJson
+    ? { ...(parseConfig(sharedJson, SHARED_KEY).texts ?? {}) }
+    : {};
+
+  if (pageKey === SHARED_KEY) return { texts, blocks: {} };
+
+  const row = await prisma.pageDesign.findUnique({ where: { pageKey } });
+  if (!row) return { texts, blocks: {} };
+  const config = parseConfig(row.draftJson, pageKey);
+  Object.assign(texts, config.texts ?? {});
+  return { texts, blocks: config.blocks ?? {} };
 }
 
 /** CSS черновика — только для предпросмотра в админке. */

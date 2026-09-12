@@ -224,7 +224,7 @@ export default function DropCatalogPanel({ items }: { items: CatalogItem[] }) {
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-        <table className="w-full text-sm">
+        <table data-design-el="shared.table" className="w-full text-sm">
           <thead>
             <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
               <th className="px-4 py-3 font-medium">Фото</th>

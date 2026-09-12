@@ -36,7 +36,7 @@ export default function TreasuryChart({ data }: { data: TreasuryChartPoint[] }) 
   const hasCategories = data[0].goldMiniRb !== undefined || data[0].goldPrime !== undefined;
 
   return (
-    <div className="min-w-0">
+    <div data-design-el="shared.chart" className="min-w-0">
       <ResponsiveContainer width="100%" height={260}>
         <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <defs>

@@ -1,12 +1,16 @@
 /**
- * Реестр редактируемых страниц и элементов.
+ * Реестр редактируемых страниц, элементов и статических подписей.
  *
  * Это единственный источник правды о том, что можно редактировать. Компилятор
- * стилей принимает только идентификаторы отсюда, поэтому конфиг не может
- * сослаться на произвольный селектор и задеть чужую страницу.
+ * принимает только идентификаторы отсюда, поэтому конфиг не может сослаться
+ * на произвольный селектор и задеть чужую страницу.
  *
- * Чтобы подключить новый элемент: добавить сюда запись и проставить в разметке
- * атрибут data-design-el с тем же id (см. helpers в ./attr.ts).
+ * Элемент описывается одним из двух способов:
+ *  - по атрибуту: id совпадает с data-design-el в разметке (устойчиво к
+ *    перестановке и правке текста);
+ *  - по фиксированному селектору (поле selector) — для семантических групп
+ *    вроде кнопок и полей ввода, которые встречаются повсеместно. Селектор
+ *    задаётся здесь, в коде, а не приходит от пользователя.
  */
 
 import type { PropertyGroupKey } from "./properties";
@@ -14,14 +18,24 @@ import type { PropertyGroupKey } from "./properties";
 export const SHARED_KEY = "__shared__";
 
 export type ElementDef = {
-  /** Устойчивый идентификатор; совпадает с data-design-el в разметке. */
+  /** Устойчивый идентификатор; для атрибутных элементов совпадает с data-design-el. */
   id: string;
   label: string;
   /** id родителя внутри той же страницы — для дерева элементов. */
   parent?: string;
+  /** Фиксированный селектор вместо атрибута. */
+  selector?: string;
   /** Какие группы свойств показывать. Пусто — все. */
   groups?: PropertyGroupKey[];
   /** Пояснение для администратора. */
+  note?: string;
+};
+
+export type TextDef = {
+  id: string;
+  label: string;
+  /** Текст в коде — показывается как исходное значение. */
+  fallback: string;
   note?: string;
 };
 
@@ -34,17 +48,17 @@ export type PageDef = {
   route: string;
   /** Страница — шаблон: предпросмотр требует выбрать пример записи. */
   template?: {
-    /** Откуда брать примеры: используется в API /api/design/samples. */
     sampleKind: "activity" | "player";
-    /** Как собрать маршрут из id примера. */
     buildRoute: (id: string) => string;
     note: string;
   };
   elements: ElementDef[];
+  texts?: TextDef[];
 };
 
 /** Общие элементы и тема — действуют на весь сайт. */
 export const SHARED_ELEMENTS: ElementDef[] = [
+  // Каркас
   { id: "shared.sidebar", label: "Боковое меню" },
   { id: "shared.sidebarSection", label: "Заголовок раздела меню", parent: "shared.sidebar" },
   { id: "shared.sidebarItem", label: "Пункт меню", parent: "shared.sidebar" },
@@ -53,11 +67,64 @@ export const SHARED_ELEMENTS: ElementDef[] = [
   { id: "shared.main", label: "Область контента" },
   { id: "shared.footer", label: "Подвал" },
   { id: "shared.bottomNav", label: "Нижнее меню (телефон)" },
-  { id: "shared.panel", label: "Панель (карточка-контейнер)", note: "Общий вид всех панелей на сайте." },
+
+  // Контейнеры и карточки
+  { id: "shared.panel", label: "Панель (карточка-контейнер)", note: "Общий вид всех панелей сайта." },
   { id: "shared.sectionTitle", label: "Заголовок панели", parent: "shared.panel" },
   { id: "shared.statCard", label: "Карточка показателя" },
   { id: "shared.activityRow", label: "Строка активности" },
   { id: "shared.rankRow", label: "Строка рейтинга" },
+  { id: "shared.emptyState", label: "Блок «нет данных»" },
+
+  // Таблицы
+  { id: "shared.table", label: "Таблица" },
+  { id: "shared.tableHeadCell", label: "Заголовок колонки", parent: "shared.table", selector: "[data-design-el=\"shared.table\"] thead th" },
+  { id: "shared.tableRow", label: "Строка таблицы", parent: "shared.table", selector: "[data-design-el=\"shared.table\"] tbody tr" },
+  { id: "shared.tableCell", label: "Ячейка таблицы", parent: "shared.table", selector: "[data-design-el=\"shared.table\"] tbody td" },
+
+  // Формы и управление
+  {
+    id: "shared.button",
+    label: "Кнопки",
+    selector: "main button:not([data-design-el]), main a[data-xd-button]",
+    note: "Все кнопки в области контента.",
+  },
+  { id: "shared.link", label: "Ссылки в тексте", selector: "main a:not([data-design-el]):not([data-xd-button])" },
+  {
+    id: "shared.input",
+    label: "Поля ввода",
+    selector: "main input:not([type=\"checkbox\"]):not([type=\"radio\"]), main textarea",
+  },
+  { id: "shared.select", label: "Выпадающие списки", selector: "main select" },
+  { id: "shared.checkbox", label: "Флажки", selector: "main input[type=\"checkbox\"]" },
+  { id: "shared.label", label: "Подписи полей", selector: "main label" },
+
+  // Индикаторы и всплывающие окна
+  { id: "shared.badge", label: "Бейдж статуса" },
+  { id: "shared.modal", label: "Модальное окно" },
+  { id: "shared.modalOverlay", label: "Затемнение за окном", parent: "shared.modal" },
+  { id: "shared.drawer", label: "Выезжающая панель" },
+
+  // Графики
+  { id: "shared.chart", label: "Область графика" },
+  { id: "shared.chartGrid", label: "Сетка графика", parent: "shared.chart", selector: "[data-design-el=\"shared.chart\"] .recharts-cartesian-grid line" },
+  // Подпись оси — это <text class="recharts-cartesian-axis-tick-value">;
+  // группа .recharts-cartesian-axis-tick текст не содержит.
+  { id: "shared.chartAxis", label: "Подписи осей", parent: "shared.chart", selector: "[data-design-el=\"shared.chart\"] .recharts-cartesian-axis-tick-value" },
+  { id: "shared.chartAxisLine", label: "Линии осей", parent: "shared.chart", selector: "[data-design-el=\"shared.chart\"] .recharts-cartesian-axis-line" },
+  { id: "shared.chartLegend", label: "Легенда графика", parent: "shared.chart", selector: "[data-design-el=\"shared.chart\"] .recharts-legend-wrapper" },
+  { id: "shared.chartTooltip", label: "Подсказка графика", parent: "shared.chart", selector: ".recharts-tooltip-wrapper" },
+];
+
+/** Общие подписи каркаса. */
+export const SHARED_TEXTS: TextDef[] = [
+  { id: "shared.footerText", label: "Текст подвала", fallback: "v0.1.0" },
+  { id: "shared.loginButton", label: "Кнопка входа в меню", fallback: "Войти" },
+  { id: "shared.logoutButton", label: "Кнопка выхода в меню", fallback: "Выйти" },
+  { id: "shared.navSectionOverview", label: "Раздел меню «Обзор»", fallback: "Обзор" },
+  { id: "shared.navSectionEconomy", label: "Раздел меню «Экономика»", fallback: "Экономика" },
+  { id: "shared.navSectionTools", label: "Раздел меню «Инструменты»", fallback: "Инструменты" },
+  { id: "shared.navSectionAdmin", label: "Раздел меню «Администрирование»", fallback: "Администрирование" },
 ];
 
 /** Токены темы: редактируются только в «Общих элементах», пишутся в :root. */
@@ -65,15 +132,20 @@ export const THEME_TOKENS: { key: string; label: string; group: "Палитра"
   { key: "accent", label: "Акцент", group: "Палитра" },
   { key: "accent-bright", label: "Акцент яркий", group: "Палитра" },
   { key: "accent-dim", label: "Акцент приглушённый", group: "Палитра" },
+  { key: "accent-soft", label: "Акцент фоновый", group: "Палитра" },
   { key: "danger", label: "Опасность", group: "Палитра" },
   { key: "success", label: "Успех", group: "Палитра" },
   { key: "info", label: "Информация", group: "Палитра" },
   { key: "jade", label: "Нефрит", group: "Палитра" },
+  { key: "violet", label: "Фиолетовый", group: "Палитра" },
+  { key: "ember", label: "Угольный", group: "Палитра" },
   { key: "background", label: "Фон страницы", group: "Поверхности" },
   { key: "surface", label: "Поверхность", group: "Поверхности" },
   { key: "surface-2", label: "Поверхность 2", group: "Поверхности" },
+  { key: "surface-hover", label: "Поверхность при наведении", group: "Поверхности" },
   { key: "bg-sidebar", label: "Фон бокового меню", group: "Поверхности" },
   { key: "border", label: "Граница", group: "Поверхности" },
+  { key: "border-strong", label: "Граница выделенная", group: "Поверхности" },
   { key: "foreground", label: "Основной текст", group: "Текст" },
   { key: "muted", label: "Приглушённый текст", group: "Текст" },
   { key: "muted-2", label: "Очень приглушённый текст", group: "Текст" },
@@ -82,12 +154,10 @@ export const THEME_TOKENS: { key: string; label: string; group: "Палитра"
 /**
  * Страница без собственных размеченных элементов: редактируется через общие
  * элементы, ограниченные областью этой страницы (см. compileConfig — правило
- * получает префикс [data-design-page="key"]). Собственных id здесь нет
- * намеренно: объявлять элемент, которого нет в разметке, значит показать
- * администратору настройку, которая ни на что не влияет.
+ * получает префикс [data-design-page="key"]).
  */
-function simplePage(key: string, label: string, section: string, route: string): PageDef {
-  return { key, label, section, route, elements: [] };
+function simplePage(key: string, label: string, section: string, route: string, texts?: TextDef[]): PageDef {
+  return { key, label, section, route, elements: [], texts };
 }
 
 export const PAGES: PageDef[] = [
@@ -106,6 +176,19 @@ export const PAGES: PageDef[] = [
       { id: "home.leadersPrime", label: "Панель «Посещаемость: Прайм»", parent: "home.root" },
       { id: "home.leadersMiniRb", label: "Панель «Посещаемость: Мини-РБ»", parent: "home.root" },
     ],
+    texts: [
+      { id: "home.titleMyAttendance", label: "Заголовок «Моя посещаемость»", fallback: "Моя посещаемость" },
+      { id: "home.titleMyChart", label: "Заголовок «Мой график посещаемости»", fallback: "Мой график посещаемости" },
+      { id: "home.titleSchedule", label: "Заголовок «До активностей»", fallback: "До активностей" },
+      { id: "home.titleRecent", label: "Заголовок «Последние активности»", fallback: "Последние активности" },
+      { id: "home.titlePrime", label: "Заголовок «Посещаемость: Прайм»", fallback: "Посещаемость: Прайм" },
+      { id: "home.titleMiniRb", label: "Заголовок «Посещаемость: Мини-РБ»", fallback: "Посещаемость: Мини-РБ" },
+      { id: "home.statTotal", label: "Подпись «Общая»", fallback: "Общая" },
+      { id: "home.statPrime", label: "Подпись «Прайм»", fallback: "Прайм" },
+      { id: "home.statMiniRb", label: "Подпись «Мини-РБ»", fallback: "Мини-РБ" },
+      { id: "home.linkProfile", label: "Ссылка «Профиль»", fallback: "Профиль" },
+      { id: "home.linkAll", label: "Ссылка «Все»", fallback: "Все" },
+    ],
   },
   {
     key: "dashboard",
@@ -115,6 +198,7 @@ export const PAGES: PageDef[] = [
     elements: [
       { id: "dashboard.root", label: "Вся страница" },
       { id: "dashboard.kpiGrid", label: "Сетка показателей", parent: "dashboard.root" },
+      { id: "dashboard.hero", label: "Фоновое изображение сверху", parent: "dashboard.root" },
     ],
   },
   simplePage("activities", "Активность", "Обзор", "/activities"),
@@ -127,7 +211,9 @@ export const PAGES: PageDef[] = [
   simplePage("users", "Пользователи", "Администрирование", "/users"),
   simplePage("dropCatalog", "Реестр дропа", "Администрирование", "/drop-catalog"),
   simplePage("activityBanners", "Баннеры активностей", "Администрирование", "/activity-banners"),
-  simplePage("rbPurchase", "Расчёт покупки РБ", "Администрирование", "/rb-purchase"),
+  simplePage("rbPurchase", "Расчёт покупки РБ", "Администрирование", "/rb-purchase", [
+    { id: "rbPurchase.title", label: "Заголовок страницы", fallback: "Расчёт покупки РБ" },
+  ]),
   simplePage("drops", "Дроп", "Администрирование", "/drops"),
   {
     key: "activityDetail",
@@ -139,9 +225,7 @@ export const PAGES: PageDef[] = [
       buildRoute: (id) => `/activities/${id}`,
       note: "Изменения применяются ко всем карточкам активностей.",
     },
-    elements: [
-      { id: "activityDetail.root", label: "Вся страница" },
-    ],
+    elements: [{ id: "activityDetail.root", label: "Вся страница" }],
   },
   {
     key: "playerDetail",
@@ -153,13 +237,29 @@ export const PAGES: PageDef[] = [
       buildRoute: (id) => `/players/${id}`,
       note: "Изменения применяются ко всем профилям игроков.",
     },
-    elements: [
-      { id: "playerDetail.root", label: "Вся страница" },
-    ],
+    elements: [{ id: "playerDetail.root", label: "Вся страница" }],
   },
 ];
 
 export const PAGE_BY_KEY = new Map(PAGES.map((p) => [p.key, p]));
+
+const SELECTOR_BY_ID = new Map<string, string>();
+for (const def of SHARED_ELEMENTS) if (def.selector) SELECTOR_BY_ID.set(def.id, def.selector);
+for (const page of PAGES) for (const def of page.elements) if (def.selector) SELECTOR_BY_ID.set(def.id, def.selector);
+
+/**
+ * Селектор элемента для компилятора. Либо фиксированный из реестра, либо
+ * атрибутный. Ничего, что пришло от пользователя, сюда не попадает.
+ */
+export function selectorForElement(id: string): string {
+  const fixed = SELECTOR_BY_ID.get(id);
+  if (fixed) return fixed;
+  if (id.startsWith("block.")) {
+    // Блоки, добавленные администратором, размечаются тем же атрибутом.
+    return /^block\.[a-zA-Z0-9_-]+$/.test(id) ? `[data-design-el="${id}"]` : "";
+  }
+  return /^[a-zA-Z0-9._-]+$/.test(id) ? `[data-design-el="${id}"]` : "";
+}
 
 /** Все допустимые id элементов — и страничные, и общие. */
 export function allowedElementIds(pageKey: string): Set<string> {
@@ -168,6 +268,18 @@ export function allowedElementIds(pageKey: string): Set<string> {
   const page = PAGE_BY_KEY.get(pageKey);
   for (const e of page?.elements ?? []) ids.add(e.id);
   return ids;
+}
+
+/** Допустимые id статических подписей. */
+export function allowedTextIds(pageKey: string): Set<string> {
+  if (pageKey === SHARED_KEY) return new Set(SHARED_TEXTS.map((t) => t.id));
+  const page = PAGE_BY_KEY.get(pageKey);
+  return new Set((page?.texts ?? []).map((t) => t.id));
+}
+
+export function textsFor(pageKey: string): TextDef[] {
+  if (pageKey === SHARED_KEY) return SHARED_TEXTS;
+  return PAGE_BY_KEY.get(pageKey)?.texts ?? [];
 }
 
 export function isKnownPageKey(key: string): boolean {
