@@ -8,7 +8,7 @@ import {
   getPublishedCss,
 } from "./store";
 import { isKnownPageKey, pageKeyForPathname, SHARED_KEY } from "./registry";
-import type { DesignBlock, SlotKey } from "./types";
+import type { DesignBlock, LayoutEntry, SlotKey } from "./types";
 
 export const PREVIEW_PARAM = "__design_preview";
 export const PREVIEW_SHARED_PARAM = "__design_shared_draft";
@@ -18,6 +18,7 @@ export type ResolvedDesign = {
   css: string;
   texts: Record<string, string>;
   blocks: Partial<Record<SlotKey, DesignBlock[]>>;
+  layout: LayoutEntry[];
   isPreview: boolean;
 };
 
@@ -56,13 +57,21 @@ export const resolveDesign = cache(async (): Promise<ResolvedDesign> => {
         css,
         texts: content.texts,
         blocks: content.blocks,
+        layout: content.layout,
         isPreview: true,
       };
     }
   }
 
   const [css, content] = await Promise.all([getPublishedCss(routeKey), getPublishedContent(routeKey)]);
-  return { pageKey: routeKey, css, texts: content.texts, blocks: content.blocks, isPreview: false };
+  return {
+    pageKey: routeKey,
+    css,
+    texts: content.texts,
+    blocks: content.blocks,
+    layout: content.layout,
+    isPreview: false,
+  };
 });
 
 /** Подпись с учётом переопределения из редактора. */

@@ -19,6 +19,7 @@ import {
 import { findLabelMatch } from "@/lib/nameMatch";
 import { SCHEDULE } from "@/lib/schedule";
 import { designText } from "@/lib/design/resolve";
+import DesignLayout from "@/components/design/DesignLayout";
 
 function attendanceTone(pct: number) {
   if (pct <= 20) return "text-danger";
@@ -79,9 +80,11 @@ export default async function HomePage() {
 
   const isRandom = user?.role === "random";
 
-  return (
-    <div data-design-el="home.root" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      {/* Слева вверху — личная посещаемость того, кто открыл страницу. */}
+  // Секции передаются в DesignLayout: порядок, видимость и вставку своих
+  // блоков между ними задаёт конфиг, а сами панели остаются обычными
+  // компонентами со своими запросами к базе.
+  const sections: Record<string, React.ReactNode> = {
+    "home.myAttendance": (
       <DashboardPanel designId="home.myAttendance" className="min-w-0">
         <SectionHeader
           title="Моя посещаемость"
@@ -113,7 +116,11 @@ export default async function HomePage() {
                 { label: labelPrime, value: player.attendancePctPrime },
                 { label: labelMiniRb, value: player.attendancePctMiniRb },
               ].map((s) => (
-                <div key={s.label} data-design-el="home.myAttendanceStat" className="rounded-lg border border-border bg-surface-2 px-3 py-2.5">
+                <div
+                  key={s.label}
+                  data-design-el="home.myAttendanceStat"
+                  className="rounded-lg border border-border bg-surface-2 px-3 py-2.5"
+                >
                   <p className="text-[11px] text-muted">{s.label}</p>
                   <BlurValue blurred={isRandom}>
                     <p className={clsx("font-mono text-xl font-semibold", attendanceTone(s.value))}>{s.value}%</p>
@@ -124,8 +131,9 @@ export default async function HomePage() {
           </div>
         )}
       </DashboardPanel>
+    ),
 
-      {/* Справа вверху — личный график посещаемости. */}
+    "home.myChart": (
       <DashboardPanel designId="home.myChart" className="min-w-0">
         <SectionHeader
           title="Мой график посещаемости"
@@ -142,8 +150,9 @@ export default async function HomePage() {
           </div>
         )}
       </DashboardPanel>
+    ),
 
-      {/* Слева ниже статистики — ближайшие активности. */}
+    "home.schedule": (
       <DashboardPanel designId="home.schedule" className="min-w-0">
         <SectionHeader
           title="До активностей"
@@ -152,8 +161,9 @@ export default async function HomePage() {
         />
         <SchedulePanel banners={scheduleBanners} />
       </DashboardPanel>
+    ),
 
-      {/* Справа под графиком — последние активности. */}
+    "home.recent": (
       <DashboardPanel designId="home.recent" className="min-w-0">
         <SectionHeader
           title="Последние активности"
@@ -195,8 +205,9 @@ export default async function HomePage() {
           </div>
         )}
       </DashboardPanel>
+    ),
 
-      {/* Слева внизу — лидеры по Прайму. */}
+    "home.leadersPrime": (
       <DashboardPanel designId="home.leadersPrime" className="min-w-0">
         <SectionHeader
           title="Посещаемость: Прайм"
@@ -228,8 +239,9 @@ export default async function HomePage() {
           </div>
         )}
       </DashboardPanel>
+    ),
 
-      {/* Справа внизу — лидеры по Мини-РБ. */}
+    "home.leadersMiniRb": (
       <DashboardPanel designId="home.leadersMiniRb" className="min-w-0">
         <SectionHeader
           title="Посещаемость: Мини-РБ"
@@ -261,6 +273,15 @@ export default async function HomePage() {
           </div>
         )}
       </DashboardPanel>
-    </div>
+    ),
+  };
+
+  return (
+    <DesignLayout
+      pageKey="home"
+      designId="home.root"
+      sections={sections}
+      className="grid grid-cols-1 gap-4 lg:grid-cols-2"
+    />
   );
 }

@@ -21,13 +21,21 @@ import {
   normalizeElementValues,
   sanitizeText,
 } from "./normalize";
-import { allowedElementIds, allowedTextIds, selectorForElement, SHARED_KEY, THEME_TOKENS } from "./registry";
+import {
+  allowedElementIds,
+  allowedTextIds,
+  sectionsFor,
+  selectorForElement,
+  SHARED_KEY,
+  THEME_TOKENS,
+} from "./registry";
 import {
   BREAKPOINTS,
   CURRENT_SCHEMA_VERSION,
   SLOTS,
   STATES,
   THEME_MODES,
+  reconcileLayout,
   canContain,
   emptyConfig,
   mediaQueryFor,
@@ -82,6 +90,20 @@ export function normalizeConfig(raw: unknown, pageKey: string): PageConfig {
     if (clean) texts[id] = clean;
   }
   result.texts = texts;
+
+  // Раскладка: сводим сохранённое с актуальными секциями и блоками, чтобы
+  // изменение кода страницы не оставляло в конфиге ссылок в пустоту.
+  const sectionIds = sectionsFor(pageKey).map((s) => s.id);
+  if (sectionIds.length > 0) {
+    const topLevelBlockIds = SLOTS.flatMap((slot) => (blocks[slot.key] ?? []).map((b) => b.id));
+    result.layout = reconcileLayout(
+      Array.isArray(input.layout) ? (input.layout as PageConfig["layout"]) : [],
+      sectionIds,
+      topLevelBlockIds
+    );
+  } else {
+    result.layout = [];
+  }
 
   // Блокировки.
   const locks = Array.isArray(input.locks)

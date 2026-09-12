@@ -13,7 +13,8 @@ import {
   type BlocksState,
 } from "../src/lib/design/blockOps";
 import { instantiateSnippet, normalizeSnippet } from "../src/lib/design/snippets";
-import type { DesignBlock } from "../src/lib/design/types";
+import { emptyConfig, reconcileLayout, type DesignBlock, type LayoutEntry } from "../src/lib/design/types";
+import { normalizeConfig } from "../src/lib/design/compile";
 
 function block(id: string, type: DesignBlock["type"] = "text", children?: DesignBlock[]): DesignBlock {
   return children ? { id, type, children } : { id, type };
@@ -138,4 +139,65 @@ test("вставка заготовки выдаёт новые id и перен
     "#ffffff"
   );
   assert.equal(first.styles["block.s1"], undefined, "старые ключи не должны остаться");
+});
+
+test("раскладка сводится с актуальным списком секций", () => {
+  const saved: LayoutEntry[] = [
+    { kind: "section", id: "b" },
+    { kind: "section", id: "исчезла" },
+    { kind: "block", id: "blk1" },
+    { kind: "section", id: "a" },
+  ];
+
+  const result = reconcileLayout(saved, ["a", "b", "новая"], ["blk1"]);
+
+  // Порядок сохранённого уважается, пропавшая секция выброшена,
+  // новая добавлена в конец — иначе правка кода ломала бы страницу.
+  assert.deepEqual(
+    result.map((e) => `${e.kind}:${e.id}`),
+    ["section:b", "block:blk1", "section:a", "section:новая"]
+  );
+});
+
+test("раскладка не теряет скрытие секции при сведении", () => {
+  const saved: LayoutEntry[] = [{ kind: "section", id: "a", hidden: true, hiddenOn: ["mobile"] }];
+  const [entry] = reconcileLayout(saved, ["a"], []);
+  assert.equal(entry.kind, "section");
+  if (entry.kind === "section") {
+    assert.equal(entry.hidden, true);
+    assert.deepEqual(entry.hiddenOn, ["mobile"]);
+  }
+});
+
+test("дубли в раскладке отбрасываются", () => {
+  const saved: LayoutEntry[] = [
+    { kind: "section", id: "a" },
+    { kind: "section", id: "a" },
+    { kind: "block", id: "blk1" },
+    { kind: "block", id: "blk1" },
+  ];
+  const result = reconcileLayout(saved, ["a"], ["blk1"]);
+  assert.equal(result.length, 2);
+});
+
+test("блок, которого нет в дереве, из раскладки убирается", () => {
+  const saved: LayoutEntry[] = [{ kind: "block", id: "удалённый" }, { kind: "section", id: "a" }];
+  const result = reconcileLayout(saved, ["a"], []);
+  assert.deepEqual(result.map((e) => e.id), ["a"]);
+});
+
+test("нормализация конфига заполняет раскладку для страницы с секциями", () => {
+  const config = normalizeConfig(
+    { ...emptyConfig(), blocks: { top: [{ id: "blk1", type: "heading", text: "Привет" }] } },
+    "home"
+  );
+  const ids = (config.layout ?? []).map((e) => `${e.kind}:${e.id}`);
+  // Шесть секций Главной плюс добавленный блок.
+  assert.equal(ids.filter((i) => i.startsWith("section:")).length, 6);
+  assert.ok(ids.includes("block:blk1"));
+});
+
+test("у страницы без секций раскладка остаётся пустой", () => {
+  const config = normalizeConfig({ ...emptyConfig(), layout: [{ kind: "section", id: "x" }] }, "players");
+  assert.deepEqual(config.layout, []);
 });

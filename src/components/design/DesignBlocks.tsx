@@ -2,6 +2,7 @@ import Link from "next/link";
 import clsx from "clsx";
 import { mediaUrl } from "@/lib/design/compile";
 import { resolveDesign } from "@/lib/design/resolve";
+import { sectionsFor } from "@/lib/design/registry";
 import type { Breakpoint, DesignBlock, SlotKey } from "@/lib/design/types";
 
 /**
@@ -27,7 +28,7 @@ function hiddenClasses(hiddenOn: Breakpoint[] | undefined): string {
     .join(" ");
 }
 
-function BlockNode({ block }: { block: DesignBlock }) {
+export function BlockNode({ block }: { block: DesignBlock }) {
   if (block.hidden) return null;
 
   const el = `block.${block.id}`;
@@ -125,6 +126,12 @@ function BlockNode({ block }: { block: DesignBlock }) {
 
 export default async function DesignBlocks({ slot }: { slot: SlotKey }) {
   const design = await resolveDesign();
+
+  // У страниц, разбитых на секции, порядком блоков управляет раскладка
+  // (DesignLayout) — она вставляет их между секциями. Слоты там не нужны,
+  // иначе блок отрисовался бы дважды.
+  if (design.pageKey && sectionsFor(design.pageKey).length > 0) return null;
+
   const blocks = design.blocks[slot] ?? [];
   if (blocks.length === 0) return null;
 

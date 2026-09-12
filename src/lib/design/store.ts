@@ -1,7 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { compileConfig, parseConfig, stableStringify } from "./compile";
 import { isKnownPageKey, PAGE_BY_KEY, SHARED_KEY } from "./registry";
-import { SLOTS, emptyConfig, walkBlocks, type DesignBlock, type PageConfig, type SlotKey } from "./types";
+import {
+  SLOTS,
+  emptyConfig,
+  walkBlocks,
+  type DesignBlock,
+  type LayoutEntry,
+  type PageConfig,
+  type SlotKey,
+} from "./types";
 
 /** Читает (и при необходимости создаёт) запись оформления страницы. */
 async function ensureRow(pageKey: string) {
@@ -242,6 +250,7 @@ function configUsesMedia(config: PageConfig, mediaId: string): boolean {
 export async function getPublishedContent(pageKey: string | null): Promise<{
   texts: Record<string, string>;
   blocks: Partial<Record<SlotKey, DesignBlock[]>>;
+  layout: LayoutEntry[];
 }> {
   const keys = pageKey ? [SHARED_KEY, pageKey] : [SHARED_KEY];
   const rows = await prisma.pageDesign.findMany({
@@ -251,34 +260,42 @@ export async function getPublishedContent(pageKey: string | null): Promise<{
 
   const texts: Record<string, string> = {};
   let blocks: Partial<Record<SlotKey, DesignBlock[]>> = {};
+  let layout: LayoutEntry[] = [];
   for (const key of keys) {
     const row = rows.find((r) => r.pageKey === key);
     if (!row) continue;
     const config = parseConfig(row.publishedJson, key);
     Object.assign(texts, config.texts ?? {});
-    if (key !== SHARED_KEY) blocks = config.blocks ?? {};
+    if (key !== SHARED_KEY) {
+      blocks = config.blocks ?? {};
+      layout = config.layout ?? [];
+    }
   }
-  return { texts, blocks };
+  return { texts, blocks, layout };
 }
 
 /** То же для предпросмотра черновика. */
 export async function getDraftContent(
   pageKey: string,
   includeSharedDraft: boolean
-): Promise<{ texts: Record<string, string>; blocks: Partial<Record<SlotKey, DesignBlock[]>> }> {
+): Promise<{
+  texts: Record<string, string>;
+  blocks: Partial<Record<SlotKey, DesignBlock[]>>;
+  layout: LayoutEntry[];
+}> {
   const sharedRow = await prisma.pageDesign.findUnique({ where: { pageKey: SHARED_KEY } });
   const sharedJson = includeSharedDraft ? sharedRow?.draftJson : sharedRow?.publishedJson;
   const texts: Record<string, string> = sharedJson
     ? { ...(parseConfig(sharedJson, SHARED_KEY).texts ?? {}) }
     : {};
 
-  if (pageKey === SHARED_KEY) return { texts, blocks: {} };
+  if (pageKey === SHARED_KEY) return { texts, blocks: {}, layout: [] };
 
   const row = await prisma.pageDesign.findUnique({ where: { pageKey } });
-  if (!row) return { texts, blocks: {} };
+  if (!row) return { texts, blocks: {}, layout: [] };
   const config = parseConfig(row.draftJson, pageKey);
   Object.assign(texts, config.texts ?? {});
-  return { texts, blocks: config.blocks ?? {} };
+  return { texts, blocks: config.blocks ?? {}, layout: config.layout ?? [] };
 }
 
 /** CSS черновика — только для предпросмотра в админке. */

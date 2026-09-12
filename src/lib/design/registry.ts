@@ -39,6 +39,17 @@ export type TextDef = {
   note?: string;
 };
 
+/**
+ * Секция страницы — рукописный блок содержимого, который можно переставить,
+ * скрыть или убрать из раскладки. Сам компонент остаётся в коде: конфиг
+ * задаёт только порядок и видимость.
+ */
+export type SectionDef = {
+  id: string;
+  label: string;
+  note?: string;
+};
+
 export type PageDef = {
   key: string;
   label: string;
@@ -46,6 +57,8 @@ export type PageDef = {
   section: string;
   /** Маршрут для предпросмотра. */
   route: string;
+  /** Переставляемые секции страницы; пусто — страница не разбита на секции. */
+  sections?: SectionDef[];
   /** Страница — шаблон: предпросмотр требует выбрать пример записи. */
   template?: {
     sampleKind: "activity" | "player";
@@ -166,6 +179,14 @@ export const PAGES: PageDef[] = [
     label: "Главная",
     section: "Обзор",
     route: "/",
+    sections: [
+      { id: "home.myAttendance", label: "Моя посещаемость" },
+      { id: "home.myChart", label: "Мой график посещаемости" },
+      { id: "home.schedule", label: "До активностей" },
+      { id: "home.recent", label: "Последние активности" },
+      { id: "home.leadersPrime", label: "Посещаемость: Прайм" },
+      { id: "home.leadersMiniRb", label: "Посещаемость: Мини-РБ" },
+    ],
     elements: [
       { id: "home.root", label: "Вся страница" },
       { id: "home.myAttendance", label: "Панель «Моя посещаемость»", parent: "home.root" },
@@ -195,6 +216,14 @@ export const PAGES: PageDef[] = [
     label: "Статистика",
     section: "Обзор",
     route: "/dashboard",
+    sections: [
+      { id: "dashboard.kpi", label: "Показатели и баннер" },
+      {
+        id: "dashboard.panels",
+        label: "Настраиваемые панели",
+        note: "Внутренний порядок панелей пользователь меняет сам на странице.",
+      },
+    ],
     elements: [
       { id: "dashboard.root", label: "Вся страница" },
       { id: "dashboard.kpiGrid", label: "Сетка показателей", parent: "dashboard.root" },
@@ -207,14 +236,26 @@ export const PAGES: PageDef[] = [
   simplePage("treasury", "Казна", "Экономика", "/treasury"),
   simplePage("payments", "Выплаты", "Экономика", "/payments"),
   simplePage("calculator", "Калькуляторы", "Инструменты", "/calculator"),
-  simplePage("archeage", "ArcheAge", "Инструменты", "/archeage", [
+  {
+    key: "archeage",
+    label: "ArcheAge",
+    section: "Инструменты",
+    route: "/archeage",
+    sections: [
+      { id: "archeage.heading", label: "Заголовок страницы" },
+      { id: "archeage.gear", label: "Калькулятор ранга экипировки" },
+      { id: "archeage.packs", label: "Блок про калькулятор паков" },
+    ],
+    elements: [],
+    texts: [
     { id: "archeage.title", label: "Заголовок страницы", fallback: "ArcheAge" },
     {
       id: "archeage.subtitle",
       label: "Подзаголовок",
       fallback: "Полезные инструменты и справочная информация по игре.",
     },
-  ]),
+    ],
+  },
   simplePage("users", "Пользователи", "Администрирование", "/users"),
   simplePage("dropCatalog", "Реестр дропа", "Администрирование", "/drop-catalog"),
   simplePage("activityBanners", "Баннеры активностей", "Администрирование", "/activity-banners"),
@@ -288,6 +329,12 @@ export function allowedTextIds(pageKey: string): Set<string> {
   if (pageKey === SHARED_KEY) return new Set(SHARED_TEXTS.map((t) => t.id));
   const page = PAGE_BY_KEY.get(pageKey);
   return new Set((page?.texts ?? []).map((t) => t.id));
+}
+
+/** Секции страницы; для общих настроек их нет. */
+export function sectionsFor(pageKey: string): SectionDef[] {
+  if (pageKey === SHARED_KEY) return [];
+  return PAGE_BY_KEY.get(pageKey)?.sections ?? [];
 }
 
 export function textsFor(pageKey: string): TextDef[] {

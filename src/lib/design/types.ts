@@ -98,6 +98,20 @@ export const SLOTS: { key: SlotKey; label: string }[] = [
   { key: "bottom", label: "Под содержимым страницы" },
 ];
 
+/**
+ * Элемент раскладки страницы.
+ *
+ * Раскладка — единый упорядоченный список: рукописные секции страницы и
+ * добавленные администратором блоки лежат в нём вперемешку. Это и даёт
+ * перестановку существующих панелей и вставку своих блоков между ними.
+ *
+ * Сами секции остаются обычными React-компонентами со своей загрузкой
+ * данных: конфиг решает только порядок и видимость, а не как они устроены.
+ */
+export type LayoutEntry =
+  | { kind: "section"; id: string; hidden?: boolean; hiddenOn?: Breakpoint[] }
+  | { kind: "block"; id: string };
+
 /** Конфиг одной страницы. */
 export type PageConfig = {
   /** Версия формата — читается при миграции сохранённых конфигов. */
@@ -112,11 +126,16 @@ export type PageConfig = {
   texts?: Record<string, string>;
   /** Добавленные блоки по слотам. */
   blocks?: Partial<Record<SlotKey, DesignBlock[]>>;
+  /**
+   * Порядок и видимость секций страницы вперемешку с добавленными блоками.
+   * Пусто — действует порядок из кода страницы.
+   */
+  layout?: LayoutEntry[];
   /** Заблокированные от правки элементы реестра. */
   locks?: string[];
 };
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 export function emptyConfig(): PageConfig {
   return {
@@ -125,8 +144,49 @@ export function emptyConfig(): PageConfig {
     tokens: { dark: {}, light: {} },
     texts: {},
     blocks: { top: [], bottom: [] },
+    layout: [],
     locks: [],
   };
+}
+
+/**
+ * Сводит сохранённую раскладку с актуальным списком секций страницы.
+ *
+ * Секции, которых больше нет в коде, выбрасываются; новые добавляются в
+ * конец. Без этого добавление панели в код ломало бы страницу у всех, кто
+ * уже настроил порядок, — а удаление панели оставляло бы дырку в раскладке.
+ */
+export function reconcileLayout(
+  saved: LayoutEntry[] | undefined,
+  sectionIds: string[],
+  blockIds: string[]
+): LayoutEntry[] {
+  const knownSections = new Set(sectionIds);
+  const knownBlocks = new Set(blockIds);
+  const seen = new Set<string>();
+  const result: LayoutEntry[] = [];
+
+  for (const entry of saved ?? []) {
+    if (!entry || typeof entry !== "object") continue;
+    if (entry.kind === "section") {
+      if (!knownSections.has(entry.id) || seen.has(`s:${entry.id}`)) continue;
+      seen.add(`s:${entry.id}`);
+      result.push(entry);
+    } else if (entry.kind === "block") {
+      if (!knownBlocks.has(entry.id) || seen.has(`b:${entry.id}`)) continue;
+      seen.add(`b:${entry.id}`);
+      result.push(entry);
+    }
+  }
+
+  for (const id of sectionIds) {
+    if (!seen.has(`s:${id}`)) result.push({ kind: "section", id });
+  }
+  for (const id of blockIds) {
+    if (!seen.has(`b:${id}`)) result.push({ kind: "block", id });
+  }
+
+  return result;
 }
 
 /** Достаёт значение с учётом наследования: состояние -> base-состояние -> base-брейкпоинт. */

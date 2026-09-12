@@ -26,6 +26,7 @@ import {
   Layers,
   Type as TypeIcon,
   Boxes,
+  LayoutTemplate as LayoutIcon,
   Eye,
   EyeOff,
   ArrowUp,
@@ -36,6 +37,7 @@ import PreviewFrame, { type PreviewMode } from "./PreviewFrame";
 import PropertyPanel from "./PropertyPanel";
 import MediaLibrary from "./MediaLibrary";
 import BlocksPanel, { BlockSettings, type BlocksState, type Snippet } from "./BlocksPanel";
+import LayoutPanel from "./LayoutPanel";
 import { appendToSlot, findBlock, patchBlock as patchBlockOp } from "@/lib/design/blockOps";
 import { instantiateSnippet, type SnippetPayload } from "@/lib/design/snippets";
 import {
@@ -43,6 +45,7 @@ import {
   SHARED_ELEMENTS,
   SHARED_KEY,
   THEME_TOKENS,
+  sectionsFor,
   textsFor,
   type ElementDef,
 } from "@/lib/design/registry";
@@ -55,6 +58,7 @@ import {
   walkBlocks,
   type Breakpoint,
   type DesignBlock,
+  type LayoutEntry,
   type PageConfig,
   type SlotKey,
   type StateKey,
@@ -74,7 +78,7 @@ type DesignState = {
 
 type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
 type Version = { id: string; note: string; author: string; createdAt: string };
-type LeftTab = "elements" | "blocks" | "texts";
+type LeftTab = "layout" | "elements" | "blocks" | "texts";
 
 const DEVICE_WIDTH: Record<Breakpoint | "custom", number | null> = {
   base: null,
@@ -330,6 +334,11 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     if (value === "") delete texts[id];
     else texts[id] = value;
     mutate({ ...state.draft, texts });
+  }
+
+  function setLayout(next: LayoutEntry[]) {
+    if (!state) return;
+    mutate({ ...state.draft, layout: next });
   }
 
   function setBlocks(next: BlocksState) {
@@ -776,17 +785,18 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
           <div className="flex w-[272px] flex-shrink-0 flex-col rounded-lg border border-border bg-surface">
             <div className="flex items-center gap-0.5 border-b border-border p-1">
               {([
+                { key: "layout" as LeftTab, label: "Структура", Icon: LayoutIcon },
                 { key: "elements" as LeftTab, label: "Элементы", Icon: Layers },
                 { key: "blocks" as LeftTab, label: "Блоки", Icon: Boxes },
                 { key: "texts" as LeftTab, label: "Тексты", Icon: TypeIcon },
               ]).map(({ key, label: l, Icon }) => {
-                const disabled = key === "blocks" && isShared;
+                const disabled = (key === "blocks" || key === "layout") && isShared;
                 return (
                   <button
                     key={key}
                     type="button"
                     disabled={disabled}
-                    title={disabled ? "Блоки добавляются на страницы, а не в общие элементы" : l}
+                    title={disabled ? "Структура и блоки относятся к страницам, а не к общим элементам" : l}
                     onClick={() => setLeftTab(key)}
                     className={clsx(
                       "flex flex-1 items-center justify-center gap-1 rounded px-1.5 py-1.5 text-[11px]",
@@ -887,6 +897,19 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                   })}
                 </div>
               </>
+            )}
+
+            {leftTab === "layout" && !isShared && state && (
+              <div className="scroll-slim min-h-0 flex-1 overflow-y-auto p-2">
+                <LayoutPanel
+                  layout={state.draft.layout ?? []}
+                  sections={sectionsFor(pageKey)}
+                  blocks={SLOTS.flatMap((slot) => state.draft.blocks?.[slot.key] ?? [])}
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onChange={setLayout}
+                />
+              </div>
             )}
 
             {leftTab === "blocks" && !isShared && state && (
