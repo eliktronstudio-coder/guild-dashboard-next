@@ -27,6 +27,7 @@ export default function ActivityRow({ href, name, participants, status, date, ba
   return (
     <Link
       href={href}
+      data-design-el="shared.activityRow"
       className="relative flex min-h-[92px] items-center gap-4 overflow-hidden rounded-lg border border-border bg-surface px-4 py-3 text-sm transition-colors duration-150 hover:border-accent/30"
     >
       {bannerUrl && (

@@ -82,16 +82,21 @@ export default function StatCard({
       </>
     );
     return href ? (
-      <Link href={href} className={className}>
+      <Link href={href} data-design-el="shared.statCard" className={className}>
         {content}
       </Link>
     ) : (
-      <div className={className}>{content}</div>
+      <div data-design-el="shared.statCard" className={className}>
+        {content}
+      </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-border bg-surface/90 p-4 backdrop-blur-sm transition-colors hover:border-border-strong hover:bg-surface-hover">
+    <div
+      data-design-el="shared.statCard"
+      className="rounded-lg border border-border bg-surface/90 p-4 backdrop-blur-sm transition-colors hover:border-border-strong hover:bg-surface-hover"
+    >
       <div className="flex items-center gap-2">
         {Icon && <Icon size={15} strokeWidth={2} className={toneClasses[tone]} />}
         <p className="truncate text-xs font-medium uppercase tracking-wider text-muted">{label}</p>

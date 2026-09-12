@@ -70,9 +70,9 @@ export default async function HomePage() {
   const isRandom = user?.role === "random";
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div data-design-el="home.root" className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {/* Слева вверху — личная посещаемость того, кто открыл страницу. */}
-      <DashboardPanel className="min-w-0">
+      <DashboardPanel designId="home.myAttendance" className="min-w-0">
         <SectionHeader
           title="Моя посещаемость"
           right={
@@ -102,7 +102,7 @@ export default async function HomePage() {
                 { label: "Прайм", value: player.attendancePctPrime },
                 { label: "Мини-РБ", value: player.attendancePctMiniRb },
               ].map((s) => (
-                <div key={s.label} className="rounded-lg border border-border bg-surface-2 px-3 py-2.5">
+                <div key={s.label} data-design-el="home.myAttendanceStat" className="rounded-lg border border-border bg-surface-2 px-3 py-2.5">
                   <p className="text-[11px] text-muted">{s.label}</p>
                   <BlurValue blurred={isRandom}>
                     <p className={clsx("font-mono text-xl font-semibold", attendanceTone(s.value))}>{s.value}%</p>
@@ -115,7 +115,7 @@ export default async function HomePage() {
       </DashboardPanel>
 
       {/* Справа вверху — личный график посещаемости. */}
-      <DashboardPanel className="min-w-0">
+      <DashboardPanel designId="home.myChart" className="min-w-0">
         <SectionHeader
           title="Мой график посещаемости"
           right={<span className="text-xs text-muted">за 30 дней</span>}
@@ -132,13 +132,13 @@ export default async function HomePage() {
       </DashboardPanel>
 
       {/* Слева ниже статистики — ближайшие активности. */}
-      <DashboardPanel className="min-w-0">
+      <DashboardPanel designId="home.schedule" className="min-w-0">
         <SectionHeader title="До активностей" right={<span className="text-xs text-muted">по МСК</span>} />
         <SchedulePanel banners={scheduleBanners} />
       </DashboardPanel>
 
       {/* Справа под графиком — последние активности. */}
-      <DashboardPanel className="min-w-0">
+      <DashboardPanel designId="home.recent" className="min-w-0">
         <SectionHeader
           title="Последние активности"
           right={
@@ -180,7 +180,7 @@ export default async function HomePage() {
       </DashboardPanel>
 
       {/* Слева внизу — лидеры по Прайму. */}
-      <DashboardPanel className="min-w-0">
+      <DashboardPanel designId="home.leadersPrime" className="min-w-0">
         <SectionHeader
           title="Посещаемость: Прайм"
           right={
@@ -212,7 +212,7 @@ export default async function HomePage() {
       </DashboardPanel>
 
       {/* Справа внизу — лидеры по Мини-РБ. */}
-      <DashboardPanel className="min-w-0">
+      <DashboardPanel designId="home.leadersMiniRb" className="min-w-0">
         <SectionHeader
           title="Посещаемость: Мини-РБ"
           right={

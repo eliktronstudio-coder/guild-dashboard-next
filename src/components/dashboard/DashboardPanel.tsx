@@ -11,13 +11,17 @@ export default function DashboardPanel({
   children,
   className,
   art,
+  designId,
 }: {
   children: ReactNode;
   className?: string;
   art?: string;
+  /** Идентификатор из реестра оформления; по умолчанию — общий вид панели. */
+  designId?: string;
 }) {
   return (
     <div
+      data-design-el={designId ?? "shared.panel"}
       className={clsx(
         "relative flex flex-col overflow-hidden rounded-2xl border border-border p-5",
         art ? "bg-surface-2" : "bg-surface",

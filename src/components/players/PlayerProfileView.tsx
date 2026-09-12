@@ -60,7 +60,7 @@ export default function PlayerProfileView({
   backLabel = "← Состав",
 }: PlayerProfileData) {
   return (
-    <div className="space-y-4">
+    <div data-design-el="playerDetail.root" className="space-y-4">
       {backHref && (
         <div>
           <Link href={backHref} className="text-xs text-accent hover:underline">

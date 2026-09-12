@@ -132,6 +132,42 @@ model Payment {
   createdAt    DateTime @default(now())
 }
 
+/// Оформление одной страницы. pageKey берётся из реестра (src/lib/design/registry.ts);
+/// служебный ключ "__shared__" хранит общие элементы и тему.
+/// draftJson — черновик администратора, publishedJson — то, что видят посетители.
+/// Разделение на две колонки даёт изоляцию: публикация одной страницы не трогает
+/// черновики остальных, потому что у каждой страницы своя строка.
+model PageDesign {
+  id            String    @id @default(cuid())
+  pageKey       String    @unique
+  draftJson     String    @default("{}")
+  publishedJson String    @default("{}")
+  /// Версия формата конфига — чтобы мигрировать сохранённое при смене схемы.
+  schemaVersion Int       @default(1)
+  /// Растёт при каждой публикации. Клиент присылает известное ему значение,
+  /// и публикация отклоняется, если другой админ успел опубликовать раньше.
+  revision      Int       @default(0)
+  draftUpdatedAt DateTime @default(now()) @updatedAt
+  draftUpdatedBy String?
+  publishedAt   DateTime?
+  publishedBy   String?
+  versions      DesignVersion[]
+}
+
+/// История опубликованных версий оформления: отдельная на каждую страницу,
+/// поэтому восстановление одной страницы не откатывает остальные.
+model DesignVersion {
+  id           String     @id @default(cuid())
+  pageDesignId String
+  pageDesign   PageDesign @relation(fields: [pageDesignId], references: [id], onDelete: Cascade)
+  configJson   String
+  note         String     @default("")
+  authorName   String     @default("")
+  createdAt    DateTime   @default(now())
+
+  @@index([pageDesignId, createdAt])
+}
+
 /// Баннер активности: название -> фото. Отдельно от Activity, потому что
 /// активностей с одним названием много, а картинка у них общая.
 model ActivityBanner {

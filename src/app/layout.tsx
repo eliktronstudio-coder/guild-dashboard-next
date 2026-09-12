@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Unbounded } from "next/font/google";
 import AppShell from "@/components/AppShell";
+import DesignStyles, { resolveDesign } from "@/components/design/DesignStyles";
 import { guild } from "@/lib/config";
 import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
@@ -29,7 +30,7 @@ export const metadata: Metadata = {
 const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('theme');if(!t){t=window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';}if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();`;
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const user = await getCurrentUser();
+  const [user, design] = await Promise.all([getCurrentUser(), resolveDesign()]);
   return (
     <html
       lang="ru"
@@ -38,8 +39,15 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <DesignStyles css={design.css} />
       </head>
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+      {/* data-design-page — область действия правил страницы: без него
+          правило одной страницы применилось бы на всех остальных. */}
+      <body
+        data-design-page={design.pageKey ?? undefined}
+        data-design-preview={design.isPreview ? "1" : undefined}
+        className="min-h-full flex flex-col bg-background text-foreground"
+      >
         <AppShell user={user}>{children}</AppShell>
       </body>
     </html>

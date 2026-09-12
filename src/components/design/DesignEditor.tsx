@@ -1,0 +1,894 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Monitor,
+  Tablet,
+  Smartphone,
+  Undo2,
+  Redo2,
+  ExternalLink,
+  Check,
+  Loader2,
+  AlertTriangle,
+  Search,
+  Lock,
+  Unlock,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  History,
+  MousePointer2,
+  Hand,
+  RotateCcw,
+} from "lucide-react";
+import clsx from "clsx";
+import PreviewFrame, { type PreviewMode } from "./PreviewFrame";
+import PropertyPanel from "./PropertyPanel";
+import { PAGES, SHARED_ELEMENTS, SHARED_KEY, THEME_TOKENS, type ElementDef } from "@/lib/design/registry";
+import { isValidValue } from "@/lib/design/properties";
+import {
+  BREAKPOINTS,
+  STATES,
+  emptyConfig,
+  type Breakpoint,
+  type PageConfig,
+  type StateKey,
+} from "@/lib/design/types";
+
+type DesignState = {
+  pageKey: string;
+  draft: PageConfig;
+  published: PageConfig;
+  revision: number;
+  hasUnpublished: boolean;
+  draftUpdatedAt: string | null;
+  publishedAt: string | null;
+  publishedBy: string | null;
+};
+
+type SaveStatus = "idle" | "dirty" | "saving" | "saved" | "error";
+
+type Version = { id: string; note: string; author: string; createdAt: string };
+
+const DEVICE_WIDTH: Record<Breakpoint | "custom", number | null> = {
+  base: null,
+  tablet: 900,
+  mobile: 390,
+  custom: null,
+};
+
+const DEVICE_ICON = { base: Monitor, tablet: Tablet, mobile: Smartphone } as const;
+
+/** Группировка подвкладок по разделам меню, в порядке реестра. */
+function groupedPages() {
+  const sections: { title: string; pages: typeof PAGES }[] = [];
+  for (const page of PAGES) {
+    let section = sections.find((s) => s.title === page.section);
+    if (!section) {
+      section = { title: page.section, pages: [] };
+      sections.push(section);
+    }
+    section.pages.push(page);
+  }
+  return sections;
+}
+
+export default function DesignEditor({ initialUnpublished }: { initialUnpublished: Record<string, boolean> }) {
+  const [pageKey, setPageKey] = useState<string>("home");
+  const [state, setState] = useState<DesignState | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [unpublished, setUnpublished] = useState(initialUnpublished);
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [breakpoint, setBreakpoint] = useState<Breakpoint>("base");
+  const [elementState, setElementState] = useState<StateKey>("normal");
+  const [device, setDevice] = useState<Breakpoint | "custom">("base");
+  const [customWidth, setCustomWidth] = useState(1280);
+  const [mode, setMode] = useState<PreviewMode>("select");
+  const [search, setSearch] = useState("");
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
+  const [presentIds, setPresentIds] = useState<Set<string>>(new Set());
+  const [locked, setLocked] = useState<Set<string>>(new Set());
+  const [previewSharedDraft, setPreviewSharedDraft] = useState(false);
+
+  const [samples, setSamples] = useState<{ id: string; label: string }[]>([]);
+  const [sampleId, setSampleId] = useState<string>("");
+
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [versions, setVersions] = useState<Version[]>([]);
+
+  // Undo/redo: стек снимков черновика. Локальный — история публикаций отдельно.
+  const undoStack = useRef<PageConfig[]>([]);
+  const redoStack = useRef<PageConfig[]>([]);
+  const [stackSizes, setStackSizes] = useState({ undo: 0, redo: 0 });
+
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reloadPreview = useRef<() => void>(() => {});
+
+  const page = PAGES.find((p) => p.key === pageKey);
+  const isShared = pageKey === SHARED_KEY;
+
+  const pageElements: ElementDef[] = useMemo(() => (isShared ? SHARED_ELEMENTS : page?.elements ?? []), [isShared, page]);
+
+  /** Загрузка состояния выбранной подвкладки. */
+  const load = useCallback(async (key: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/design/${key}`, { cache: "no-store" });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Не удалось загрузить оформление.");
+      const data = (await res.json()) as DesignState;
+      setState(data);
+      undoStack.current = [];
+      redoStack.current = [];
+      setStackSizes({ undo: 0, redo: 0 });
+      setSaveStatus("idle");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Ошибка загрузки.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(pageKey);
+    setSelectedId(null);
+  }, [pageKey, load]);
+
+  // Примеры записей для шаблонных страниц.
+  useEffect(() => {
+    if (!page?.template) {
+      setSamples([]);
+      setSampleId("");
+      return;
+    }
+    let alive = true;
+    void (async () => {
+      const res = await fetch(`/api/design/samples?kind=${page.template!.sampleKind}`, { cache: "no-store" });
+      if (!res.ok || !alive) return;
+      const data = (await res.json()) as { samples: { id: string; label: string }[] };
+      if (!alive) return;
+      setSamples(data.samples);
+      setSampleId((prev) => prev || data.samples[0]?.id || "");
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [page]);
+
+  /** Сохраняет черновик на сервер. Локально ничего не теряется при ошибке. */
+  const persist = useCallback(
+    async (config: PageConfig, key: string) => {
+      setSaveStatus("saving");
+      try {
+        const res = await fetch(`/api/design/${key}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ config }),
+        });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Не удалось сохранить черновик.");
+        const data = (await res.json()) as DesignState;
+        setState((prev) => (prev && prev.pageKey === key ? { ...data, draft: prev.draft } : data));
+        setUnpublished((prev) => ({ ...prev, [key]: data.hasUnpublished }));
+        setSaveStatus("saved");
+      } catch (e) {
+        setSaveStatus("error");
+        setError(e instanceof Error ? e.message : "Ошибка сохранения.");
+      }
+    },
+    []
+  );
+
+  /** Меняет черновик: снимок в undo, автосохранение через пазу. */
+  const mutate = useCallback(
+    (next: PageConfig) => {
+      setState((prev) => {
+        if (!prev) return prev;
+        undoStack.current.push(prev.draft);
+        if (undoStack.current.length > 100) undoStack.current.shift();
+        redoStack.current = [];
+        setStackSizes({ undo: undoStack.current.length, redo: 0 });
+        return { ...prev, draft: next, hasUnpublished: true };
+      });
+      setUnpublished((prev) => ({ ...prev, [pageKey]: true }));
+      setSaveStatus("dirty");
+
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      const key = pageKey;
+      saveTimer.current = setTimeout(() => void persist(next, key), 700);
+    },
+    [pageKey, persist]
+  );
+
+  /** Сбрасывает отложенное сохранение при уходе со подвкладки — иначе правка
+      одной страницы могла бы записаться после переключения на другую. */
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [pageKey]);
+
+  // Предупреждение при выходе с незавершённым сохранением.
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (saveStatus === "dirty" || saveStatus === "saving") {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [saveStatus]);
+
+  function setProperty(prop: string, raw: string) {
+    if (!state || !selectedId || locked.has(selectedId)) return;
+    const value = raw.trim();
+    const next: PageConfig = {
+      ...state.draft,
+      elements: { ...state.draft.elements },
+    };
+    const values = { ...(next.elements[selectedId] ?? {}) };
+    const byBp = { ...(values[prop] ?? {}) };
+    const byState = { ...(byBp[breakpoint] ?? {}) };
+
+    if (value === "") delete byState[elementState];
+    else byState[elementState] = value;
+
+    if (Object.keys(byState).length === 0) delete byBp[breakpoint];
+    else byBp[breakpoint] = byState;
+
+    if (Object.keys(byBp).length === 0) delete values[prop];
+    else values[prop] = byBp;
+
+    if (Object.keys(values).length === 0) delete next.elements[selectedId];
+    else next.elements[selectedId] = values;
+
+    mutate(next);
+  }
+
+  function resetProperty(prop: string) {
+    setProperty(prop, "");
+  }
+
+  function resetElement() {
+    if (!state || !selectedId) return;
+    const next: PageConfig = { ...state.draft, elements: { ...state.draft.elements } };
+    delete next.elements[selectedId];
+    mutate(next);
+  }
+
+  function setToken(token: string, raw: string) {
+    if (!state) return;
+    const value = raw.trim();
+    const tokens = { ...(state.draft.tokens ?? {}) };
+    if (value === "") delete tokens[token];
+    else tokens[token] = value;
+    mutate({ ...state.draft, tokens });
+  }
+
+  function undo() {
+    if (!state || undoStack.current.length === 0) return;
+    const prev = undoStack.current.pop()!;
+    redoStack.current.push(state.draft);
+    setStackSizes({ undo: undoStack.current.length, redo: redoStack.current.length });
+    setState({ ...state, draft: prev });
+    setSaveStatus("dirty");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const key = pageKey;
+    saveTimer.current = setTimeout(() => void persist(prev, key), 400);
+  }
+
+  function redo() {
+    if (!state || redoStack.current.length === 0) return;
+    const next = redoStack.current.pop()!;
+    undoStack.current.push(state.draft);
+    setStackSizes({ undo: undoStack.current.length, redo: redoStack.current.length });
+    setState({ ...state, draft: next });
+    setSaveStatus("dirty");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const key = pageKey;
+    saveTimer.current = setTimeout(() => void persist(next, key), 400);
+  }
+
+  async function flushThen(action: () => Promise<void>) {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      if (state) await persist(state.draft, pageKey);
+    }
+    await action();
+  }
+
+  async function publish() {
+    if (!state) return;
+    await flushThen(async () => {
+      setError(null);
+      setSaveStatus("saving");
+      const res = await fetch(`/api/design/${pageKey}/publish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision: state.revision, note: `Обновлено оформление: ${label(pageKey)}` }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSaveStatus("error");
+        setError(data.error ?? "Не удалось применить изменения.");
+        if (data.conflict) await load(pageKey);
+        return;
+      }
+      setState(data as DesignState);
+      setUnpublished((prev) => ({ ...prev, [pageKey]: false }));
+      setSaveStatus("saved");
+      reloadPreview.current();
+    });
+  }
+
+  async function revert() {
+    if (!state) return;
+    const confirmed = window.confirm(
+      "Черновик этой страницы вернётся к последней опубликованной версии. Несохранённые правки будут потеряны. Продолжить?"
+    );
+    if (!confirmed) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    const res = await fetch(`/api/design/${pageKey}/revert`, { method: "POST" });
+    if (!res.ok) {
+      setError("Не удалось отменить изменения.");
+      return;
+    }
+    const data = (await res.json()) as DesignState;
+    setState(data);
+    setUnpublished((prev) => ({ ...prev, [pageKey]: false }));
+    undoStack.current = [];
+    redoStack.current = [];
+    setStackSizes({ undo: 0, redo: 0 });
+    setSaveStatus("idle");
+    reloadPreview.current();
+  }
+
+  async function openHistory() {
+    setHistoryOpen(true);
+    const res = await fetch(`/api/design/${pageKey}/history`, { cache: "no-store" });
+    if (res.ok) setVersions(((await res.json()) as { versions: Version[] }).versions);
+  }
+
+  async function restore(versionId: string) {
+    const res = await fetch(`/api/design/${pageKey}/history`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ versionId }),
+    });
+    if (!res.ok) {
+      setError("Не удалось восстановить версию.");
+      return;
+    }
+    const data = (await res.json()) as DesignState;
+    setState(data);
+    setUnpublished((prev) => ({ ...prev, [pageKey]: data.hasUnpublished }));
+    setHistoryOpen(false);
+    reloadPreview.current();
+  }
+
+  function label(key: string) {
+    return key === SHARED_KEY ? "Общие элементы и тема" : PAGES.find((p) => p.key === key)?.label ?? key;
+  }
+
+  /** Адрес кадра предпросмотра: черновик выбранной страницы. */
+  const previewSrc = useMemo(() => {
+    const base =
+      page?.template && sampleId
+        ? page.template.buildRoute(sampleId)
+        : isShared
+          ? "/dashboard"
+          : page?.route ?? "/";
+    const params = new URLSearchParams({ __design_preview: pageKey });
+    if (isShared || previewSharedDraft) params.set("__design_shared_draft", "1");
+    return `${base}?${params.toString()}`;
+  }, [page, sampleId, isShared, pageKey, previewSharedDraft]);
+
+  /** Чистый предпросмотр — та же страница в новой вкладке, без панелей. */
+  function openCleanPreview() {
+    window.open(previewSrc, "_blank", "noopener");
+  }
+
+  const visibleElements = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = [...pageElements];
+    // На странице (не в общих) дополнительно показываем общие элементы —
+    // их правка здесь создаёт переопределение только для этой страницы.
+    const sharedForPage = isShared ? [] : SHARED_ELEMENTS;
+    const all = [...list.map((e) => ({ ...e, shared: false })), ...sharedForPage.map((e) => ({ ...e, shared: true }))];
+    if (!q) return all;
+    return all.filter((e) => e.label.toLowerCase().includes(q) || e.id.toLowerCase().includes(q));
+  }, [pageElements, search, isShared]);
+
+  const selectedDef = visibleElements.find((e) => e.id === selectedId) ?? null;
+  const selectedIsShared = Boolean(selectedDef?.shared);
+
+  const sections = useMemo(groupedPages, []);
+
+  const statusText: Record<SaveStatus, string> = {
+    idle: "Изменений нет",
+    dirty: "Есть несохранённые правки…",
+    saving: "Сохранение…",
+    saved: "Черновик сохранён",
+    error: "Ошибка сохранения",
+  };
+
+  return (
+    <div className="flex h-[calc(100vh-8rem)] min-h-[600px] flex-col gap-3">
+      {/* Подвкладки страниц */}
+      <div className="rounded-lg border border-border bg-surface p-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPageKey(SHARED_KEY)}
+            className={clsx(
+              "relative rounded-md border px-3 py-1.5 text-xs font-medium",
+              isShared ? "border-accent bg-accent-soft text-accent" : "border-border text-muted hover:text-foreground"
+            )}
+          >
+            Общие элементы и тема
+            {unpublished[SHARED_KEY] && (
+              <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent" title="Есть неопубликованные изменения" />
+            )}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
+          {sections.map((section) => (
+            <div key={section.title} className="min-w-0">
+              <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-2">{section.title}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {section.pages.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => setPageKey(p.key)}
+                    className={clsx(
+                      "relative rounded-md border px-2.5 py-1.5 text-xs",
+                      pageKey === p.key
+                        ? "border-accent bg-accent-soft text-accent"
+                        : "border-border text-muted hover:text-foreground"
+                    )}
+                  >
+                    {p.label}
+                    {unpublished[p.key] && (
+                      <span
+                        className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-accent"
+                        title="Есть неопубликованные изменения"
+                      />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Панель действий */}
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface px-3 py-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">Редактируется: {label(pageKey)}</p>
+          {isShared ? (
+            <p className="text-[11px] text-accent">Изменения в этом разделе распространяются на весь сайт.</p>
+          ) : page?.template ? (
+            <p className="text-[11px] text-muted">{page.template.note}</p>
+          ) : (
+            <p className="text-[11px] text-muted">Изменения затрагивают только эту страницу.</p>
+          )}
+        </div>
+
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          {/* Устройство */}
+          <div className="flex items-center rounded-md border border-border">
+            {(["base", "tablet", "mobile"] as const).map((d) => {
+              const Icon = DEVICE_ICON[d];
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  title={BREAKPOINTS.find((b) => b.key === d)?.label}
+                  onClick={() => {
+                    setDevice(d);
+                    setBreakpoint(d);
+                  }}
+                  className={clsx("px-2 py-1.5", device === d ? "bg-accent-soft text-accent" : "text-muted")}
+                >
+                  <Icon size={14} />
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setDevice("custom")}
+              className={clsx("px-2 py-1.5 text-[11px]", device === "custom" ? "bg-accent-soft text-accent" : "text-muted")}
+            >
+              Своя
+            </button>
+          </div>
+          {device === "custom" && (
+            <input
+              type="number"
+              min={320}
+              max={2560}
+              value={customWidth}
+              onChange={(e) => setCustomWidth(Number(e.target.value) || 1280)}
+              className="w-20 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs"
+            />
+          )}
+
+          {/* Режим */}
+          <div className="flex items-center rounded-md border border-border">
+            <button
+              type="button"
+              title="Режим выбора элементов"
+              onClick={() => setMode("select")}
+              className={clsx("px-2 py-1.5", mode === "select" ? "bg-accent-soft text-accent" : "text-muted")}
+            >
+              <MousePointer2 size={14} />
+            </button>
+            <button
+              type="button"
+              title="Проверка взаимодействий"
+              onClick={() => setMode("interact")}
+              className={clsx("px-2 py-1.5", mode === "interact" ? "bg-accent-soft text-accent" : "text-muted")}
+            >
+              <Hand size={14} />
+            </button>
+          </div>
+
+          <button type="button" onClick={undo} disabled={stackSizes.undo === 0} title="Отменить"
+            className="rounded-md border border-border p-1.5 text-muted hover:text-foreground disabled:opacity-40">
+            <Undo2 size={14} />
+          </button>
+          <button type="button" onClick={redo} disabled={stackSizes.redo === 0} title="Повторить"
+            className="rounded-md border border-border p-1.5 text-muted hover:text-foreground disabled:opacity-40">
+            <Redo2 size={14} />
+          </button>
+
+          <span className="flex items-center gap-1.5 rounded-md bg-surface-2 px-2 py-1.5 text-[11px] text-muted">
+            {saveStatus === "saving" && <Loader2 size={12} className="animate-spin" />}
+            {saveStatus === "saved" && <Check size={12} className="text-success" />}
+            {saveStatus === "error" && <AlertTriangle size={12} className="text-danger" />}
+            {statusText[saveStatus]}
+          </span>
+
+          <button type="button" onClick={openHistory}
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:text-foreground">
+            <History size={13} /> История
+          </button>
+          <button type="button" onClick={openCleanPreview}
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:text-foreground">
+            <ExternalLink size={13} /> Предпросмотр
+          </button>
+          <button type="button" onClick={revert}
+            className="rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:text-danger">
+            Отменить изменения
+          </button>
+          <button
+            type="button"
+            onClick={publish}
+            disabled={!state?.hasUnpublished || saveStatus === "saving"}
+            className="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-black hover:bg-accent-bright disabled:opacity-50"
+          >
+            {isShared ? "Применить общие изменения" : "Применить изменения страницы"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+          <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+          <span className="min-w-0 flex-1">{error}</span>
+          <button type="button" onClick={() => setError(null)} className="flex-shrink-0 underline">
+            Скрыть
+          </button>
+        </div>
+      )}
+
+      {/* Рабочая область */}
+      <div className="flex min-h-0 flex-1 gap-3">
+        {/* Дерево элементов */}
+        {leftOpen ? (
+          <div className="flex w-[260px] flex-shrink-0 flex-col rounded-lg border border-border bg-surface">
+            <div className="flex items-center gap-1.5 border-b border-border p-2">
+              <div className="relative min-w-0 flex-1">
+                <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Поиск элемента…"
+                  className="w-full rounded-md border border-border bg-surface-2 py-1.5 pl-7 pr-2 text-xs outline-none focus:border-accent"
+                />
+              </div>
+              <button type="button" onClick={() => setLeftOpen(false)} title="Свернуть панель" className="p-1 text-muted hover:text-foreground">
+                <PanelLeftClose size={15} />
+              </button>
+            </div>
+
+            <div className="scroll-slim min-h-0 flex-1 overflow-y-auto p-1.5">
+              {visibleElements.length === 0 && (
+                <p className="px-2 py-3 text-[11px] text-muted-2">
+                  У этой страницы нет собственных размеченных элементов. Используйте общие элементы ниже — их правка
+                  здесь действует только на эту страницу.
+                </p>
+              )}
+              {visibleElements.map((el) => {
+                const isPresent = presentIds.size === 0 || presentIds.has(el.id);
+                const hasValues = Boolean(state?.draft.elements[el.id]);
+                return (
+                  <button
+                    key={el.id}
+                    type="button"
+                    onClick={() => setSelectedId(el.id)}
+                    className={clsx(
+                      "mb-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs",
+                      selectedId === el.id ? "bg-accent-soft text-accent" : "text-foreground/80 hover:bg-surface-2",
+                      el.parent && "pl-5"
+                    )}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{el.label}</span>
+                    {el.shared && (
+                      <span className="flex-shrink-0 rounded bg-surface px-1 text-[9px] text-muted-2" title="Общий элемент">
+                        общий
+                      </span>
+                    )}
+                    {hasValues && <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-accent" />}
+                    {!isPresent && (
+                      <span className="flex-shrink-0 text-[9px] text-muted-2" title="Не найден в предпросмотре">
+                        нет
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <button type="button" onClick={() => setLeftOpen(true)} title="Показать дерево"
+            className="h-9 flex-shrink-0 rounded-lg border border-border bg-surface px-2 text-muted hover:text-foreground">
+            <PanelLeftOpen size={15} />
+          </button>
+        )}
+
+        {/* Предпросмотр */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-surface">
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-1.5 text-[11px] text-muted">
+            <span className="truncate font-mono">{previewSrc}</span>
+            {page?.template && samples.length > 0 && (
+              <label className="ml-auto flex items-center gap-1.5">
+                Пример:
+                <select
+                  value={sampleId}
+                  onChange={(e) => setSampleId(e.target.value)}
+                  className="max-w-[220px] rounded border border-border bg-surface-2 px-1.5 py-1 text-[11px]"
+                >
+                  {samples.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {!isShared && (
+              <label className="ml-auto flex items-center gap-1.5" title="Показать в предпросмотре черновик общей темы">
+                <input
+                  type="checkbox"
+                  checked={previewSharedDraft}
+                  onChange={(e) => setPreviewSharedDraft(e.target.checked)}
+                  className="h-3 w-3 accent-accent"
+                />
+                с черновиком общей темы
+              </label>
+            )}
+          </div>
+          {loading ? (
+            <div className="flex flex-1 items-center justify-center text-xs text-muted">
+              <Loader2 size={16} className="mr-2 animate-spin" /> Загрузка…
+            </div>
+          ) : (
+            <PreviewFrame
+              src={previewSrc}
+              mode={mode}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onElementsFound={(ids) => setPresentIds(new Set(ids))}
+              width={device === "custom" ? customWidth : DEVICE_WIDTH[device]}
+              onReload={(fn) => {
+                reloadPreview.current = fn;
+              }}
+            />
+          )}
+        </div>
+
+        {/* Настройки */}
+        {rightOpen ? (
+          <div className="flex w-[300px] flex-shrink-0 flex-col rounded-lg border border-border bg-surface">
+            <div className="flex items-center justify-between gap-2 border-b border-border px-2 py-1.5">
+              <div className="flex items-center rounded-md border border-border">
+                {BREAKPOINTS.map((b) => (
+                  <button
+                    key={b.key}
+                    type="button"
+                    onClick={() => setBreakpoint(b.key)}
+                    className={clsx("px-1.5 py-1 text-[10px]", breakpoint === b.key ? "bg-accent-soft text-accent" : "text-muted")}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center rounded-md border border-border">
+                {STATES.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setElementState(s.key)}
+                    className={clsx("px-1.5 py-1 text-[10px]", elementState === s.key ? "bg-accent-soft text-accent" : "text-muted")}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <button type="button" onClick={() => setRightOpen(false)} title="Свернуть" className="p-1 text-muted hover:text-foreground">
+                <PanelRightClose size={15} />
+              </button>
+            </div>
+
+            {isShared && (
+              <details className="border-b border-border" open>
+                <summary className="cursor-pointer px-3 py-2 text-xs font-medium">Палитра и токены темы</summary>
+                <div className="space-y-2 px-3 pb-3">
+                  {THEME_TOKENS.map((t) => {
+                    const value = state?.draft.tokens?.[t.key] ?? "";
+                    const invalid =
+                      value !== "" &&
+                      !isValidValue({ key: t.key, label: t.label, css: t.key, kind: "color", group: "colors" }, value);
+                    return (
+                      <div key={t.key} className="space-y-1">
+                        <label className="flex items-center justify-between text-[11px] text-muted">
+                          <span>{t.label}</span>
+                          <span className="font-mono text-[9px] text-muted-2">--{t.key}</span>
+                        </label>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            defaultValue={value}
+                            key={`${pageKey}-${t.key}-${value}`}
+                            placeholder="не задано"
+                            onBlur={(e) => setToken(t.key, e.target.value)}
+                            className={clsx(
+                              "min-w-0 flex-1 rounded-md border bg-surface-2 px-2 py-1.5 text-xs outline-none",
+                              invalid ? "border-danger" : "border-border focus:border-accent"
+                            )}
+                          />
+                          <span
+                            aria-hidden="true"
+                            className="h-7 w-7 flex-shrink-0 rounded border border-border"
+                            style={{ background: invalid || value === "" ? "transparent" : value }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
+
+            {selectedDef && state ? (
+              <>
+                {selectedIsShared && (
+                  <div className="border-b border-border bg-surface-2 px-3 py-2 text-[11px] text-muted">
+                    Это общий элемент сайта. Правка здесь создаёт переопределение только для «{label(pageKey)}».{" "}
+                    <button type="button" onClick={() => setPageKey(SHARED_KEY)} className="text-accent underline">
+                      Изменить для всего сайта
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLocked((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(selectedDef.id)) next.delete(selectedDef.id);
+                        else next.add(selectedDef.id);
+                        return next;
+                      })
+                    }
+                    className="flex items-center gap-1 text-[11px] text-muted hover:text-foreground"
+                  >
+                    {locked.has(selectedDef.id) ? <Lock size={12} /> : <Unlock size={12} />}
+                    {locked.has(selectedDef.id) ? "Разблокировать" : "Заблокировать"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetElement}
+                    className="flex items-center gap-1 text-[11px] text-muted hover:text-danger"
+                  >
+                    <RotateCcw size={12} /> Сбросить элемент
+                  </button>
+                </div>
+                <div className="min-h-0 flex-1">
+                  <PropertyPanel
+                    elementId={selectedDef.id}
+                    elementLabel={selectedDef.label}
+                    scopeLabel={
+                      isShared
+                        ? "Область: весь сайт"
+                        : selectedIsShared
+                          ? `Область: только страница «${label(pageKey)}»`
+                          : `Область: страница «${label(pageKey)}»`
+                    }
+                    values={state.draft.elements[selectedDef.id]}
+                    breakpoint={breakpoint}
+                    state={elementState}
+                    onChange={setProperty}
+                    onResetProp={resetProperty}
+                    locked={locked.has(selectedDef.id)}
+                  />
+                </div>
+              </>
+            ) : (
+              <p className="p-3 text-xs text-muted">
+                Выберите элемент — кликом в предпросмотре или в дереве слева.
+              </p>
+            )}
+          </div>
+        ) : (
+          <button type="button" onClick={() => setRightOpen(true)} title="Показать настройки"
+            className="h-9 flex-shrink-0 rounded-lg border border-border bg-surface px-2 text-muted hover:text-foreground">
+            <PanelRightOpen size={15} />
+          </button>
+        )}
+      </div>
+
+      {/* История версий */}
+      {historyOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setHistoryOpen(false)}>
+          <div className="max-h-[80vh] w-full max-w-lg overflow-hidden rounded-lg border border-border bg-surface" onClick={(e) => e.stopPropagation()}>
+            <div className="border-b border-border px-4 py-3">
+              <h2 className="text-sm font-semibold">История публикаций — {label(pageKey)}</h2>
+              <p className="mt-0.5 text-[11px] text-muted">
+                Восстановление кладёт версию в черновик. Текущая опубликованная версия останется на месте, пока вы не
+                нажмёте «Применить».
+              </p>
+            </div>
+            <div className="scroll-slim max-h-[55vh] divide-y divide-border overflow-y-auto">
+              {versions.length === 0 ? (
+                <p className="px-4 py-6 text-center text-xs text-muted">Публикаций пока не было.</p>
+              ) : (
+                versions.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs">{v.note || "Без описания"}</p>
+                      <p className="text-[10px] text-muted-2">
+                        {new Date(v.createdAt).toLocaleString("ru-RU")} · {v.author || "—"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void restore(v.id)}
+                      className="flex-shrink-0 rounded-md border border-border px-2 py-1 text-[11px] text-muted hover:text-foreground"
+                    >
+                      Восстановить
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="border-t border-border px-4 py-2 text-right">
+              <button type="button" onClick={() => setHistoryOpen(false)} className="rounded-md border border-border px-3 py-1.5 text-xs">
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

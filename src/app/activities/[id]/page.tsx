@@ -25,7 +25,7 @@ export default async function ActivityDetailPage({
   const banner = findLabelMatch(activity.name, bannerNames);
 
   return (
-    <div className="space-y-4">
+    <div data-design-el="activityDetail.root" className="space-y-4">
       <div>
         <Link href="/activities" className="text-xs text-accent hover:underline">
           ← Все активности

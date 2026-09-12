@@ -12,6 +12,7 @@ import {
   UserCircle,
   Coins,
   House,
+  Palette,
   type LucideIcon,
 } from "lucide-react";
 
@@ -59,6 +60,7 @@ export const navSections: NavSection[] = [
       { href: "/drop-catalog", label: "Реестр дропа", icon: BookOpen, adminOnly: true },
       { href: "/activity-banners", label: "Баннеры активностей", icon: ImagePlay, adminOnly: true },
       { href: "/rb-purchase", label: "Расчёт покупки РБ", icon: Coins, adminOnly: true },
+      { href: "/design", label: "Дизайн", icon: Palette, adminOnly: true },
     ],
   },
 ];

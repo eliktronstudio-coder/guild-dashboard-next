@@ -39,6 +39,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
         />
       )}
       <aside
+        data-design-el="shared.sidebar"
         className={clsx(
           "fixed inset-y-0 left-0 z-50 flex w-[240px] flex-col border-r border-border bg-bg-sidebar transition-transform lg:static lg:z-auto lg:translate-x-0",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
@@ -54,7 +55,10 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
             if (items.length === 0) return null;
             return (
             <div key={section.title} className="mb-6">
-              <p className="px-3 pb-2 text-[11px] font-medium uppercase tracking-widest text-muted-2">
+              <p
+                data-design-el="shared.sidebarSection"
+                className="px-3 pb-2 text-[11px] font-medium uppercase tracking-widest text-muted-2"
+              >
                 {section.title}
               </p>
               <ul className="space-y-0.5">
@@ -66,6 +70,7 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user 
                       <Link
                         href={item.href}
                         onClick={onCloseMobile}
+                        data-design-el="shared.sidebarItem"
                         className={clsx(
                           "flex items-center gap-3 rounded-lg border px-4 py-3 text-sm font-medium transition-colors duration-150",
                           active

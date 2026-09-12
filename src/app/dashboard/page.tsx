@@ -100,7 +100,7 @@ export default async function DashboardPage() {
 
   return (
     <BlurGate blurred={isRandom}>
-    <div className="space-y-4">
+    <div data-design-el="dashboard.root" className="space-y-4">
       {/* Отступ на две высоты карточки открывает баннер, который иначе почти
           целиком закрыт KPI-блоком. Это padding обёртки, а не margin сетки:
           margin схлопнулся бы через обёртку и утащил баннер вниз вместе с
@@ -108,7 +108,10 @@ export default async function DashboardPage() {
       <div className="relative lg:pt-60">
         <DashboardHero />
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+        <div
+          data-design-el="dashboard.kpiGrid"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
+        >
           <StatCard
             variant="dashboard"
             label="Казна с Прайма"

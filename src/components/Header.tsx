@@ -27,7 +27,10 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
   const [lang, setLang] = useState<"ru" | "en">("ru");
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/90 px-4 py-4 backdrop-blur sm:px-6">
+    <header
+      data-design-el="shared.header"
+      className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-border bg-background/90 px-4 py-4 backdrop-blur sm:px-6"
+    >
       <div className="flex min-w-0 items-center gap-3">
         <button
           type="button"

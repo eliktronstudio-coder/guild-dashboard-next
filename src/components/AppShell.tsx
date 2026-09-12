@@ -25,8 +25,13 @@ export default function AppShell({ children, user }: { children: ReactNode; user
 
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <Header onMenuClick={() => setMobileOpen(true)} user={user} />
-        <main className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:pb-6">{children}</main>
-        <footer className="hidden border-t border-border px-4 py-3 text-center text-xs text-muted sm:px-6 lg:block">
+        <main data-design-el="shared.main" className="flex-1 px-4 py-6 pb-24 sm:px-6 lg:pb-6">
+          {children}
+        </main>
+        <footer
+          data-design-el="shared.footer"
+          className="hidden border-t border-border px-4 py-3 text-center text-xs text-muted sm:px-6 lg:block"
+        >
           {guild.version}
         </footer>
       </div>
