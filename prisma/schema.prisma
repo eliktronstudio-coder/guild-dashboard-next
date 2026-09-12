@@ -171,6 +171,20 @@ model DesignMedia {
   @@index([createdAt])
 }
 
+/// Сохранённый блок для повторного использования: дерево блоков вместе с их
+/// оформлением. При вставке идентификаторы пересоздаются, поэтому одну
+/// заготовку можно положить на несколько страниц независимо.
+model DesignSnippet {
+  id         String   @id @default(cuid())
+  name       String
+  /// JSON: { block: DesignBlock, styles: Record<elementId, ElementValues> }
+  payload    String
+  createdAt  DateTime @default(now())
+  createdBy  String?
+
+  @@index([createdAt])
+}
+
 /// История опубликованных версий оформления: отдельная на каждую страницу,
 /// поэтому восстановление одной страницы не откатывает остальные.
 model DesignVersion {

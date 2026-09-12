@@ -6,6 +6,7 @@ import Header from "./Header";
 import LoginDialog from "./LoginDialog";
 import Atmosphere from "./Atmosphere";
 import BottomNav from "./BottomNav";
+import { DesignTextProvider } from "./design/DesignTextProvider";
 import { guild } from "@/lib/config";
 import type { SessionPayload } from "@/lib/auth";
 
@@ -27,6 +28,7 @@ export default function AppShell({
   const [loginOpen, setLoginOpen] = useState(false);
 
   return (
+    <DesignTextProvider texts={texts}>
     <div className="relative flex min-h-screen">
       <Atmosphere />
       <Sidebar
@@ -53,5 +55,6 @@ export default function AppShell({
       <BottomNav onMoreClick={() => setMobileOpen(true)} />
       <LoginDialog open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>
+    </DesignTextProvider>
   );
 }

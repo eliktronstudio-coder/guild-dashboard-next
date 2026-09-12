@@ -207,12 +207,25 @@ export const PAGES: PageDef[] = [
   simplePage("treasury", "Казна", "Экономика", "/treasury"),
   simplePage("payments", "Выплаты", "Экономика", "/payments"),
   simplePage("calculator", "Калькуляторы", "Инструменты", "/calculator"),
-  simplePage("archeage", "ArcheAge", "Инструменты", "/archeage"),
+  simplePage("archeage", "ArcheAge", "Инструменты", "/archeage", [
+    { id: "archeage.title", label: "Заголовок страницы", fallback: "ArcheAge" },
+    {
+      id: "archeage.subtitle",
+      label: "Подзаголовок",
+      fallback: "Полезные инструменты и справочная информация по игре.",
+    },
+  ]),
   simplePage("users", "Пользователи", "Администрирование", "/users"),
   simplePage("dropCatalog", "Реестр дропа", "Администрирование", "/drop-catalog"),
   simplePage("activityBanners", "Баннеры активностей", "Администрирование", "/activity-banners"),
   simplePage("rbPurchase", "Расчёт покупки РБ", "Администрирование", "/rb-purchase", [
     { id: "rbPurchase.title", label: "Заголовок страницы", fallback: "Расчёт покупки РБ" },
+    {
+      id: "rbPurchase.subtitle",
+      label: "Описание под заголовком",
+      fallback:
+        "Выберите участников и укажите объём купленного РБ опыта — он разделится между выбранными пропорционально их посещаемости Мини-РБ (с учётом индивидуального коэффициента, как в расчёте зарплаты). В списке только игроки с посещаемостью Мини-РБ от 20%.",
+    },
   ]),
   simplePage("drops", "Дроп", "Администрирование", "/drops"),
   {

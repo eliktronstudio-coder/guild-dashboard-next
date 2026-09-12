@@ -13,6 +13,14 @@ import {
   isValidValue,
   type PropertyDef,
 } from "./properties";
+import {
+  blockElementId,
+  isSafeHref,
+  mediaUrl,
+  normalizeBlockTree,
+  normalizeElementValues,
+  sanitizeText,
+} from "./normalize";
 import { allowedElementIds, allowedTextIds, selectorForElement, SHARED_KEY, THEME_TOKENS } from "./registry";
 import {
   BREAKPOINTS,
@@ -35,98 +43,7 @@ import {
 
 const TOKEN_KEYS = new Set(THEME_TOKENS.map((t) => t.key));
 
-const BLOCK_TYPES: BlockType[] = [
-  "container",
-  "section",
-  "grid",
-  "heading",
-  "text",
-  "image",
-  "button",
-  "divider",
-  "spacer",
-];
-
-/** Адрес медиафайла: собирается только здесь, из проверенного идентификатора. */
-export function mediaUrl(id: string): string {
-  return `/api/design/media/${id}/file`;
-}
-
-/** Максимальная глубина вложенности блоков — защита от бесконечной структуры. */
-const MAX_BLOCK_DEPTH = 4;
-const MAX_BLOCKS_PER_SLOT = 40;
-
-/** Допустимая ссылка для кнопки: внутренний маршрут или https-адрес. */
-export function isSafeHref(raw: string): boolean {
-  const value = raw.trim();
-  if (value === "") return true;
-  if (value.startsWith("/") && !value.startsWith("//")) return true;
-  return /^https:\/\/[a-z0-9.-]+(\/[^\s<>"']*)?$/i.test(value);
-}
-
-function sanitizeText(raw: unknown, max = 400): string | undefined {
-  if (typeof raw !== "string") return undefined;
-  // Текст выводится через React (без dangerouslySetInnerHTML), но угловые
-  // скобки убираем, чтобы в подписях нельзя было спрятать разметку.
-  const value = raw.replace(/[<>]/g, "").slice(0, max);
-  return value === "" ? undefined : value;
-}
-
-function normalizeBlocks(raw: unknown, depth: number, seen: Set<string>): DesignBlock[] {
-  if (!Array.isArray(raw) || depth > MAX_BLOCK_DEPTH) return [];
-  const result: DesignBlock[] = [];
-
-  for (const entry of raw) {
-    if (typeof entry !== "object" || entry === null) continue;
-    const input = entry as Partial<DesignBlock>;
-    const type = input.type;
-    if (typeof type !== "string" || !BLOCK_TYPES.includes(type as BlockType)) continue;
-
-    // Важен состав символов (id попадает в CSS-селектор), а не длина —
-    // уникальность проверяется отдельно, ниже.
-    const id = typeof input.id === "string" && /^[a-zA-Z0-9_-]{1,40}$/.test(input.id) ? input.id : null;
-    // Идентификатор обязателен и уникален: на нём держатся настройки блока.
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-
-    const block: DesignBlock = { id, type: type as BlockType };
-
-    const name = sanitizeText(input.name, 60);
-    if (name) block.name = name;
-
-    const text = sanitizeText(input.text, 2000);
-    if (text) block.text = text;
-
-    if (typeof input.href === "string" && isSafeHref(input.href)) {
-      const href = input.href.trim();
-      if (href) block.href = href;
-    }
-
-    if (typeof input.mediaId === "string" && /^[a-z0-9]{20,40}$/i.test(input.mediaId)) {
-      block.mediaId = input.mediaId;
-    }
-
-    const alt = sanitizeText(input.alt, 200);
-    if (alt) block.alt = alt;
-
-    if (Array.isArray(input.hiddenOn)) {
-      const valid = input.hiddenOn.filter((b): b is Breakpoint => BREAKPOINTS.some((x) => x.key === b));
-      if (valid.length > 0) block.hiddenOn = [...new Set(valid)];
-    }
-    if (input.hidden === true) block.hidden = true;
-    if (input.locked === true) block.locked = true;
-
-    if (canContain(block.type)) {
-      const children = normalizeBlocks(input.children, depth + 1, seen);
-      if (children.length > 0) block.children = children;
-    }
-
-    result.push(block);
-    if (result.length >= MAX_BLOCKS_PER_SLOT) break;
-  }
-
-  return result;
-}
+export { blockElementId, isSafeHref, mediaUrl };
 
 /**
  * Приводит произвольный JSON к валидному конфигу: выбрасывает неизвестные
@@ -145,37 +62,14 @@ export function normalizeConfig(raw: unknown, pageKey: string): PageConfig {
   const blocks: Partial<Record<SlotKey, DesignBlock[]>> = {};
   const seenBlockIds = new Set<string>();
   for (const slot of SLOTS) {
-    blocks[slot.key] = normalizeBlocks(input.blocks?.[slot.key], 0, seenBlockIds);
+    blocks[slot.key] = normalizeBlockTree(input.blocks?.[slot.key], 0, seenBlockIds);
   }
   result.blocks = blocks;
   for (const id of seenBlockIds) allowed.add(blockElementId(id));
 
   for (const [elementId, values] of Object.entries(input.elements ?? {})) {
-    if (!allowed.has(elementId) || typeof values !== "object" || values === null) continue;
-    const cleanValues: ElementValues = {};
-
-    for (const [propKey, byBp] of Object.entries(values as ElementValues)) {
-      const def = PROPERTY_BY_KEY.get(propKey);
-      if (!def || typeof byBp !== "object" || byBp === null) continue;
-
-      for (const bp of BREAKPOINTS) {
-        const byState = byBp[bp.key];
-        if (typeof byState !== "object" || byState === null) continue;
-
-        for (const state of STATES) {
-          const value = byState[state.key];
-          if (typeof value !== "string") continue;
-          const trimmed = value.trim();
-          if (trimmed === "" || !isValidValue(def, trimmed)) continue;
-          // Состояние имеет смысл не для всех свойств.
-          if (state.key !== "normal" && !def.stateful) continue;
-
-          cleanValues[propKey] ??= {};
-          cleanValues[propKey][bp.key] ??= {};
-          cleanValues[propKey][bp.key]![state.key] = trimmed;
-        }
-      }
-    }
+    if (!allowed.has(elementId)) continue;
+    const cleanValues = normalizeElementValues(values);
     if (Object.keys(cleanValues).length > 0) result.elements[elementId] = cleanValues;
   }
 
@@ -218,11 +112,6 @@ export function normalizeConfig(raw: unknown, pageKey: string): PageConfig {
 
 function colorDef(key: string): PropertyDef {
   return { key, label: key, css: key, kind: "color", group: "colors" };
-}
-
-/** Идентификатор элемента оформления для добавленного блока. */
-export function blockElementId(blockId: string): string {
-  return `block.${blockId}`;
 }
 
 /**

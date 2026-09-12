@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Upload, Trash2, Loader2, X } from "lucide-react";
+import { Upload, Trash2, Loader2, X, Crop } from "lucide-react";
+import CropDialog from "./CropDialog";
 import clsx from "clsx";
 
 export type MediaItem = {
@@ -60,6 +61,7 @@ export default function MediaLibrary({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cropping, setCropping] = useState<MediaItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,6 +129,7 @@ export default function MediaLibrary({
   if (!open) return null;
 
   return (
+    <>
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
         className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-border bg-surface"
@@ -200,6 +203,17 @@ export default function MediaLibrary({
                     <span className="min-w-0 flex-1 truncate text-[10px] text-muted" title={item.name}>
                       {item.name}
                     </span>
+                    {item.mimeType !== "image/svg+xml" && (
+                      <button
+                        type="button"
+                        onClick={() => setCropping(item)}
+                        disabled={busy}
+                        title="Кадрировать"
+                        className="flex-shrink-0 text-muted hover:text-accent disabled:opacity-40"
+                      >
+                        <Crop size={12} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => void remove(item.id)}
@@ -221,5 +235,18 @@ export default function MediaLibrary({
         </div>
       </div>
     </div>
+
+      {cropping && (
+        <CropDialog
+          mediaId={cropping.id}
+          mediaName={cropping.name}
+          onClose={() => setCropping(null)}
+          onSaved={() => {
+            setCropping(null);
+            void load();
+          }}
+        />
+      )}
+    </>
   );
 }

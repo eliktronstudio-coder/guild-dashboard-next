@@ -1,6 +1,7 @@
 import { ExternalLink } from "lucide-react";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
+import { designText } from "@/lib/design/resolve";
 import GearRankCalculator from "@/components/GearRankCalculator";
 
 function SourceLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -21,11 +22,16 @@ export default async function ArcheAgePage() {
   const admin = await requireAdmin();
   if (!admin) redirect("/dashboard");
 
+  const [title, subtitle] = await Promise.all([
+    designText("archeage.title", "ArcheAge"),
+    designText("archeage.subtitle", "Полезные инструменты и справочная информация по игре."),
+  ]);
+
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">ArcheAge</h1>
-        <p className="text-sm text-muted">Полезные инструменты и справочная информация по игре.</p>
+        <h1 className="text-lg font-semibold">{title}</h1>
+        <p className="text-sm text-muted">{subtitle}</p>
       </div>
 
       <GearRankCalculator />

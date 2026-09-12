@@ -26,12 +26,18 @@ import {
   Layers,
   Type as TypeIcon,
   Boxes,
+  Eye,
+  EyeOff,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import clsx from "clsx";
 import PreviewFrame, { type PreviewMode } from "./PreviewFrame";
 import PropertyPanel from "./PropertyPanel";
 import MediaLibrary from "./MediaLibrary";
-import BlocksPanel, { BlockSettings, type BlocksState } from "./BlocksPanel";
+import BlocksPanel, { BlockSettings, type BlocksState, type Snippet } from "./BlocksPanel";
+import { appendToSlot, findBlock, patchBlock as patchBlockOp } from "@/lib/design/blockOps";
+import { instantiateSnippet, type SnippetPayload } from "@/lib/design/snippets";
 import {
   PAGES,
   SHARED_ELEMENTS,
@@ -121,6 +127,7 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
   const [historyOpen, setHistoryOpen] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
 
+  const [snippets, setSnippets] = useState<(Snippet & { payload: SnippetPayload })[]>([]);
   const [mediaOpen, setMediaOpen] = useState(false);
   /** Куда положить выбранный файл: свойство элемента или картинка блока. */
   const mediaTarget = useRef<{ kind: "prop"; prop: string } | { kind: "block"; blockId: string } | null>(null);
@@ -179,6 +186,17 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
       alive = false;
     };
   }, [page]);
+
+  const loadSnippets = useCallback(async () => {
+    const res = await fetch("/api/design/snippets", { cache: "no-store" });
+    if (!res.ok) return;
+    const data = (await res.json()) as { items: (Snippet & { payload: SnippetPayload })[] };
+    setSnippets(data.items.filter((i) => i.payload));
+  }, []);
+
+  useEffect(() => {
+    void loadSnippets();
+  }, [loadSnippets]);
 
   const persist = useCallback(async (config: PageConfig, key: string) => {
     setSaveStatus("saving");
@@ -240,11 +258,17 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
 
   const lockedSet = useMemo(() => new Set(state?.draft.locks ?? []), [state]);
 
-  function setProperty(prop: string, raw: string) {
-    if (!state || !selectedId || lockedSet.has(selectedId)) return;
+  /**
+   * Записывает значение свойства любого элемента на текущем брейкпоинте и в
+   * текущем состоянии. Пустая строка удаляет значение, и если у элемента не
+   * осталось настроек, он убирается из конфига — чтобы в нём не копились
+   * пустые ветки.
+   */
+  function setElementProperty(elementId: string, prop: string, raw: string) {
+    if (!state || lockedSet.has(elementId)) return;
     const value = raw.trim();
     const next: PageConfig = { ...state.draft, elements: { ...state.draft.elements } };
-    const values = { ...(next.elements[selectedId] ?? {}) };
+    const values = { ...(next.elements[elementId] ?? {}) };
     const byBp = { ...(values[prop] ?? {}) };
     const byState = { ...(byBp[breakpoint] ?? {}) };
 
@@ -257,10 +281,20 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     if (Object.keys(byBp).length === 0) delete values[prop];
     else values[prop] = byBp;
 
-    if (Object.keys(values).length === 0) delete next.elements[selectedId];
-    else next.elements[selectedId] = values;
+    if (Object.keys(values).length === 0) delete next.elements[elementId];
+    else next.elements[elementId] = values;
 
     mutate(next);
+  }
+
+  function setProperty(prop: string, raw: string) {
+    if (!selectedId) return;
+    setElementProperty(selectedId, prop, raw);
+  }
+
+  /** Своё значение свойства элемента на текущем брейкпоинте/состоянии. */
+  function readElementValue(elementId: string, prop: string): string {
+    return state?.draft.elements[elementId]?.[prop]?.[breakpoint]?.[elementState] ?? "";
   }
 
   function resetElement() {
@@ -305,21 +339,64 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
 
   function patchBlock(blockId: string, changes: Partial<DesignBlock>) {
     if (!state) return;
-    const blocks: BlocksState = {};
-    for (const slot of SLOTS) {
-      blocks[slot.key] = patchIn(state.draft.blocks?.[slot.key] ?? [], blockId, changes);
-    }
-    mutate({ ...state.draft, blocks });
+    mutate({ ...state.draft, blocks: patchBlockOp(state.draft.blocks ?? {}, blockId, changes) });
   }
 
-  function patchIn(list: DesignBlock[], id: string, changes: Partial<DesignBlock>): DesignBlock[] {
-    return list.map((item) => {
-      if (item.id === id) return { ...item, ...changes };
-      if (item.children?.length) return { ...item, children: patchIn(item.children, id, changes) };
-      return item;
+  /** Сохраняет блок вместе с его оформлением как переиспользуемую заготовку. */
+  async function saveSnippet(blockId: string, name: string) {
+    if (!state) return;
+    const block = findBlock(state.draft.blocks ?? {}, blockId);
+    if (!block) return;
+
+    // Забираем оформление всего поддерева, иначе заготовка потеряет вид.
+    const styles: Record<string, unknown> = {};
+    walkBlocks([block], (b) => {
+      const key = `block.${b.id}`;
+      const values = state.draft.elements[key];
+      if (values) styles[key] = values;
     });
+
+    const res = await fetch("/api/design/snippets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, payload: { block, styles } }),
+    });
+    if (!res.ok) {
+      setError((await res.json().catch(() => ({}))).error ?? "Не удалось сохранить блок.");
+      return;
+    }
+    await loadSnippets();
+    setNotice({ text: `Блок «${name}» сохранён и доступен на всех страницах.` });
   }
 
+  /** Вставляет заготовку: новые id у блоков и перенесённое на них оформление. */
+  function insertSnippet(snippetId: string, slot: SlotKey, parentId: string | null) {
+    if (!state) return;
+    const snippet = snippets.find((s) => s.id === snippetId);
+    if (!snippet) return;
+
+    const { block, styles } = instantiateSnippet(snippet.payload);
+    let blocks = state.draft.blocks ?? {};
+    if (parentId) {
+      const parent = findBlock(blocks, parentId);
+      if (!parent) return;
+      blocks = patchBlockOp(blocks, parentId, { children: [...(parent.children ?? []), block] });
+    } else {
+      blocks = appendToSlot(blocks, slot, block);
+    }
+    mutate({ ...state.draft, blocks, elements: { ...state.draft.elements, ...styles } });
+    setSelectedId(`block.${block.id}`);
+  }
+
+  async function deleteSnippet(snippetId: string) {
+    if (!window.confirm("Удалить заготовку? Блоки, уже вставленные на страницы, останутся на месте.")) return;
+    const res = await fetch(`/api/design/snippets/${snippetId}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError("Не удалось удалить заготовку.");
+      return;
+    }
+    await loadSnippets();
+  }
   function undo() {
     if (!state || undoStack.current.length === 0) return;
     const prev = undoStack.current.pop()!;
@@ -750,18 +827,24 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                   {visibleElements.map((el) => {
                     const isPresent = presentIds.size === 0 || presentIds.has(el.id);
                     const hasValues = Boolean(state?.draft.elements[el.id]);
+                    const hidden = readElementValue(el.id, "display") === "none";
+                    const order = readElementValue(el.id, "order");
                     return (
-                      <button
+                      <div
                         key={el.id}
-                        type="button"
-                        onClick={() => setSelectedId(el.id)}
                         className={clsx(
-                          "mb-0.5 flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs",
+                          "mb-0.5 flex w-full items-center gap-1 rounded px-2 py-1.5 text-xs",
                           selectedId === el.id ? "bg-accent-soft text-accent" : "text-foreground/80 hover:bg-surface-2",
                           el.parent && "pl-5"
                         )}
                       >
-                        <span className="min-w-0 flex-1 truncate">{el.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(el.id)}
+                          className="min-w-0 flex-1 truncate text-left"
+                        >
+                          {el.label}
+                        </button>
                         {lockedSet.has(el.id) && <Lock size={10} className="flex-shrink-0 text-muted-2" />}
                         {el.shared && !isShared && (
                           <span className="flex-shrink-0 rounded bg-surface px-1 text-[9px] text-muted-2">общий</span>
@@ -772,7 +855,34 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                             нет
                           </span>
                         )}
-                      </button>
+
+                        {/* Быстрые действия: скрыть и переставить. Это визуальные
+                            настройки — данные в базе не затрагиваются. */}
+                        <button
+                          type="button"
+                          title={hidden ? "Показать элемент" : "Скрыть элемент (только визуально)"}
+                          onClick={() => setElementProperty(el.id, "display", hidden ? "" : "none")}
+                          className="flex-shrink-0 text-muted hover:text-foreground"
+                        >
+                          {hidden ? <EyeOff size={11} /> : <Eye size={11} />}
+                        </button>
+                        <button
+                          type="button"
+                          title="Поднять выше в своём контейнере"
+                          onClick={() => setElementProperty(el.id, "order", String((Number(order) || 0) - 1))}
+                          className="flex-shrink-0 text-muted hover:text-foreground"
+                        >
+                          <ArrowUp size={11} />
+                        </button>
+                        <button
+                          type="button"
+                          title="Опустить ниже в своём контейнере"
+                          onClick={() => setElementProperty(el.id, "order", String((Number(order) || 0) + 1))}
+                          className="flex-shrink-0 text-muted hover:text-foreground"
+                        >
+                          <ArrowDown size={11} />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -790,6 +900,10 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                   onSelect={setSelectedId}
                   onChange={setBlocks}
                   onDeleted={(restoreFn) => setNotice({ text: "Блок удалён.", undo: restoreFn })}
+                  snippets={snippets}
+                  onInsertSnippet={insertSnippet}
+                  onSaveSnippet={(blockId, name) => void saveSnippet(blockId, name)}
+                  onDeleteSnippet={(id) => void deleteSnippet(id)}
                 />
               </div>
             )}

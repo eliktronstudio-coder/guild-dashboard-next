@@ -5,24 +5,29 @@ import {
   Plus,
   Copy,
   Trash2,
-  ChevronUp,
-  ChevronDown,
   Eye,
   EyeOff,
   Lock,
   Unlock,
   CornerDownRight,
+  GripVertical,
+  Bookmark,
+  X,
 } from "lucide-react";
 import clsx from "clsx";
 import {
-  BREAKPOINTS,
-  SLOTS,
-  canContain,
-  type Breakpoint,
-  type BlockType,
-  type DesignBlock,
-  type SlotKey,
-} from "@/lib/design/types";
+  appendToSlot,
+  moveBlock,
+  patchBlock as patchBlockOp,
+  extractBlock,
+  findBlock,
+  findSlotOf,
+  type BlocksState,
+  type DropPosition,
+} from "@/lib/design/blockOps";
+import { BREAKPOINTS, SLOTS, canContain, type Breakpoint, type BlockType, type DesignBlock, type SlotKey } from "@/lib/design/types";
+
+export type { BlocksState };
 
 /** Библиотека блоков: что можно добавить на страницу. */
 export const BLOCK_LIBRARY: { type: BlockType; label: string; hint: string }[] = [
@@ -41,24 +46,26 @@ const TYPE_LABEL: Record<BlockType, string> = Object.fromEntries(
   BLOCK_LIBRARY.map((b) => [b.type, b.label])
 ) as Record<BlockType, string>;
 
-export type BlocksState = Partial<Record<SlotKey, DesignBlock[]>>;
+export type Snippet = { id: string; name: string; createdAt: string };
 
 type Props = {
   blocks: BlocksState;
   selectedId: string | null;
   onSelect: (elementId: string) => void;
   onChange: (next: BlocksState) => void;
-  /** Последнее удаление — для «Вернуть». */
   onDeleted: (restore: () => void) => void;
+  snippets: Snippet[];
+  onInsertSnippet: (snippetId: string, slot: SlotKey, parentId: string | null) => void;
+  onSaveSnippet: (blockId: string, name: string) => void;
+  onDeleteSnippet: (snippetId: string) => void;
 };
 
-function newId() {
-  // Короткий устойчивый идентификатор: попадает в data-design-el и в конфиг.
+export function newBlockId() {
   return `b${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 }
 
 function makeBlock(type: BlockType): DesignBlock {
-  const block: DesignBlock = { id: newId(), type };
+  const block: DesignBlock = { id: newBlockId(), type };
   if (type === "heading") block.text = "Новый заголовок";
   if (type === "text") block.text = "Новый текст";
   if (type === "button") {
@@ -69,118 +76,124 @@ function makeBlock(type: BlockType): DesignBlock {
 }
 
 function cloneBlock(block: DesignBlock): DesignBlock {
-  return {
-    ...block,
-    id: newId(),
-    children: block.children?.map(cloneBlock),
-  };
+  return { ...block, id: newBlockId(), children: block.children?.map(cloneBlock) };
 }
 
-/** Рекурсивно заменяет список по пути. */
-function updateList(
-  list: DesignBlock[],
-  parentId: string | null,
-  transform: (items: DesignBlock[]) => DesignBlock[]
-): DesignBlock[] {
-  if (parentId === null) return transform(list);
-  return list.map((item) => {
-    if (item.id === parentId) {
-      return { ...item, children: transform(item.children ?? []) };
-    }
-    if (item.children?.length) {
-      return { ...item, children: updateList(item.children, parentId, transform) };
-    }
-    return item;
-  });
-}
-
-function findParentId(list: DesignBlock[], id: string, parent: string | null = null): string | null | undefined {
-  for (const item of list) {
-    if (item.id === id) return parent;
-    if (item.children?.length) {
-      const found = findParentId(item.children, id, item.id);
-      if (found !== undefined) return found;
-    }
-  }
-  return undefined;
-}
-
-function findBlock(list: DesignBlock[], id: string): DesignBlock | null {
-  for (const item of list) {
-    if (item.id === id) return item;
-    if (item.children?.length) {
-      const found = findBlock(item.children, id);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
-export default function BlocksPanel({ blocks, selectedId, onSelect, onChange, onDeleted }: Props) {
+export default function BlocksPanel({
+  blocks,
+  selectedId,
+  onSelect,
+  onChange,
+  onDeleted,
+  snippets,
+  onInsertSnippet,
+  onSaveSnippet,
+  onDeleteSnippet,
+}: Props) {
   const [addingTo, setAddingTo] = useState<{ slot: SlotKey; parentId: string | null } | null>(null);
-
-  function mutateSlot(slot: SlotKey, parentId: string | null, transform: (items: DesignBlock[]) => DesignBlock[]) {
-    const current = blocks[slot] ?? [];
-    onChange({ ...blocks, [slot]: updateList(current, parentId, transform) });
-  }
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dropHint, setDropHint] = useState<{ id: string; position: DropPosition } | null>(null);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [snippetName, setSnippetName] = useState("");
 
   function add(slot: SlotKey, parentId: string | null, type: BlockType) {
     const block = makeBlock(type);
-    mutateSlot(slot, parentId, (items) => [...items, block]);
+    const next = parentId
+      ? patchInsertChild(blocks, parentId, block)
+      : appendToSlot(blocks, slot, block);
+    onChange(next);
     setAddingTo(null);
     onSelect(`block.${block.id}`);
   }
 
-  function duplicate(slot: SlotKey, id: string) {
-    const parentId = findParentId(blocks[slot] ?? [], id) ?? null;
-    mutateSlot(slot, parentId, (items) => {
-      const index = items.findIndex((i) => i.id === id);
-      if (index < 0) return items;
-      const copy = cloneBlock(items[index]);
-      return [...items.slice(0, index + 1), copy, ...items.slice(index + 1)];
-    });
+  function patchInsertChild(state: BlocksState, parentId: string, block: DesignBlock): BlocksState {
+    const parent = findBlock(state, parentId);
+    if (!parent) return state;
+    return patchBlockOp(state, parentId, { children: [...(parent.children ?? []), block] });
   }
 
-  function remove(slot: SlotKey, id: string) {
+  function duplicate(id: string) {
+    const block = findBlock(blocks, id);
+    const slot = findSlotOf(blocks, id);
+    if (!block || !slot) return;
+    onChange(appendToSlot(blocks, slot, cloneBlock(block)));
+  }
+
+  function remove(id: string) {
+    const block = findBlock(blocks, id);
+    if (!block || block.locked) return;
     const snapshot = blocks;
-    const parentId = findParentId(blocks[slot] ?? [], id) ?? null;
-    const block = findBlock(blocks[slot] ?? [], id);
-    if (block?.locked) return;
-    mutateSlot(slot, parentId, (items) => items.filter((i) => i.id !== id));
-    // Удаление блока не затрагивает данные в базе — это только оформление,
-    // поэтому достаточно возможности вернуть предыдущее состояние.
+    onChange(extractBlock(blocks, id).state);
+    // Удаление блока не затрагивает данные в базе — это только оформление.
     onDeleted(() => onChange(snapshot));
   }
 
-  function move(slot: SlotKey, id: string, delta: number) {
-    const parentId = findParentId(blocks[slot] ?? [], id) ?? null;
-    mutateSlot(slot, parentId, (items) => {
-      const index = items.findIndex((i) => i.id === id);
-      const target = index + delta;
-      if (index < 0 || target < 0 || target >= items.length) return items;
-      const next = [...items];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
+  function patch(id: string, changes: Partial<DesignBlock>) {
+    onChange(patchBlockOp(blocks, id, changes));
   }
 
-  function patch(slot: SlotKey, id: string, changes: Partial<DesignBlock>) {
-    const parentId = findParentId(blocks[slot] ?? [], id) ?? null;
-    mutateSlot(slot, parentId, (items) => items.map((i) => (i.id === id ? { ...i, ...changes } : i)));
+  /** Куда упадёт блок: верхняя треть — до, нижняя — после, середина — внутрь. */
+  function positionFromEvent(e: React.DragEvent, allowInside: boolean): DropPosition {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const offset = (e.clientY - rect.top) / rect.height;
+    if (allowInside && offset > 0.33 && offset < 0.67) return "inside";
+    return offset < 0.5 ? "before" : "after";
   }
 
-  function renderRow(slot: SlotKey, block: DesignBlock, depth: number, index: number, total: number) {
+  function renderRow(block: DesignBlock, depth: number) {
     const elementId = `block.${block.id}`;
     const selected = selectedId === elementId;
+    const hint = dropHint?.id === block.id ? dropHint.position : null;
+
     return (
       <div key={block.id}>
         <div
+          draggable={!block.locked}
+          onDragStart={(e) => {
+            setDragId(block.id);
+            e.dataTransfer.effectAllowed = "move";
+            // Некоторые браузеры не начинают перенос без данных.
+            e.dataTransfer.setData("text/plain", block.id);
+          }}
+          onDragEnd={() => {
+            setDragId(null);
+            setDropHint(null);
+          }}
+          onDragOver={(e) => {
+            if (!dragId || dragId === block.id) return;
+            e.preventDefault();
+            setDropHint({ id: block.id, position: positionFromEvent(e, canContain(block.type)) });
+          }}
+          onDragLeave={() => {
+            if (dropHint?.id === block.id) setDropHint(null);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (!dragId || dragId === block.id) return;
+            const position = positionFromEvent(e, canContain(block.type));
+            onChange(moveBlock(blocks, dragId, block.id, position));
+            setDragId(null);
+            setDropHint(null);
+          }}
           className={clsx(
             "flex items-center gap-1 rounded px-1.5 py-1",
-            selected ? "bg-accent-soft" : "hover:bg-surface-2"
+            selected ? "bg-accent-soft" : "hover:bg-surface-2",
+            hint === "before" && "border-t-2 border-accent",
+            hint === "after" && "border-b-2 border-accent",
+            hint === "inside" && "ring-1 ring-accent",
+            dragId === block.id && "opacity-40"
           )}
           style={{ paddingLeft: `${6 + depth * 12}px` }}
         >
+          <span
+            className="flex-shrink-0"
+            title={block.locked ? "Блок заблокирован" : "Перетащите, чтобы переместить"}
+          >
+            <GripVertical
+              size={11}
+              className={block.locked ? "text-muted-2 opacity-40" : "cursor-grab text-muted-2"}
+            />
+          </span>
           <button
             type="button"
             onClick={() => onSelect(elementId)}
@@ -190,51 +203,78 @@ export default function BlocksPanel({ blocks, selectedId, onSelect, onChange, on
             {block.hidden && <span className="ml-1 text-muted-2">(скрыт)</span>}
           </button>
 
-          <button type="button" title="Выше" onClick={() => move(slot, block.id, -1)} disabled={index === 0}
-            className="text-muted hover:text-foreground disabled:opacity-30">
-            <ChevronUp size={11} />
-          </button>
-          <button type="button" title="Ниже" onClick={() => move(slot, block.id, 1)} disabled={index === total - 1}
-            className="text-muted hover:text-foreground disabled:opacity-30">
-            <ChevronDown size={11} />
-          </button>
           <button type="button" title={block.hidden ? "Показать" : "Скрыть"}
-            onClick={() => patch(slot, block.id, { hidden: !block.hidden })}
+            onClick={() => patch(block.id, { hidden: !block.hidden })}
             className="text-muted hover:text-foreground">
             {block.hidden ? <EyeOff size={11} /> : <Eye size={11} />}
           </button>
           <button type="button" title={block.locked ? "Разблокировать" : "Заблокировать"}
-            onClick={() => patch(slot, block.id, { locked: !block.locked })}
+            onClick={() => patch(block.id, { locked: !block.locked })}
             className="text-muted hover:text-foreground">
             {block.locked ? <Lock size={11} /> : <Unlock size={11} />}
           </button>
-          <button type="button" title="Дублировать" onClick={() => duplicate(slot, block.id)}
+          <button type="button" title="Сохранить как свой блок"
+            onClick={() => {
+              setSavingId(block.id);
+              setSnippetName(block.name || TYPE_LABEL[block.type]);
+            }}
+            className="text-muted hover:text-accent">
+            <Bookmark size={11} />
+          </button>
+          <button type="button" title="Дублировать" onClick={() => duplicate(block.id)}
             className="text-muted hover:text-foreground">
             <Copy size={11} />
           </button>
           {canContain(block.type) && (
             <button type="button" title="Добавить внутрь"
-              onClick={() => setAddingTo({ slot, parentId: block.id })}
+              onClick={() => setAddingTo({ slot: findSlotOf(blocks, block.id) ?? "top", parentId: block.id })}
               className="text-muted hover:text-accent">
               <CornerDownRight size={11} />
             </button>
           )}
           <button type="button" title={block.locked ? "Блок заблокирован" : "Удалить"}
-            onClick={() => remove(slot, block.id)} disabled={block.locked}
+            onClick={() => remove(block.id)} disabled={block.locked}
             className="text-muted hover:text-danger disabled:opacity-30">
             <Trash2 size={11} />
           </button>
         </div>
 
-        {block.children?.map((child, i) =>
-          renderRow(slot, child, depth + 1, i, block.children!.length)
+        {savingId === block.id && (
+          <div className="mb-1 ml-4 flex items-center gap-1 rounded border border-border bg-surface-2 p-1.5">
+            <input
+              value={snippetName}
+              onChange={(e) => setSnippetName(e.target.value)}
+              placeholder="Название блока"
+              className="min-w-0 flex-1 rounded border border-border bg-surface px-1.5 py-1 text-[10px] outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                onSaveSnippet(block.id, snippetName.trim() || TYPE_LABEL[block.type]);
+                setSavingId(null);
+              }}
+              className="rounded bg-accent px-1.5 py-1 text-[10px] font-semibold text-black"
+            >
+              Сохранить
+            </button>
+            <button type="button" onClick={() => setSavingId(null)} className="text-muted hover:text-foreground">
+              <X size={11} />
+            </button>
+          </div>
         )}
+
+        {block.children?.map((child) => renderRow(child, depth + 1))}
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
+      <p className="text-[10px] text-muted-2">
+        Блоки можно перетаскивать за <GripVertical size={9} className="inline" />: вверх или вниз строки — поставить
+        рядом, в середину контейнера — вложить внутрь.
+      </p>
+
       {SLOTS.map((slot) => {
         const list = blocks[slot.key] ?? [];
         return (
@@ -268,6 +308,37 @@ export default function BlocksPanel({ blocks, selectedId, onSelect, onChange, on
                     </button>
                   ))}
                 </div>
+
+                {snippets.length > 0 && (
+                  <>
+                    <p className="mb-1 mt-2 text-[10px] text-muted">Свои блоки:</p>
+                    <div className="space-y-1">
+                      {snippets.map((s) => (
+                        <div key={s.id} className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onInsertSnippet(s.id, slot.key, addingTo.parentId);
+                              setAddingTo(null);
+                            }}
+                            className="min-w-0 flex-1 truncate rounded border border-border px-1.5 py-1 text-left text-[10px] hover:border-accent hover:text-accent"
+                          >
+                            {s.name}
+                          </button>
+                          <button
+                            type="button"
+                            title="Удалить заготовку"
+                            onClick={() => onDeleteSnippet(s.id)}
+                            className="flex-shrink-0 text-muted hover:text-danger"
+                          >
+                            <Trash2 size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setAddingTo(null)}
@@ -278,11 +349,25 @@ export default function BlocksPanel({ blocks, selectedId, onSelect, onChange, on
               </div>
             )}
 
-            <div className="p-1">
+            <div
+              className="p-1"
+              onDragOver={(e) => {
+                // Пустая зона слота: разрешаем бросить в конец списка.
+                if (dragId && list.length === 0) e.preventDefault();
+              }}
+              onDrop={(e) => {
+                if (!dragId || list.length > 0) return;
+                e.preventDefault();
+                const extracted = extractBlock(blocks, dragId);
+                if (extracted.block) onChange(appendToSlot(extracted.state, slot.key, extracted.block));
+                setDragId(null);
+                setDropHint(null);
+              }}
+            >
               {list.length === 0 ? (
-                <p className="px-2 py-2 text-[10px] text-muted-2">Блоков нет.</p>
+                <p className="px-2 py-2 text-[10px] text-muted-2">Блоков нет. Можно перетащить сюда.</p>
               ) : (
-                list.map((block, i) => renderRow(slot.key, block, 0, i, list.length))
+                list.map((block) => renderRow(block, 0))
               )}
             </div>
           </div>

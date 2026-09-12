@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { useDesignText } from "@/components/design/DesignTextProvider";
 
 type Player = {
   id: string;
@@ -49,6 +50,11 @@ function splitProportionally<T>(items: { item: T; weight: number }[], total: num
 }
 
 export default function RbPurchaseCalculator({ players }: { players: Player[] }) {
+  const title = useDesignText("rbPurchase.title", "Расчёт покупки РБ");
+  const subtitle = useDesignText(
+    "rbPurchase.subtitle",
+    "Выберите участников и укажите объём купленного РБ опыта — он разделится между выбранными пропорционально их посещаемости Мини-РБ (с учётом индивидуального коэффициента, как в расчёте зарплаты). В списке только игроки с посещаемостью Мини-РБ от 20%."
+  );
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [xpAmount, setXpAmount] = useState("");
@@ -98,12 +104,8 @@ export default function RbPurchaseCalculator({ players }: { players: Player[] })
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Расчёт покупки РБ</h1>
-        <p className="text-sm text-muted">
-          Выберите участников и укажите объём купленного РБ опыта — он разделится между выбранными
-          пропорционально их посещаемости Мини-РБ (с учётом индивидуального коэффициента, как в расчёте зарплаты).
-          В списке только игроки с посещаемостью Мини-РБ от 20%.
-        </p>
+        <h1 className="text-lg font-semibold">{title}</h1>
+        <p className="text-sm text-muted">{subtitle}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

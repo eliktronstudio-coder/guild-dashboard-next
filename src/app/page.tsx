@@ -18,6 +18,7 @@ import {
 } from "@/lib/queries";
 import { findLabelMatch } from "@/lib/nameMatch";
 import { SCHEDULE } from "@/lib/schedule";
+import { designText } from "@/lib/design/resolve";
 
 function attendanceTone(pct: number) {
   if (pct <= 20) return "text-danger";
@@ -67,6 +68,15 @@ export default async function HomePage() {
     return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
   });
 
+  // Статические подписи: значения из кода остаются значением по умолчанию.
+  const [labelTotal, labelPrime, labelMiniRb, linkProfile, linkAll] = await Promise.all([
+    designText("home.statTotal", "Общая"),
+    designText("home.statPrime", "Прайм"),
+    designText("home.statMiniRb", "Мини-РБ"),
+    designText("home.linkProfile", "Профиль"),
+    designText("home.linkAll", "Все"),
+  ]);
+
   const isRandom = user?.role === "random";
 
   return (
@@ -79,7 +89,7 @@ export default async function HomePage() {
           right={
             player ? (
               <Link href="/profile" className="text-xs text-accent hover:underline">
-                Профиль
+                {linkProfile}
               </Link>
             ) : undefined
           }
@@ -99,9 +109,9 @@ export default async function HomePage() {
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { label: "Общая", value: player.attendancePct },
-                { label: "Прайм", value: player.attendancePctPrime },
-                { label: "Мини-РБ", value: player.attendancePctMiniRb },
+                { label: labelTotal, value: player.attendancePct },
+                { label: labelPrime, value: player.attendancePctPrime },
+                { label: labelMiniRb, value: player.attendancePctMiniRb },
               ].map((s) => (
                 <div key={s.label} data-design-el="home.myAttendanceStat" className="rounded-lg border border-border bg-surface-2 px-3 py-2.5">
                   <p className="text-[11px] text-muted">{s.label}</p>
@@ -150,7 +160,7 @@ export default async function HomePage() {
           textId="home.titleRecent"
           right={
             <Link href="/activities" className="text-xs text-accent hover:underline">
-              Все
+              {linkAll}
             </Link>
           }
         />
