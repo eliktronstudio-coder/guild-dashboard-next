@@ -231,3 +231,37 @@ test("до архивации удаление игрока увеличивае
     "доля оставшегося игрока должна вырасти"
   );
 });
+
+test("доля игрока ниже порога уходит остальным, а не пропадает", async () => {
+  const { getAllPlayers } = await import("../src/lib/queries");
+
+  const tx = await prisma.treasuryTransaction.create({
+    data: { description: "Порог", amount: 900 },
+  });
+  await prisma.dropItem.create({
+    data: { item: "Порог", quantity: 1, value: 900, status: "Продано", category: "Мини-РБ", treasuryTransactionId: tx.id },
+  });
+
+  // Двое ходят на все активности, третий — на одну из десяти (10% < 20%).
+  const [a, b, low] = await Promise.all([makePlayer("T1"), makePlayer("T2"), makePlayer("T3")]);
+  for (let i = 0; i < 10; i++) {
+    await prisma.activity.create({
+      data: {
+        name: `РБ ${i}`,
+        category: "Мини-РБ",
+        participants: { create: i === 0 ? [a, b, low].map((p) => ({ playerId: p.id })) : [a, b].map((p) => ({ playerId: p.id })) },
+      },
+    });
+  }
+
+  const players = await getAllPlayers();
+  const lowPlayer = players.find((p) => p.id === low.id)!;
+  assert.equal(lowPlayer.salaryMiniRb, 0, "игрок ниже порога не получает долю");
+
+  const sum = players.reduce((s, p) => s + p.salaryMiniRb, 0);
+  // Весь пул обязан быть роздан оставшимся двоим — ничего не оседает.
+  assert.ok(sum > 0, "пул должен быть распределён");
+  const { getTreasuryBreakdown } = await import("../src/lib/queries");
+  const br = await getTreasuryBreakdown();
+  assert.equal(sum, br.miniRb, "сумма долей обязана совпадать с казной Мини-РБ");
+});
