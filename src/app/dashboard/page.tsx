@@ -12,6 +12,7 @@ import GuildRankRow from "@/components/dashboard/GuildRankRow";
 import ActivityRow from "@/components/dashboard/ActivityRow";
 import SchedulePanel from "@/components/dashboard/SchedulePanel";
 import CustomizableGrid from "@/components/dashboard/CustomizableGrid";
+import DesignLayout from "@/components/design/DesignLayout";
 import BlurGate from "@/components/BlurGate";
 import { daysUntilNextPayout } from "@/lib/payout";
 import { getCurrentUser } from "@/lib/auth";
@@ -98,257 +99,266 @@ export default async function DashboardPage() {
   const payoutDays = daysUntilNextPayout();
   const isRandom = user?.role === "random";
 
+  // Две секции: блок показателей с баннером и настраиваемая сетка панелей.
+  // Внутренний порядок панелей в сетке пользователь меняет сам на странице.
+  const sections: Record<string, React.ReactNode> = {
+    "dashboard.kpi": (
+          <div className="relative lg:pt-60">
+            <DashboardHero />
+
+            <div
+              data-design-el="dashboard.kpiGrid"
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
+            >
+              <StatCard
+                variant="dashboard"
+                label="Казна с Прайма"
+                art={art.prime}
+                value={`${numberFmt.format(treasuryBreakdown.prime)} золота`}
+                hint="70% — фонд ЗП"
+                icon={Coins}
+                tone="accent"
+                strong
+                goldValue
+              />
+              <StatCard
+                variant="dashboard"
+                label="Казна мини-РБ"
+                art={art.miniRb}
+                value={`${numberFmt.format(treasuryBreakdown.miniRb)} золота`}
+                hint="100% — фонд ЗП"
+                icon={Landmark}
+                tone="ember"
+                goldValue
+              />
+              <StatCard
+                variant="dashboard"
+                label="Казна гильдии"
+                art={art.guild}
+                value={`${numberFmt.format(treasuryBreakdown.guild)} золота`}
+                hint="30% — резерв гильдии"
+                icon={Archive}
+                tone="violet"
+                goldValue
+              />
+              <StatCard
+                variant="dashboard"
+                label="Дроп с Мини-РБ / Дроп с Прайм"
+                art={art.drop}
+                value={`${numberFmt.format(dropGoldMiniRb)} / ${numberFmt.format(dropGoldPrimeManual)} золота`}
+                hint="склад ХД / ручной дроп"
+                icon={Swords}
+                tone="red"
+                goldValue
+                href="/treasury"
+              />
+              <StatCard
+                variant="dashboard"
+                label="Дроп общего инвентаря"
+                art={art.dropGeneral}
+                value={`${numberFmt.format(dropGoldGeneralAuto)} золота`}
+                hint="эквивалент в золоте"
+                icon={Swords}
+                tone="red"
+                strong
+                goldValue
+                href="/treasury"
+              />
+              <StatCard
+                variant="dashboard"
+                label="Ср. посещаемость"
+                art={art.attendance}
+                value={avgAttendance30d > 0 ? `${avgAttendance30d} чел.` : "—"}
+                hint="за последние 30 дней"
+                icon={Zap}
+                tone="info"
+              />
+              <StatCard
+                variant="dashboard"
+                label="Дней до выплаты"
+                art={art.payout}
+                value={`${payoutDays}`}
+                hint="выплата 15-го числа"
+                icon={CalendarClock}
+                tone="accent-dim"
+              />
+            </div>
+          </div>
+    ),
+
+    "dashboard.panels": (
+          <CustomizableGrid
+            panels={[
+              {
+                id: "treasury-chart",
+                label: "Динамика казны",
+                defaultSpan: 4,
+                content: (
+                  <DashboardPanel className="min-w-0">
+                    <SectionHeader title="Динамика казны" right={<span className="text-xs text-muted">золото</span>} />
+                    <div className="min-h-[255px] max-h-[320px]">
+                      {treasuryChart.length === 0 ? (
+                        <EmptyState variant="dashboard" />
+                      ) : (
+                        <TreasuryChart data={treasuryChart} />
+                      )}
+                    </div>
+                  </DashboardPanel>
+                ),
+              },
+              {
+                id: "attendance-chart",
+                label: "Посещаемость",
+                defaultSpan: 4,
+                content: (
+                  <DashboardPanel className="min-w-0">
+                    <SectionHeader title="Посещаемость" right={<span className="text-xs text-muted">участия / день</span>} />
+                    <div className="min-h-[255px] max-h-[320px]">
+                      {attendanceChart.length === 0 ? (
+                        <EmptyState variant="dashboard" />
+                      ) : (
+                        <AttendanceChart data={attendanceChart} />
+                      )}
+                    </div>
+                  </DashboardPanel>
+                ),
+              },
+              {
+                id: "schedule",
+                label: "До активностей",
+                defaultSpan: 4,
+                content: (
+                  <DashboardPanel className="min-w-0">
+                    <SectionHeader
+                      title="До активностей"
+                      right={<span className="text-xs text-muted">по МСК</span>}
+                    />
+                    <SchedulePanel banners={scheduleBanners} />
+                  </DashboardPanel>
+                ),
+              },
+              {
+                id: "leaders-prime",
+                label: "Посещаемость: Прайм",
+                defaultSpan: 4,
+                content: (
+                  <DashboardPanel art={art.leadersPrime}>
+                    <SectionHeader
+                      title="Посещаемость: Прайм"
+                      right={
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-muted">за всё время</span>
+                          <Link href="/players" className="text-xs text-accent hover:underline">
+                            Состав
+                          </Link>
+                        </div>
+                      }
+                    />
+                    {primeTop.length === 0 ? (
+                      <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                    ) : (
+                      <div className="space-y-[5px]">
+                        {primeTop.map((p, i) => (
+                          <GuildRankRow
+                            key={p.id}
+                            href={`/players/${p.id}`}
+                            rank={i + 1}
+                            name={p.name}
+                            role={p.role}
+                            valueLabel={`${p.attendancePctPrime}%`}
+                            valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </DashboardPanel>
+                ),
+              },
+              {
+                id: "leaders-minirb",
+                label: "Посещаемость: Мини-РБ",
+                defaultSpan: 4,
+                content: (
+                  <DashboardPanel art={art.leadersMiniRb}>
+                    <SectionHeader
+                      title="Посещаемость: Мини-РБ"
+                      right={
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-muted">за всё время</span>
+                          <Link href="/players" className="text-xs text-accent hover:underline">
+                            Состав
+                          </Link>
+                        </div>
+                      }
+                    />
+                    {miniRbTop.length === 0 ? (
+                      <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                    ) : (
+                      <div className="space-y-[5px]">
+                        {miniRbTop.map((p, i) => (
+                          <GuildRankRow
+                            key={p.id}
+                            href={`/players/${p.id}`}
+                            rank={i + 1}
+                            name={p.name}
+                            role={p.role}
+                            valueLabel={`${p.attendancePctMiniRb}%`}
+                            valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </DashboardPanel>
+                ),
+              },
+              {
+                id: "recent-activities",
+                label: "Последние активности",
+                defaultSpan: 4,
+                content: (
+                  <DashboardPanel>
+                    <SectionHeader
+                      title="Последние активности"
+                      right={
+                        <Link href="/activities" className="text-xs text-accent hover:underline">
+                          Все
+                        </Link>
+                      }
+                    />
+                    {recentActivities.length === 0 ? (
+                      <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                    ) : (
+                      <div className="space-y-[5px]">
+                        {recentActivities.map((a) => (
+                          <ActivityRow
+                            key={a.id}
+                            href={`/activities/${a.id}`}
+                            name={a.name}
+                            participants={a.participants}
+                            status={a.status}
+                            date={a.date}
+                            bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
+                            bannerIsVideo={a.bannerIsVideo}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </DashboardPanel>
+                ),
+              },
+            ]}
+          />
+    ),
+  };
+
   return (
     <BlurGate blurred={isRandom}>
-    <div data-design-el="dashboard.root" className="space-y-4">
-      {/* Отступ на две высоты карточки открывает баннер, который иначе почти
-          целиком закрыт KPI-блоком. Это padding обёртки, а не margin сетки:
-          margin схлопнулся бы через обёртку и утащил баннер вниз вместе с
-          карточками. На узких экранах не нужен — карточки идут в одну колонку. */}
-      <div className="relative lg:pt-60">
-        <DashboardHero />
-
-        <div
-          data-design-el="dashboard.kpiGrid"
-          className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
-        >
-          <StatCard
-            variant="dashboard"
-            label="Казна с Прайма"
-            art={art.prime}
-            value={`${numberFmt.format(treasuryBreakdown.prime)} золота`}
-            hint="70% — фонд ЗП"
-            icon={Coins}
-            tone="accent"
-            strong
-            goldValue
-          />
-          <StatCard
-            variant="dashboard"
-            label="Казна мини-РБ"
-            art={art.miniRb}
-            value={`${numberFmt.format(treasuryBreakdown.miniRb)} золота`}
-            hint="100% — фонд ЗП"
-            icon={Landmark}
-            tone="ember"
-            goldValue
-          />
-          <StatCard
-            variant="dashboard"
-            label="Казна гильдии"
-            art={art.guild}
-            value={`${numberFmt.format(treasuryBreakdown.guild)} золота`}
-            hint="30% — резерв гильдии"
-            icon={Archive}
-            tone="violet"
-            goldValue
-          />
-          <StatCard
-            variant="dashboard"
-            label="Дроп с Мини-РБ / Дроп с Прайм"
-            art={art.drop}
-            value={`${numberFmt.format(dropGoldMiniRb)} / ${numberFmt.format(dropGoldPrimeManual)} золота`}
-            hint="склад ХД / ручной дроп"
-            icon={Swords}
-            tone="red"
-            goldValue
-            href="/treasury"
-          />
-          <StatCard
-            variant="dashboard"
-            label="Дроп общего инвентаря"
-            art={art.dropGeneral}
-            value={`${numberFmt.format(dropGoldGeneralAuto)} золота`}
-            hint="эквивалент в золоте"
-            icon={Swords}
-            tone="red"
-            strong
-            goldValue
-            href="/treasury"
-          />
-          <StatCard
-            variant="dashboard"
-            label="Ср. посещаемость"
-            art={art.attendance}
-            value={avgAttendance30d > 0 ? `${avgAttendance30d} чел.` : "—"}
-            hint="за последние 30 дней"
-            icon={Zap}
-            tone="info"
-          />
-          <StatCard
-            variant="dashboard"
-            label="Дней до выплаты"
-            art={art.payout}
-            value={`${payoutDays}`}
-            hint="выплата 15-го числа"
-            icon={CalendarClock}
-            tone="accent-dim"
-          />
-        </div>
-      </div>
-
-      <CustomizableGrid
-        panels={[
-          {
-            id: "treasury-chart",
-            label: "Динамика казны",
-            defaultSpan: 4,
-            content: (
-              <DashboardPanel className="min-w-0">
-                <SectionHeader title="Динамика казны" right={<span className="text-xs text-muted">золото</span>} />
-                <div className="min-h-[255px] max-h-[320px]">
-                  {treasuryChart.length === 0 ? (
-                    <EmptyState variant="dashboard" />
-                  ) : (
-                    <TreasuryChart data={treasuryChart} />
-                  )}
-                </div>
-              </DashboardPanel>
-            ),
-          },
-          {
-            id: "attendance-chart",
-            label: "Посещаемость",
-            defaultSpan: 4,
-            content: (
-              <DashboardPanel className="min-w-0">
-                <SectionHeader title="Посещаемость" right={<span className="text-xs text-muted">участия / день</span>} />
-                <div className="min-h-[255px] max-h-[320px]">
-                  {attendanceChart.length === 0 ? (
-                    <EmptyState variant="dashboard" />
-                  ) : (
-                    <AttendanceChart data={attendanceChart} />
-                  )}
-                </div>
-              </DashboardPanel>
-            ),
-          },
-          {
-            id: "schedule",
-            label: "До активностей",
-            defaultSpan: 4,
-            content: (
-              <DashboardPanel className="min-w-0">
-                <SectionHeader
-                  title="До активностей"
-                  right={<span className="text-xs text-muted">по МСК</span>}
-                />
-                <SchedulePanel banners={scheduleBanners} />
-              </DashboardPanel>
-            ),
-          },
-          {
-            id: "leaders-prime",
-            label: "Посещаемость: Прайм",
-            defaultSpan: 4,
-            content: (
-              <DashboardPanel art={art.leadersPrime}>
-                <SectionHeader
-                  title="Посещаемость: Прайм"
-                  right={
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted">за всё время</span>
-                      <Link href="/players" className="text-xs text-accent hover:underline">
-                        Состав
-                      </Link>
-                    </div>
-                  }
-                />
-                {primeTop.length === 0 ? (
-                  <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-                ) : (
-                  <div className="space-y-[5px]">
-                    {primeTop.map((p, i) => (
-                      <GuildRankRow
-                        key={p.id}
-                        href={`/players/${p.id}`}
-                        rank={i + 1}
-                        name={p.name}
-                        role={p.role}
-                        valueLabel={`${p.attendancePctPrime}%`}
-                        valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
-                      />
-                    ))}
-                  </div>
-                )}
-              </DashboardPanel>
-            ),
-          },
-          {
-            id: "leaders-minirb",
-            label: "Посещаемость: Мини-РБ",
-            defaultSpan: 4,
-            content: (
-              <DashboardPanel art={art.leadersMiniRb}>
-                <SectionHeader
-                  title="Посещаемость: Мини-РБ"
-                  right={
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-muted">за всё время</span>
-                      <Link href="/players" className="text-xs text-accent hover:underline">
-                        Состав
-                      </Link>
-                    </div>
-                  }
-                />
-                {miniRbTop.length === 0 ? (
-                  <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-                ) : (
-                  <div className="space-y-[5px]">
-                    {miniRbTop.map((p, i) => (
-                      <GuildRankRow
-                        key={p.id}
-                        href={`/players/${p.id}`}
-                        rank={i + 1}
-                        name={p.name}
-                        role={p.role}
-                        valueLabel={`${p.attendancePctMiniRb}%`}
-                        valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
-                      />
-                    ))}
-                  </div>
-                )}
-              </DashboardPanel>
-            ),
-          },
-          {
-            id: "recent-activities",
-            label: "Последние активности",
-            defaultSpan: 4,
-            content: (
-              <DashboardPanel>
-                <SectionHeader
-                  title="Последние активности"
-                  right={
-                    <Link href="/activities" className="text-xs text-accent hover:underline">
-                      Все
-                    </Link>
-                  }
-                />
-                {recentActivities.length === 0 ? (
-                  <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-                ) : (
-                  <div className="space-y-[5px]">
-                    {recentActivities.map((a) => (
-                      <ActivityRow
-                        key={a.id}
-                        href={`/activities/${a.id}`}
-                        name={a.name}
-                        participants={a.participants}
-                        status={a.status}
-                        date={a.date}
-                        bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
-                        bannerIsVideo={a.bannerIsVideo}
-                      />
-                    ))}
-                  </div>
-                )}
-              </DashboardPanel>
-            ),
-          },
-        ]}
+      <DesignLayout
+        pageKey="dashboard"
+        designId="dashboard.root"
+        sections={sections}
+        className="space-y-4"
       />
-    </div>
     </BlurGate>
   );
 }

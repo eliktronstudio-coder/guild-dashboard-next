@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { designText } from "@/lib/design/resolve";
+import DesignLayout from "@/components/design/DesignLayout";
 import GearRankCalculator from "@/components/GearRankCalculator";
 
 function SourceLink({ href, children }: { href: string; children: React.ReactNode }) {
@@ -27,15 +28,19 @@ export default async function ArcheAgePage() {
     designText("archeage.subtitle", "Полезные инструменты и справочная информация по игре."),
   ]);
 
-  return (
-    <div className="space-y-4">
+  // Секции идут в DesignLayout: порядок и видимость задаёт конфиг, сами
+  // блоки остаются обычной разметкой.
+  const sections: Record<string, React.ReactNode> = {
+    "archeage.heading": (
       <div>
         <h1 className="text-lg font-semibold">{title}</h1>
         <p className="text-sm text-muted">{subtitle}</p>
       </div>
+    ),
 
-      <GearRankCalculator />
+    "archeage.gear": <GearRankCalculator />,
 
+    "archeage.packs": (
       <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold">Паки — калькулятор dllib.ru (Dead Legion)</h2>
         <p className="text-sm text-muted-2">
@@ -55,7 +60,9 @@ export default async function ArcheAgePage() {
           копировать сюда — тут она мгновенно устареет.
         </p>
       </div>
+    ),
 
+    "archeage.craft": (
       <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold">Крафт торговых паков — общая механика</h2>
         <p className="text-sm text-muted-2">
@@ -97,7 +104,9 @@ export default async function ArcheAgePage() {
           </SourceLink>
         </p>
       </div>
+    ),
 
+    "archeage.routes": (
       <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
         <h2 className="text-sm font-semibold">Куда сдавать паки и брать ресурсы</h2>
         <p className="text-sm text-muted-2">
@@ -115,11 +124,15 @@ export default async function ArcheAgePage() {
           <SourceLink href="https://www.ayinmaiden.com/archeage/tradesystem">AyinMaiden — Trade System</SourceLink>
         </p>
       </div>
+    ),
 
+    "archeage.note": (
       <p className="text-xs text-muted">
         Раздел можно дополнить — пришлите конкретные данные вашего сервера (скрины фолио, точные рецепты, цены), и
         я оформлю их отдельной таблицей вместо общих описаний выше.
       </p>
-    </div>
-  );
+    ),
+  };
+
+  return <DesignLayout pageKey="archeage" sections={sections} className="space-y-4" />;
 }

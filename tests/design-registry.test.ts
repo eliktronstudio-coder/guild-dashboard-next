@@ -38,6 +38,34 @@ test("каждый атрибутный элемент размечен в ра�
   assert.deepEqual(missing, [], `элементы объявлены, но не использованы в коде: ${missing.join(", ")}`);
 });
 
+test("каждая объявленная секция подключена к раскладке", () => {
+  const sections = PAGES.flatMap((p) => (p.sections ?? []).map((s) => ({ page: p.key, id: s.id })));
+  assert.ok(sections.length > 0, "секции должны быть объявлены");
+
+  // Секция попадает в рендер как ключ карты sections у DesignLayout.
+  // Объявленная, но не подключённая секция — это настройка без эффекта.
+  const missing = sections.filter((s) => !grepSources(`"${s.id}":`)).map((s) => `${s.page}/${s.id}`);
+  assert.deepEqual(missing, [], `секции объявлены, но не подключены: ${missing.join(", ")}`);
+});
+
+test("каждая объявленная часть секции подключена", () => {
+  const parts = PAGES.flatMap((p) =>
+    (p.sections ?? []).flatMap((s) => (s.parts ?? []).map((part) => ({ section: s.id, id: part.id })))
+  );
+  if (parts.length === 0) return;
+
+  // Часть подключается ключом в карте parts у DesignParts. Ключи короткие
+  // ("title", "list"), поэтому дополнительно требуем, чтобы сама секция
+  // передавалась в DesignParts — иначе проверка была бы бессмысленной.
+  const sectionsWithParts = [...new Set(parts.map((p) => p.section))];
+  const missingSections = sectionsWithParts.filter((id) => !grepSources(`sectionId="${id}"`));
+  assert.deepEqual(
+    missingSections,
+    [],
+    `у секций объявлены части, но DesignParts не подключён: ${missingSections.join(", ")}`
+  );
+});
+
 test("селектор элемента строится только из безопасных символов", () => {
   for (const el of [...SHARED_ELEMENTS, ...PAGES.flatMap((p) => p.elements)]) {
     const selector = selectorForElement(el.id);

@@ -292,7 +292,10 @@ export const PAGES: PageDef[] = [
     sections: [
       { id: "archeage.heading", label: "Заголовок страницы" },
       { id: "archeage.gear", label: "Калькулятор ранга экипировки" },
-      { id: "archeage.packs", label: "Блок про калькулятор паков" },
+      { id: "archeage.packs", label: "Калькулятор паков (dllib)" },
+      { id: "archeage.craft", label: "Крафт паков — механика" },
+      { id: "archeage.routes", label: "Куда сдавать паки" },
+      { id: "archeage.note", label: "Примечание внизу" },
     ],
     elements: [],
     texts: [
