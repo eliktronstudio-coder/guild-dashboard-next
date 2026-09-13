@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { resolveDesign } from "@/lib/design/resolve";
 import { sectionsFor } from "@/lib/design/registry";
 import { reconcileLayout, type Breakpoint, type DesignBlock, type SlotKey } from "@/lib/design/types";
@@ -67,14 +67,15 @@ export default async function DesignLayout({
           const hide = hiddenClasses(entry.hiddenOn);
           // Обёртка нужна только когда секцию скрывают по устройствам:
           // иначе лишний div сломал бы сетку страницы.
+          // Обёртка только для скрытия по устройствам: display:contents
+          // оставляет секцию прямым участником сетки, а display:none её
+          // убирает. Без скрытия обёртка не нужна вовсе.
           return hide ? (
             <div key={entry.id} className={clsx("contents", hide)}>
               {node}
             </div>
           ) : (
-            <div key={entry.id} className="contents">
-              {node}
-            </div>
+            <Fragment key={entry.id}>{node}</Fragment>
           );
         }
 

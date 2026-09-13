@@ -8,7 +8,7 @@ import {
   getPublishedCss,
 } from "./store";
 import { isKnownPageKey, pageKeyForPathname, SHARED_KEY } from "./registry";
-import type { DesignBlock, LayoutEntry, SlotKey } from "./types";
+import type { DesignBlock, LayoutEntry, PartEntry, SlotKey } from "./types";
 
 export const PREVIEW_PARAM = "__design_preview";
 export const PREVIEW_SHARED_PARAM = "__design_shared_draft";
@@ -19,6 +19,7 @@ export type ResolvedDesign = {
   texts: Record<string, string>;
   blocks: Partial<Record<SlotKey, DesignBlock[]>>;
   layout: LayoutEntry[];
+  parts: Record<string, PartEntry[]>;
   isPreview: boolean;
 };
 
@@ -58,6 +59,7 @@ export const resolveDesign = cache(async (): Promise<ResolvedDesign> => {
         texts: content.texts,
         blocks: content.blocks,
         layout: content.layout,
+        parts: content.parts,
         isPreview: true,
       };
     }
@@ -70,6 +72,7 @@ export const resolveDesign = cache(async (): Promise<ResolvedDesign> => {
     texts: content.texts,
     blocks: content.blocks,
     layout: content.layout,
+    parts: content.parts,
     isPreview: false,
   };
 });

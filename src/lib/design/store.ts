@@ -8,6 +8,7 @@ import {
   type DesignBlock,
   type LayoutEntry,
   type PageConfig,
+  type PartEntry,
   type SlotKey,
 } from "./types";
 
@@ -251,6 +252,7 @@ export async function getPublishedContent(pageKey: string | null): Promise<{
   texts: Record<string, string>;
   blocks: Partial<Record<SlotKey, DesignBlock[]>>;
   layout: LayoutEntry[];
+  parts: Record<string, PartEntry[]>;
 }> {
   const keys = pageKey ? [SHARED_KEY, pageKey] : [SHARED_KEY];
   const rows = await prisma.pageDesign.findMany({
@@ -261,6 +263,7 @@ export async function getPublishedContent(pageKey: string | null): Promise<{
   const texts: Record<string, string> = {};
   let blocks: Partial<Record<SlotKey, DesignBlock[]>> = {};
   let layout: LayoutEntry[] = [];
+  let parts: Record<string, PartEntry[]> = {};
   for (const key of keys) {
     const row = rows.find((r) => r.pageKey === key);
     if (!row) continue;
@@ -269,9 +272,10 @@ export async function getPublishedContent(pageKey: string | null): Promise<{
     if (key !== SHARED_KEY) {
       blocks = config.blocks ?? {};
       layout = config.layout ?? [];
+      parts = config.parts ?? {};
     }
   }
-  return { texts, blocks, layout };
+  return { texts, blocks, layout, parts };
 }
 
 /** То же для предпросмотра черновика. */
@@ -282,6 +286,7 @@ export async function getDraftContent(
   texts: Record<string, string>;
   blocks: Partial<Record<SlotKey, DesignBlock[]>>;
   layout: LayoutEntry[];
+  parts: Record<string, PartEntry[]>;
 }> {
   const sharedRow = await prisma.pageDesign.findUnique({ where: { pageKey: SHARED_KEY } });
   const sharedJson = includeSharedDraft ? sharedRow?.draftJson : sharedRow?.publishedJson;
@@ -289,13 +294,18 @@ export async function getDraftContent(
     ? { ...(parseConfig(sharedJson, SHARED_KEY).texts ?? {}) }
     : {};
 
-  if (pageKey === SHARED_KEY) return { texts, blocks: {}, layout: [] };
+  if (pageKey === SHARED_KEY) return { texts, blocks: {}, layout: [], parts: {} };
 
   const row = await prisma.pageDesign.findUnique({ where: { pageKey } });
-  if (!row) return { texts, blocks: {}, layout: [] };
+  if (!row) return { texts, blocks: {}, layout: [], parts: {} };
   const config = parseConfig(row.draftJson, pageKey);
   Object.assign(texts, config.texts ?? {});
-  return { texts, blocks: config.blocks ?? {}, layout: config.layout ?? [] };
+  return {
+    texts,
+    blocks: config.blocks ?? {},
+    layout: config.layout ?? [],
+    parts: config.parts ?? {},
+  };
 }
 
 /** CSS черновика — только для предпросмотра в админке. */

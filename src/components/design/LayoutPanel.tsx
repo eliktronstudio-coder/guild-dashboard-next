@@ -1,10 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { GripVertical, Eye, EyeOff, Layers, Boxes } from "lucide-react";
+import { GripVertical, Eye, EyeOff, Layers, Boxes, ArrowUp, ArrowDown } from "lucide-react";
 import clsx from "clsx";
 import type { SectionDef } from "@/lib/design/registry";
-import { BREAKPOINTS, type Breakpoint, type DesignBlock, type LayoutEntry } from "@/lib/design/types";
+import {
+  BREAKPOINTS,
+  reconcileParts,
+  type Breakpoint,
+  type DesignBlock,
+  type LayoutEntry,
+  type PartEntry,
+} from "@/lib/design/types";
 
 /**
  * Раскладка страницы: единый список рукописных секций и добавленных блоков.
@@ -21,6 +28,8 @@ export default function LayoutPanel({
   selectedId,
   onSelect,
   onChange,
+  parts,
+  onPartsChange,
 }: {
   layout: LayoutEntry[];
   sections: SectionDef[];
@@ -29,6 +38,9 @@ export default function LayoutPanel({
   selectedId: string | null;
   onSelect: (elementId: string) => void;
   onChange: (next: LayoutEntry[]) => void;
+  /** Порядок частей по секциям. */
+  parts: Record<string, PartEntry[]>;
+  onPartsChange: (sectionId: string, next: PartEntry[]) => void;
 }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -159,6 +171,17 @@ export default function LayoutPanel({
                 )}
               </div>
 
+              {/* Части секции: вложенный уровень раскладки. Показываем их у
+                  выбранной секции, чтобы список не распухал. */}
+              {isSection && selectedId === elementId && def?.parts && def.parts.length > 0 && (
+                <PartsList
+                  sectionId={entry.id}
+                  partDefs={def.parts}
+                  entries={reconcileParts(parts[entry.id], def.parts.map((x) => x.id))}
+                  onChange={(next) => onPartsChange(entry.id, next)}
+                />
+              )}
+
               {/* Скрытие секции по устройствам — под строкой, чтобы не
                   распухала основная. */}
               {isSection && selectedId === elementId && (
@@ -210,5 +233,113 @@ function SectionNotes({ sections }: { sections: SectionDef[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * Части внутри секции: порядок и видимость. Перетаскивание тут не нужно —
+ * частей мало, стрелки надёжнее и понятнее.
+ */
+function PartsList({
+  sectionId,
+  partDefs,
+  entries,
+  onChange,
+}: {
+  sectionId: string;
+  partDefs: { id: string; label: string }[];
+  entries: PartEntry[];
+  onChange: (next: PartEntry[]) => void;
+}) {
+  const labelById = new Map(partDefs.map((p) => [p.id, p.label]));
+
+  function move(index: number, delta: number) {
+    const target = index + delta;
+    if (target < 0 || target >= entries.length) return;
+    const next = [...entries];
+    [next[index], next[target]] = [next[target], next[index]];
+    onChange(next);
+  }
+
+  function patch(index: number, changes: Partial<PartEntry>) {
+    const next = [...entries];
+    next[index] = { ...next[index], ...changes };
+    onChange(next);
+  }
+
+  return (
+    <div className="mb-1 ml-6 space-y-1 rounded border border-border bg-surface-2 p-1.5">
+      <p className="text-[10px] text-muted">Части панели:</p>
+      {entries.map((entry, index) => (
+        <div key={`${sectionId}:${entry.id}`} className="flex items-center gap-1">
+          <span
+            className={clsx(
+              "min-w-0 flex-1 truncate text-[10px]",
+              entry.hidden ? "text-muted-2 line-through" : "text-foreground/80"
+            )}
+          >
+            {labelById.get(entry.id) ?? entry.id}
+          </span>
+          <button
+            type="button"
+            title="Выше"
+            onClick={() => move(index, -1)}
+            disabled={index === 0}
+            className="text-muted hover:text-foreground disabled:opacity-30"
+          >
+            <ArrowUp size={10} />
+          </button>
+          <button
+            type="button"
+            title="Ниже"
+            onClick={() => move(index, 1)}
+            disabled={index === entries.length - 1}
+            className="text-muted hover:text-foreground disabled:opacity-30"
+          >
+            <ArrowDown size={10} />
+          </button>
+          <button
+            type="button"
+            title={entry.hidden ? "Показать часть" : "Скрыть часть"}
+            onClick={() => patch(index, { hidden: !entry.hidden })}
+            className="text-muted hover:text-foreground"
+          >
+            {entry.hidden ? <EyeOff size={10} /> : <Eye size={10} />}
+          </button>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-1">
+        {entries.map((entry, index) => (
+          <details key={`cfg-${entry.id}`} className="w-full">
+            <summary className="cursor-pointer text-[10px] text-muted-2">
+              {labelById.get(entry.id) ?? entry.id}: устройства
+            </summary>
+            <div className="flex flex-wrap gap-1 pl-2 pt-1">
+              {BREAKPOINTS.map((bp) => {
+                const on = (entry.hiddenOn ?? []).includes(bp.key);
+                return (
+                  <button
+                    key={bp.key}
+                    type="button"
+                    onClick={() => {
+                      const set = new Set<Breakpoint>(entry.hiddenOn ?? []);
+                      if (on) set.delete(bp.key);
+                      else set.add(bp.key);
+                      patch(index, { hiddenOn: set.size > 0 ? [...set] : undefined });
+                    }}
+                    className={clsx(
+                      "rounded border px-1.5 py-0.5 text-[10px]",
+                      on ? "border-danger text-danger" : "border-border text-muted hover:text-foreground"
+                    )}
+                  >
+                    {bp.label}
+                  </button>
+                );
+              })}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
   );
 }

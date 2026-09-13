@@ -60,6 +60,7 @@ import {
   type DesignBlock,
   type LayoutEntry,
   type PageConfig,
+  type PartEntry,
   type SlotKey,
   type StateKey,
   type ThemeMode,
@@ -339,6 +340,11 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
   function setLayout(next: LayoutEntry[]) {
     if (!state) return;
     mutate({ ...state.draft, layout: next });
+  }
+
+  function setParts(sectionId: string, next: PartEntry[]) {
+    if (!state) return;
+    mutate({ ...state.draft, parts: { ...(state.draft.parts ?? {}), [sectionId]: next } });
   }
 
   function setBlocks(next: BlocksState) {
@@ -908,6 +914,8 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
                   selectedId={selectedId}
                   onSelect={setSelectedId}
                   onChange={setLayout}
+                  parts={state.draft.parts ?? {}}
+                  onPartsChange={setParts}
                 />
               </div>
             )}

@@ -20,6 +20,7 @@ import { findLabelMatch } from "@/lib/nameMatch";
 import { SCHEDULE } from "@/lib/schedule";
 import { designText } from "@/lib/design/resolve";
 import DesignLayout from "@/components/design/DesignLayout";
+import DesignParts from "@/components/design/DesignParts";
 
 function attendanceTone(pct: number) {
   if (pct <= 20) return "text-danger";
@@ -80,54 +81,69 @@ export default async function HomePage() {
 
   const isRandom = user?.role === "random";
 
-  // Секции передаются в DesignLayout: порядок, видимость и вставку своих
-  // блоков между ними задаёт конфиг, а сами панели остаются обычными
-  // компонентами со своими запросами к базе.
+  // Секции передаются в DesignLayout, их внутренние части — в DesignParts.
+  // Порядок, видимость и вставку своих блоков задаёт конфиг; сами панели и
+  // части остаются обычными компонентами со своими запросами к базе.
   const sections: Record<string, React.ReactNode> = {
     "home.myAttendance": (
       <DashboardPanel designId="home.myAttendance" className="min-w-0">
-        <SectionHeader
-          title="Моя посещаемость"
-          textId="home.titleMyAttendance"
-          right={
-            player ? (
-              <Link href="/profile" className="text-xs text-accent hover:underline">
-                {linkProfile}
-              </Link>
-            ) : undefined
-          }
-        />
         {!player ? (
-          <PersonalPlaceholder user={user} />
+          <>
+            <SectionHeader title="Моя посещаемость" textId="home.titleMyAttendance" />
+            <PersonalPlaceholder user={user} />
+          </>
         ) : (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-accent-soft text-base font-semibold text-accent-bright">
-                {player.name.charAt(0).toUpperCase()}
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground">{player.name}</p>
-                <p className="truncate text-xs text-muted">{player.role}</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: labelTotal, value: player.attendancePct },
-                { label: labelPrime, value: player.attendancePctPrime },
-                { label: labelMiniRb, value: player.attendancePctMiniRb },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  data-design-el="home.myAttendanceStat"
-                  className="rounded-lg border border-border bg-surface-2 px-3 py-2.5"
-                >
-                  <p className="text-[11px] text-muted">{s.label}</p>
-                  <BlurValue blurred={isRandom}>
-                    <p className={clsx("font-mono text-xl font-semibold", attendanceTone(s.value))}>{s.value}%</p>
-                  </BlurValue>
-                </div>
-              ))}
-            </div>
+          <div className="flex flex-col gap-3">
+            <DesignParts
+              pageKey="home"
+              sectionId="home.myAttendance"
+              parts={{
+                title: (
+                  <SectionHeader
+                    title="Моя посещаемость"
+                    textId="home.titleMyAttendance"
+                    right={
+                      <Link href="/profile" className="text-xs text-accent hover:underline">
+                        {linkProfile}
+                      </Link>
+                    }
+                  />
+                ),
+                player: (
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-accent-soft text-base font-semibold text-accent-bright">
+                      {player.name.charAt(0).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">{player.name}</p>
+                      <p className="truncate text-xs text-muted">{player.role}</p>
+                    </div>
+                  </div>
+                ),
+                stats: (
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { label: labelTotal, value: player.attendancePct },
+                      { label: labelPrime, value: player.attendancePctPrime },
+                      { label: labelMiniRb, value: player.attendancePctMiniRb },
+                    ].map((s) => (
+                      <div
+                        key={s.label}
+                        data-design-el="home.myAttendanceStat"
+                        className="rounded-lg border border-border bg-surface-2 px-3 py-2.5"
+                      >
+                        <p className="text-[11px] text-muted">{s.label}</p>
+                        <BlurValue blurred={isRandom}>
+                          <p className={clsx("font-mono text-xl font-semibold", attendanceTone(s.value))}>
+                            {s.value}%
+                          </p>
+                        </BlurValue>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              }}
+            />
           </div>
         )}
       </DashboardPanel>
@@ -135,143 +151,191 @@ export default async function HomePage() {
 
     "home.myChart": (
       <DashboardPanel designId="home.myChart" className="min-w-0">
-        <SectionHeader
-          title="Мой график посещаемости"
-          textId="home.titleMyChart"
-          right={<span className="text-xs text-muted">за 30 дней</span>}
-        />
         {!player ? (
-          <PersonalPlaceholder user={user} />
+          <>
+            <SectionHeader title="Мой график посещаемости" textId="home.titleMyChart" />
+            <PersonalPlaceholder user={user} />
+          </>
         ) : (
-          <div className="min-h-[220px]">
-            <BlurValue blurred={isRandom}>
-              <DailyAttendanceChart data={dailyAttendance} />
-            </BlurValue>
-          </div>
+          <DesignParts
+            pageKey="home"
+            sectionId="home.myChart"
+            parts={{
+              title: (
+                <SectionHeader
+                  title="Мой график посещаемости"
+                  textId="home.titleMyChart"
+                  right={<span className="text-xs text-muted">за 30 дней</span>}
+                />
+              ),
+              chart: (
+                <div className="min-h-[220px]">
+                  <BlurValue blurred={isRandom}>
+                    <DailyAttendanceChart data={dailyAttendance} />
+                  </BlurValue>
+                </div>
+              ),
+            }}
+          />
         )}
       </DashboardPanel>
     ),
 
     "home.schedule": (
       <DashboardPanel designId="home.schedule" className="min-w-0">
-        <SectionHeader
-          title="До активностей"
-          textId="home.titleSchedule"
-          right={<span className="text-xs text-muted">по МСК</span>}
+        <DesignParts
+          pageKey="home"
+          sectionId="home.schedule"
+          parts={{
+            title: (
+              <SectionHeader
+                title="До активностей"
+                textId="home.titleSchedule"
+                right={<span className="text-xs text-muted">по МСК</span>}
+              />
+            ),
+            list: <SchedulePanel banners={scheduleBanners} />,
+          }}
         />
-        <SchedulePanel banners={scheduleBanners} />
       </DashboardPanel>
     ),
 
     "home.recent": (
       <DashboardPanel designId="home.recent" className="min-w-0">
-        <SectionHeader
-          title="Последние активности"
-          textId="home.titleRecent"
-          right={
-            <Link href="/activities" className="text-xs text-accent hover:underline">
-              {linkAll}
-            </Link>
-          }
+        <DesignParts
+          pageKey="home"
+          sectionId="home.recent"
+          parts={{
+            title: (
+              <SectionHeader
+                title="Последние активности"
+                textId="home.titleRecent"
+                right={
+                  <Link href="/activities" className="text-xs text-accent hover:underline">
+                    {linkAll}
+                  </Link>
+                }
+              />
+            ),
+            list:
+              recentActivities.length === 0 ? (
+                <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+              ) : (
+                <div className="space-y-[5px]">
+                  {recentActivities.map((a, i) => (
+                    // Обёртка повторяет строение «До активностей»: там заголовок
+                    // дня лежит внутри обёртки строки, а не отдельным ребёнком
+                    // списка, иначе space-y добавил бы лишние 5px.
+                    <div key={a.id}>
+                      {i === 0 && (
+                        /* Пустая метка высотой с заголовок дня («Сегодня») в
+                           «До активностей» — без неё первая строка этой панели
+                           встаёт на 20px выше и баннеры панелей не совпадают. */
+                        <p aria-hidden="true" className="invisible px-1 pb-1 text-[11px] uppercase tracking-wider">
+                          &nbsp;
+                        </p>
+                      )}
+                      <ActivityRow
+                        href={`/activities/${a.id}`}
+                        name={a.name}
+                        participants={a.participants}
+                        status={a.status}
+                        date={a.date}
+                        bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
+                        bannerIsVideo={a.bannerIsVideo}
+                      />
+                    </div>
+                  ))}
+                </div>
+              ),
+          }}
         />
-        {recentActivities.length === 0 ? (
-          <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-        ) : (
-          <div className="space-y-[5px]">
-            {recentActivities.map((a, i) => (
-              // Обёртка повторяет строение «До активностей»: там заголовок дня
-              // лежит внутри обёртки строки, а не отдельным ребёнком списка,
-              // иначе space-y добавил бы лишние 5px.
-              <div key={a.id}>
-                {i === 0 && (
-                  /* Пустая метка высотой с заголовок дня («Сегодня») в
-                     «До активностей» — без неё первая строка этой панели
-                     встаёт на 20px выше и баннеры панелей не совпадают. */
-                  <p aria-hidden="true" className="invisible px-1 pb-1 text-[11px] uppercase tracking-wider">
-                    &nbsp;
-                  </p>
-                )}
-                <ActivityRow
-                  href={`/activities/${a.id}`}
-                  name={a.name}
-                  participants={a.participants}
-                  status={a.status}
-                  date={a.date}
-                  bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
-                  bannerIsVideo={a.bannerIsVideo}
-                />
-              </div>
-            ))}
-          </div>
-        )}
       </DashboardPanel>
     ),
 
     "home.leadersPrime": (
       <DashboardPanel designId="home.leadersPrime" className="min-w-0">
-        <SectionHeader
-          title="Посещаемость: Прайм"
-          textId="home.titlePrime"
-          right={
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted">за всё время</span>
-              <Link href="/players" className="text-xs text-accent hover:underline">
-                Состав
-              </Link>
-            </div>
-          }
-        />
-        {primeTop.length === 0 ? (
-          <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-        ) : (
-          <div className="space-y-[5px]">
-            {primeTop.map((p, i) => (
-              <GuildRankRow
-                key={p.id}
-                href={`/players/${p.id}`}
-                rank={i + 1}
-                name={p.name}
-                role={p.role}
-                valueLabel={`${p.attendancePctPrime}%`}
-                valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
+        <DesignParts
+          pageKey="home"
+          sectionId="home.leadersPrime"
+          parts={{
+            title: (
+              <SectionHeader
+                title="Посещаемость: Прайм"
+                textId="home.titlePrime"
+                right={
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted">за всё время</span>
+                    <Link href="/players" className="text-xs text-accent hover:underline">
+                      Состав
+                    </Link>
+                  </div>
+                }
               />
-            ))}
-          </div>
-        )}
+            ),
+            list:
+              primeTop.length === 0 ? (
+                <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+              ) : (
+                <div className="space-y-[5px]">
+                  {primeTop.map((p, i) => (
+                    <GuildRankRow
+                      key={p.id}
+                      href={`/players/${p.id}`}
+                      rank={i + 1}
+                      name={p.name}
+                      role={p.role}
+                      valueLabel={`${p.attendancePctPrime}%`}
+                      valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
+                    />
+                  ))}
+                </div>
+              ),
+          }}
+        />
       </DashboardPanel>
     ),
 
     "home.leadersMiniRb": (
       <DashboardPanel designId="home.leadersMiniRb" className="min-w-0">
-        <SectionHeader
-          title="Посещаемость: Мини-РБ"
-          textId="home.titleMiniRb"
-          right={
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted">за всё время</span>
-              <Link href="/players" className="text-xs text-accent hover:underline">
-                Состав
-              </Link>
-            </div>
-          }
-        />
-        {miniRbTop.length === 0 ? (
-          <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
-        ) : (
-          <div className="space-y-[5px]">
-            {miniRbTop.map((p, i) => (
-              <GuildRankRow
-                key={p.id}
-                href={`/players/${p.id}`}
-                rank={i + 1}
-                name={p.name}
-                role={p.role}
-                valueLabel={`${p.attendancePctMiniRb}%`}
-                valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
+        <DesignParts
+          pageKey="home"
+          sectionId="home.leadersMiniRb"
+          parts={{
+            title: (
+              <SectionHeader
+                title="Посещаемость: Мини-РБ"
+                textId="home.titleMiniRb"
+                right={
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted">за всё время</span>
+                    <Link href="/players" className="text-xs text-accent hover:underline">
+                      Состав
+                    </Link>
+                  </div>
+                }
               />
-            ))}
-          </div>
-        )}
+            ),
+            list:
+              miniRbTop.length === 0 ? (
+                <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+              ) : (
+                <div className="space-y-[5px]">
+                  {miniRbTop.map((p, i) => (
+                    <GuildRankRow
+                      key={p.id}
+                      href={`/players/${p.id}`}
+                      rank={i + 1}
+                      name={p.name}
+                      role={p.role}
+                      valueLabel={`${p.attendancePctMiniRb}%`}
+                      valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
+                    />
+                  ))}
+                </div>
+              ),
+          }}
+        />
       </DashboardPanel>
     ),
   };

@@ -36,6 +36,7 @@ import {
   STATES,
   THEME_MODES,
   reconcileLayout,
+  reconcileParts,
   canContain,
   emptyConfig,
   mediaQueryFor,
@@ -44,6 +45,7 @@ import {
   type DesignBlock,
   type ElementValues,
   type PageConfig,
+  type PartEntry,
   type SlotKey,
   type StateKey,
   type ThemeMode,
@@ -104,6 +106,15 @@ export function normalizeConfig(raw: unknown, pageKey: string): PageConfig {
   } else {
     result.layout = [];
   }
+
+  // Части внутри секций: сводим с реестром так же, как раскладку.
+  const parts: Record<string, PartEntry[]> = {};
+  for (const section of sectionsFor(pageKey)) {
+    const partIds = (section.parts ?? []).map((p) => p.id);
+    if (partIds.length === 0) continue;
+    parts[section.id] = reconcileParts(input.parts?.[section.id], partIds);
+  }
+  result.parts = parts;
 
   // Блокировки.
   const locks = Array.isArray(input.locks)

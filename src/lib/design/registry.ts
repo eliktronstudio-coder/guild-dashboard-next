@@ -48,6 +48,11 @@ export type SectionDef = {
   id: string;
   label: string;
   note?: string;
+  /**
+   * Переставляемые части внутри секции: заголовок, список, плитки.
+   * Пусто — секция неделима.
+   */
+  parts?: { id: string; label: string }[];
 };
 
 export type PageDef = {
@@ -180,12 +185,55 @@ export const PAGES: PageDef[] = [
     section: "Обзор",
     route: "/",
     sections: [
-      { id: "home.myAttendance", label: "Моя посещаемость" },
-      { id: "home.myChart", label: "Мой график посещаемости" },
-      { id: "home.schedule", label: "До активностей" },
-      { id: "home.recent", label: "Последние активности" },
-      { id: "home.leadersPrime", label: "Посещаемость: Прайм" },
-      { id: "home.leadersMiniRb", label: "Посещаемость: Мини-РБ" },
+      {
+        id: "home.myAttendance",
+        label: "Моя посещаемость",
+        parts: [
+          { id: "title", label: "Заголовок" },
+          { id: "player", label: "Ник и класс" },
+          { id: "stats", label: "Плитки процентов" },
+        ],
+      },
+      {
+        id: "home.myChart",
+        label: "Мой график посещаемости",
+        parts: [
+          { id: "title", label: "Заголовок" },
+          { id: "chart", label: "График" },
+        ],
+      },
+      {
+        id: "home.schedule",
+        label: "До активностей",
+        parts: [
+          { id: "title", label: "Заголовок" },
+          { id: "list", label: "Список слотов" },
+        ],
+      },
+      {
+        id: "home.recent",
+        label: "Последние активности",
+        parts: [
+          { id: "title", label: "Заголовок" },
+          { id: "list", label: "Список активностей" },
+        ],
+      },
+      {
+        id: "home.leadersPrime",
+        label: "Посещаемость: Прайм",
+        parts: [
+          { id: "title", label: "Заголовок" },
+          { id: "list", label: "Список лидеров" },
+        ],
+      },
+      {
+        id: "home.leadersMiniRb",
+        label: "Посещаемость: Мини-РБ",
+        parts: [
+          { id: "title", label: "Заголовок" },
+          { id: "list", label: "Список лидеров" },
+        ],
+      },
     ],
     elements: [
       { id: "home.root", label: "Вся страница" },
@@ -335,6 +383,11 @@ export function allowedTextIds(pageKey: string): Set<string> {
 export function sectionsFor(pageKey: string): SectionDef[] {
   if (pageKey === SHARED_KEY) return [];
   return PAGE_BY_KEY.get(pageKey)?.sections ?? [];
+}
+
+/** Части конкретной секции; пусто — секция неделима. */
+export function partsFor(pageKey: string, sectionId: string): { id: string; label: string }[] {
+  return sectionsFor(pageKey).find((s) => s.id === sectionId)?.parts ?? [];
 }
 
 export function textsFor(pageKey: string): TextDef[] {

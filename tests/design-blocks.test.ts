@@ -13,7 +13,14 @@ import {
   type BlocksState,
 } from "../src/lib/design/blockOps";
 import { instantiateSnippet, normalizeSnippet } from "../src/lib/design/snippets";
-import { emptyConfig, reconcileLayout, type DesignBlock, type LayoutEntry } from "../src/lib/design/types";
+import {
+  emptyConfig,
+  reconcileLayout,
+  reconcileParts,
+  type DesignBlock,
+  type LayoutEntry,
+  type PartEntry,
+} from "../src/lib/design/types";
 import { normalizeConfig } from "../src/lib/design/compile";
 
 function block(id: string, type: DesignBlock["type"] = "text", children?: DesignBlock[]): DesignBlock {
@@ -200,4 +207,46 @@ test("нормализация конфига заполняет расклад�
 test("у страницы без секций раскладка остаётся пустой", () => {
   const config = normalizeConfig({ ...emptyConfig(), layout: [{ kind: "section", id: "x" }] }, "players");
   assert.deepEqual(config.layout, []);
+});
+
+test("части секции сводятся с реестром", () => {
+  const saved: PartEntry[] = [
+    { id: "stats" },
+    { id: "исчезла" },
+    { id: "title", hidden: true, hiddenOn: ["mobile"] },
+  ];
+  const result = reconcileParts(saved, ["title", "player", "stats"]);
+
+  // Сохранённый порядок уважается, пропавшая часть выброшена,
+  // новая («player») добавлена в конец.
+  assert.deepEqual(result.map((p) => p.id), ["stats", "title", "player"]);
+  assert.equal(result[1].hidden, true);
+  assert.deepEqual(result[1].hiddenOn, ["mobile"]);
+});
+
+test("дубли частей отбрасываются", () => {
+  const result = reconcileParts([{ id: "title" }, { id: "title" }], ["title"]);
+  assert.equal(result.length, 1);
+});
+
+test("нормализация заполняет части только для секций, у которых они объявлены", () => {
+  const config = normalizeConfig(emptyConfig(), "home");
+  // У всех шести панелей Главной части объявлены.
+  assert.equal(Object.keys(config.parts ?? {}).length, 6);
+  assert.deepEqual(
+    (config.parts ?? {})["home.myAttendance"].map((p) => p.id),
+    ["title", "player", "stats"]
+  );
+
+  // У «Статистики» секции есть, а частей нет — значит и записи быть не должно.
+  const dash = normalizeConfig(emptyConfig(), "dashboard");
+  assert.deepEqual(dash.parts, {});
+});
+
+test("части чужой секции не сохраняются", () => {
+  const config = normalizeConfig(
+    { ...emptyConfig(), parts: { "чужая.секция": [{ id: "title" }] } },
+    "home"
+  );
+  assert.equal((config.parts ?? {})["чужая.секция"], undefined);
 });

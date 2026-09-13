@@ -112,6 +112,35 @@ export type LayoutEntry =
   | { kind: "section"; id: string; hidden?: boolean; hiddenOn?: Breakpoint[] }
   | { kind: "block"; id: string };
 
+/**
+ * Часть внутри секции — вложенный уровень раскладки (заголовок панели,
+ * список, плитка показателей). Устройство части остаётся в коде: конфиг
+ * задаёт её порядок и видимость, как и у секций.
+ */
+export type PartEntry = {
+  id: string;
+  hidden?: boolean;
+  hiddenOn?: Breakpoint[];
+};
+
+/** Сводит сохранённый порядок частей с актуальным списком из реестра. */
+export function reconcileParts(saved: PartEntry[] | undefined, partIds: string[]): PartEntry[] {
+  const known = new Set(partIds);
+  const seen = new Set<string>();
+  const result: PartEntry[] = [];
+
+  for (const entry of saved ?? []) {
+    if (!entry || typeof entry !== "object" || typeof entry.id !== "string") continue;
+    if (!known.has(entry.id) || seen.has(entry.id)) continue;
+    seen.add(entry.id);
+    result.push(entry);
+  }
+  for (const id of partIds) {
+    if (!seen.has(id)) result.push({ id });
+  }
+  return result;
+}
+
 /** Конфиг одной страницы. */
 export type PageConfig = {
   /** Версия формата — читается при миграции сохранённых конфигов. */
@@ -131,6 +160,8 @@ export type PageConfig = {
    * Пусто — действует порядок из кода страницы.
    */
   layout?: LayoutEntry[];
+  /** Порядок и видимость частей внутри секций: id секции -> её части. */
+  parts?: Record<string, PartEntry[]>;
   /** Заблокированные от правки элементы реестра. */
   locks?: string[];
 };
@@ -145,6 +176,7 @@ export function emptyConfig(): PageConfig {
     texts: {},
     blocks: { top: [], bottom: [] },
     layout: [],
+    parts: {},
     locks: [],
   };
 }
