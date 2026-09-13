@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { splitProportionally } from "@/lib/proportionalSplit";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const shortDateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
@@ -90,7 +91,7 @@ async function getSalaryMapForPool(attendanceMap: Map<string, number>, pool: num
   const weights = players.map((p) => {
     const pct = attendanceMap.get(p.id) ?? 0;
     const eligible = pct >= SALARY_MIN_ATTENDANCE_PCT;
-    return { id: p.id, weight: eligible ? pct * p.salaryCoefficient : 0 };
+    return { item: p.id, weight: eligible ? pct * p.salaryCoefficient : 0 };
   });
   const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
   if (totalWeight <= 0) {
@@ -98,8 +99,11 @@ async function getSalaryMapForPool(attendanceMap: Map<string, number>, pool: num
     return map;
   }
 
-  for (const w of weights) {
-    map.set(w.id, Math.round((w.weight / totalWeight) * pool));
+  // Метод наибольшего остатка, а не округление каждой доли по отдельности:
+  // при round() сумма долей не сходилась с казной и часть золота просто
+  // исчезала из выплат — до нескольких десятков на большом составе.
+  for (const share of splitProportionally(weights, pool)) {
+    map.set(share.item, share.amount);
   }
   return map;
 }

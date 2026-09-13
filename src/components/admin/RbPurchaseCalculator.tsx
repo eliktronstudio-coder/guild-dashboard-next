@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import { useDesignText } from "@/components/design/DesignTextProvider";
+import { splitProportionally } from "@/lib/proportionalSplit";
 
 type Player = {
   id: string;
@@ -14,40 +15,6 @@ type Player = {
 };
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
-
-/**
- * Делит целое количество опыта пропорционально весам методом наибольшего
- * остатка: сначала всем достаётся целая часть доли, затем оставшиеся
- * единицы уходят тем, у кого дробный хвост больше. Обычное округление
- * каждой доли по отдельности давало бы сумму, не совпадающую с введённым
- * опытом (при большом составе расхождение — десятки единиц).
- */
-function splitProportionally<T>(items: { item: T; weight: number }[], total: number) {
-  const totalWeight = items.reduce((sum, i) => sum + i.weight, 0);
-  if (totalWeight <= 0 || total <= 0) {
-    return items.map((i) => ({ item: i.item, weight: i.weight, sharePct: 0, amount: 0 }));
-  }
-
-  const exact = items.map((i) => {
-    const value = (i.weight / totalWeight) * total;
-    const floor = Math.floor(value);
-    return { item: i.item, weight: i.weight, sharePct: (i.weight / totalWeight) * 100, floor, frac: value - floor };
-  });
-
-  let rest = total - exact.reduce((sum, e) => sum + e.floor, 0);
-  const byFrac = [...exact].sort((a, b) => b.frac - a.frac);
-  const bonus = new Map<number, number>();
-  for (let i = 0; i < byFrac.length && rest > 0; i++, rest--) {
-    bonus.set(exact.indexOf(byFrac[i]), 1);
-  }
-
-  return exact.map((e, idx) => ({
-    item: e.item,
-    weight: e.weight,
-    sharePct: e.sharePct,
-    amount: e.floor + (bonus.get(idx) ?? 0),
-  }));
-}
 
 export default function RbPurchaseCalculator({ players }: { players: Player[] }) {
   const title = useDesignText("rbPurchase.title", "Расчёт покупки РБ");

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin, getCurrentUser } from "@/lib/auth";
 import { ROLES } from "@/lib/roles";
 import { getPlayerById, getPlayerActivityHistory, getPlayerPayments, getPlayerAttendanceChartData } from "@/lib/queries";
+import { redistributePlayerPayments } from "@/lib/payoutRedistribution";
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -69,7 +70,16 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const { id } = await params;
-  await prisma.player.delete({ where: { id } });
 
-  return NextResponse.json({ ok: true });
+  // Начисленное, но не выплаченное золото игрока раздаём остальным
+  // участникам тех же месяцев — иначе каскадное удаление его выплат
+  // просто теряло бы эти деньги. Всё одной транзакцией: раздать и удалить
+  // должно произойти целиком, иначе можно раздать дважды.
+  const redistribution = await prisma.$transaction(async (tx) => {
+    const result = await redistributePlayerPayments(tx, id);
+    await tx.player.delete({ where: { id } });
+    return result;
+  });
+
+  return NextResponse.json({ ok: true, redistribution });
 }
