@@ -8,6 +8,7 @@ import {
   getPublishedCss,
 } from "./store";
 import { isKnownPageKey, pageKeyForPathname, SHARED_KEY } from "./registry";
+import type { DesignCss } from "./store";
 import type { DesignBlock, LayoutEntry, PartEntry, SlotKey } from "./types";
 
 export const PREVIEW_PARAM = "__design_preview";
@@ -15,7 +16,7 @@ export const PREVIEW_SHARED_PARAM = "__design_shared_draft";
 
 export type ResolvedDesign = {
   pageKey: string | null;
-  css: string;
+  css: DesignCss;
   texts: Record<string, string>;
   blocks: Partial<Record<SlotKey, DesignBlock[]>>;
   layout: LayoutEntry[];

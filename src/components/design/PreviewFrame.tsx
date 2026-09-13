@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { PAGE_STYLE_ID, SHARED_STYLE_ID } from "./DesignStyles";
 
 /**
  * Предпросмотр страницы в iframe.
@@ -12,6 +13,10 @@ import { useCallback, useEffect, useRef } from "react";
  * В режиме «Выбор» переходы и отправка форм внутри кадра блокируются: иначе
  * клик по строке увёл бы предпросмотр на другую страницу, а случайная кнопка
  * могла бы выполнить настоящее действие над рабочими данными.
+ *
+ * Живая правка: CSS собирается в редакторе и записывается прямо в тег стилей
+ * внутри кадра. Перезагрузка не нужна — изменение видно сразу, и снятие
+ * свойства работает, потому что тег подменяется целиком, а не дополняется.
  */
 
 const OVERLAY_STYLE_ID = "xd-design-overlay";
@@ -32,7 +37,30 @@ type Props = {
   onElementsFound?: (ids: string[]) => void;
   width: number | null;
   onReload?: (reload: () => void) => void;
+  /** Скомпилированный CSS черновика: страничный и, при правке общих, общий. */
+  liveCss?: { page?: string; shared?: string };
 };
+
+/**
+ * Записывает CSS в теги внутри кадра. Тег подменяется целиком, поэтому
+ * снятое свойство перестаёт действовать — дописывание правил поверх такого
+ * не даёт.
+ */
+function applyLiveCss(doc: Document, css: { page?: string; shared?: string } | undefined) {
+  if (!css) return;
+  const write = (id: string, text: string | undefined) => {
+    if (text === undefined) return;
+    let tag = doc.getElementById(id);
+    if (!tag) {
+      tag = doc.createElement("style");
+      tag.id = id;
+      doc.head.appendChild(tag);
+    }
+    if (tag.textContent !== text) tag.textContent = text;
+  };
+  write(SHARED_STYLE_ID, css.shared);
+  write(PAGE_STYLE_ID, css.page);
+}
 
 export default function PreviewFrame({
   src,
@@ -42,8 +70,11 @@ export default function PreviewFrame({
   onElementsFound,
   width,
   onReload,
+  liveCss,
 }: Props) {
   const frameRef = useRef<HTMLIFrameElement>(null);
+  const liveCssRef = useRef(liveCss);
+  liveCssRef.current = liveCss;
   const modeRef = useRef(mode);
   const selectRef = useRef(onSelect);
   modeRef.current = mode;
@@ -60,6 +91,11 @@ export default function PreviewFrame({
       style.textContent = OVERLAY_CSS;
       doc.head.appendChild(style);
     }
+
+    // Свежезагруженный кадр несёт серверный CSS черновика. Сразу же
+    // подменяем его локальным: иначе после перезагрузки правки, сделанные
+    // за последние полсекунды, откатились бы до сохранённых.
+    applyLiveCss(doc, liveCssRef.current);
 
     const found = new Set<string>();
     doc.querySelectorAll("[data-design-el]").forEach((el) => {
@@ -132,6 +168,12 @@ export default function PreviewFrame({
       el.setAttribute("data-xd-selected", "1")
     );
   }, [selectedId, src]);
+
+  // Живое применение: на каждое изменение переписываем теги в кадре.
+  useEffect(() => {
+    const doc = frameRef.current?.contentDocument;
+    if (doc) applyLiveCss(doc, liveCss);
+  }, [liveCss]);
 
   useEffect(() => {
     onReload?.(() => {

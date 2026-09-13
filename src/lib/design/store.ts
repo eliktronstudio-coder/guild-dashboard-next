@@ -176,23 +176,28 @@ export async function restoreVersionToDraft(pageKey: string, versionId: string, 
  * CSS для публичного рендера страницы: общие настройки + настройки страницы.
  * Читается на каждый запрос страницы, поэтому выбираем только две строки.
  */
-export async function getPublishedCss(pageKey: string | null): Promise<string> {
+export type DesignCss = {
+  /** Общие правила сайта. */
+  shared: string;
+  /** Правила текущей страницы — их редактор подменяет целиком при живой правке. */
+  page: string;
+};
+
+export async function getPublishedCss(pageKey: string | null): Promise<DesignCss> {
   const keys = pageKey ? [SHARED_KEY, pageKey] : [SHARED_KEY];
   const rows = await prisma.pageDesign.findMany({
     where: { pageKey: { in: keys } },
     select: { pageKey: true, publishedJson: true },
   });
 
-  // Порядок важен: общие правила идут первыми, страничные — следом, чтобы
-  // при равной специфичности побеждала страница.
-  const ordered = keys
-    .map((key) => rows.find((r) => r.pageKey === key))
-    .filter((r): r is NonNullable<typeof r> => Boolean(r));
+  const find = (key: string) => rows.find((r) => r.pageKey === key);
+  const sharedRow = find(SHARED_KEY);
+  const pageRow = pageKey ? find(pageKey) : undefined;
 
-  return ordered
-    .map((row) => compileConfig(parseConfig(row.publishedJson, row.pageKey), row.pageKey))
-    .filter(Boolean)
-    .join("");
+  return {
+    shared: sharedRow ? compileConfig(parseConfig(sharedRow.publishedJson, SHARED_KEY), SHARED_KEY) : "",
+    page: pageRow && pageKey ? compileConfig(parseConfig(pageRow.publishedJson, pageKey), pageKey) : "",
+  };
 }
 
 /**
@@ -309,16 +314,16 @@ export async function getDraftContent(
 }
 
 /** CSS черновика — только для предпросмотра в админке. */
-export async function getDraftCss(pageKey: string, includeSharedDraft: boolean): Promise<string> {
+export async function getDraftCss(pageKey: string, includeSharedDraft: boolean): Promise<DesignCss> {
   const sharedRow = await prisma.pageDesign.findUnique({ where: { pageKey: SHARED_KEY } });
   const sharedJson = includeSharedDraft ? sharedRow?.draftJson : sharedRow?.publishedJson;
-  const sharedCss = sharedJson ? compileConfig(parseConfig(sharedJson, SHARED_KEY), SHARED_KEY) : "";
+  const shared = sharedJson ? compileConfig(parseConfig(sharedJson, SHARED_KEY), SHARED_KEY) : "";
 
-  if (pageKey === SHARED_KEY) return sharedCss;
+  if (pageKey === SHARED_KEY) return { shared, page: "" };
 
   const row = await prisma.pageDesign.findUnique({ where: { pageKey } });
-  const pageCss = row ? compileConfig(parseConfig(row.draftJson, pageKey), pageKey) : "";
-  return sharedCss + pageCss;
+  const page = row ? compileConfig(parseConfig(row.draftJson, pageKey), pageKey) : "";
+  return { shared, page };
 }
 
 export { emptyConfig };

@@ -1,7 +1,28 @@
-/** Тег со скомпилированными стилями. Пустой конфиг не печатает ничего. */
-export default function DesignStyles({ css }: { css: string }) {
-  if (!css) return null;
-  // Содержимое собрано компилятором из проверенных значений (см. compile.ts):
-  // произвольная строка сюда попасть не может.
-  return <style id="xd-design" dangerouslySetInnerHTML={{ __html: css }} />;
+import type { DesignCss } from "@/lib/design/store";
+
+/** Идентификаторы тегов: по ним редактор находит и подменяет правила. */
+export const SHARED_STYLE_ID = "xd-design-shared";
+export const PAGE_STYLE_ID = "xd-design-page";
+
+/**
+ * Стили оформления двумя отдельными тегами.
+ *
+ * Разделение нужно для живого предпросмотра: редактор подменяет страничный
+ * тег целиком, и снятие свойства действительно убирает правило. Если бы всё
+ * лежало в одном теге, клиенту пришлось бы дописывать правила поверх — тогда
+ * удалённое свойство продолжало бы действовать из старого текста.
+ *
+ * Порядок важен: общие правила идут первыми, страничные следом, чтобы при
+ * равной специфичности побеждала страница.
+ */
+export default function DesignStyles({ css }: { css: DesignCss }) {
+  return (
+    <>
+      {/* Содержимое собрано компилятором из проверенных значений (compile.ts):
+          произвольная строка сюда попасть не может. Пустые теги оставляем —
+          редактору нужно куда-то писать. */}
+      <style id={SHARED_STYLE_ID} dangerouslySetInnerHTML={{ __html: css.shared }} />
+      <style id={PAGE_STYLE_ID} dangerouslySetInnerHTML={{ __html: css.page }} />
+    </>
+  );
 }

@@ -36,6 +36,11 @@ after(() => {
   }
 });
 
+/** Общий + страничный CSS одной строкой — тесты проверяют итоговый текст. */
+function cssText(css: { shared: string; page: string }) {
+  return css.shared + css.page;
+}
+
 const redPanel = {
   schemaVersion: 2,
   elements: { "home.myChart": { color: { base: { normal: "#ff0000" } } } },
@@ -56,7 +61,7 @@ test("черновик сохраняется и читается обратно
 });
 
 test("до публикации посетители видят пустое оформление", async () => {
-  const css = await store.getPublishedCss("home");
+  const css = cssText(await store.getPublishedCss("home"));
   assert.equal(css, "", "черновик не должен попадать в публичный CSS");
 });
 
@@ -67,10 +72,10 @@ test("публикация одной страницы не публикует �
   const result = await store.publishPage("home", "admin", before.revision, "тест");
   assert.equal(result.ok, true);
 
-  const homeCss = await store.getPublishedCss("home");
+  const homeCss = cssText(await store.getPublishedCss("home"));
   assert.match(homeCss, /\[data-design-page="home"\]/, "оформление Главной должно быть опубликовано");
 
-  const playersCss = await store.getPublishedCss("players");
+  const playersCss = cssText(await store.getPublishedCss("players"));
   assert.equal(playersCss, "", "черновик Состава не должен был опубликоваться");
 
   const playersState = await store.getDesignState("players");
@@ -110,13 +115,13 @@ test("история ведётся по страницам и восстано�
 
   // Восстанавливаем самую старую версию — она должна попасть в черновик,
   // а опубликованная версия остаться прежней.
-  const publishedBefore = await store.getPublishedCss("home");
+  const publishedBefore = cssText(await store.getPublishedCss("home"));
   const restored = await store.restoreVersionToDraft("home", history[history.length - 1].id, "admin");
   assert.equal(restored, true);
 
   const after = await store.getDesignState("home");
   assert.equal(after.draft.elements["home.myChart"].color?.base?.normal, "#ff0000");
-  assert.equal(await store.getPublishedCss("home"), publishedBefore, "публикация не должна меняться при восстановлении");
+  assert.equal(cssText(await store.getPublishedCss("home")), publishedBefore, "публикация не должна меняться при восстановлении");
 });
 
 test("общие настройки попадают в CSS любой страницы", async () => {
@@ -129,7 +134,7 @@ test("общие настройки попадают в CSS любой стра�
   await store.saveDraft("__shared__", sharedConfig as never, "admin");
   await store.publishPage("__shared__", "admin", sharedState.revision, "тема");
 
-  const css = await store.getPublishedCss("players");
+  const css = cssText(await store.getPublishedCss("players"));
   assert.match(css, /:root\{--accent: #00ff00\}/);
   assert.match(css, /:root\[data-theme="light"\]\{--accent: #0000ff\}/);
   assert.match(css, /\[data-design-el="shared\.sidebar"\]/);

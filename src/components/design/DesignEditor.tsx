@@ -7,7 +7,6 @@ import {
   Smartphone,
   Undo2,
   Redo2,
-  ExternalLink,
   Check,
   Loader2,
   AlertTriangle,
@@ -50,6 +49,7 @@ import {
   type ElementDef,
 } from "@/lib/design/registry";
 import { isValidValue } from "@/lib/design/properties";
+import { compileConfig, stableStringify } from "@/lib/design/compile";
 import {
   BREAKPOINTS,
   SLOTS,
@@ -530,6 +530,50 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
     else patchBlock(target.blockId, { mediaId: id });
   }
 
+  /**
+   * CSS черновика, собранный прямо в браузере тем же компилятором, что и на
+   * сервере. Благодаря этому правка видна мгновенно, без сохранения и
+   * перезагрузки кадра.
+   */
+  const liveCss = useMemo(() => {
+    if (!state) return undefined;
+    return isShared
+      ? { shared: compileConfig(state.draft, SHARED_KEY) }
+      : { page: compileConfig(state.draft, pageKey) };
+  }, [state, pageKey, isShared]);
+
+  /**
+   * Тексты, блоки, раскладка и части рисуются на сервере — их живым CSS не
+   * показать. Следим за ними отдельно и перезагружаем кадр после сохранения.
+   */
+  const structureSignature = useMemo(() => {
+    if (!state) return "";
+    const d = state.draft;
+    return stableStringify({ texts: d.texts, blocks: d.blocks, layout: d.layout, parts: d.parts });
+  }, [state]);
+
+  const lastStructure = useRef<string | null>(null);
+  const structureDirty = useRef(false);
+
+  useEffect(() => {
+    if (lastStructure.current === null) {
+      lastStructure.current = structureSignature;
+      return;
+    }
+    if (lastStructure.current !== structureSignature) {
+      lastStructure.current = structureSignature;
+      structureDirty.current = true;
+    }
+  }, [structureSignature]);
+
+  // Кадр перезагружаем только когда изменилась структура и черновик уже
+  // сохранён: иначе сервер отдал бы предыдущее состояние.
+  useEffect(() => {
+    if (saveStatus === "saved" && structureDirty.current) {
+      structureDirty.current = false;
+      reloadPreview.current();
+    }
+  }, [saveStatus]);
   const previewSrc = useMemo(() => {
     const base =
       page?.template && sampleId
@@ -735,10 +779,6 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
           <button type="button" onClick={openHistory}
             className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:text-foreground">
             <History size={13} /> История
-          </button>
-          <button type="button" onClick={() => window.open(previewSrc, "_blank", "noopener")}
-            className="flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:text-foreground">
-            <ExternalLink size={13} /> Предпросмотр
           </button>
           <button type="button" onClick={revert}
             className="rounded-md border border-border px-2 py-1.5 text-[11px] text-muted hover:text-danger">
@@ -988,6 +1028,10 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
         {/* Предпросмотр */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-surface">
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-1.5 text-[11px] text-muted">
+            <span className="flex items-center gap-1.5 text-accent" title="Правки видны сразу, без сохранения">
+              <span className="h-1.5 w-1.5 rounded-full bg-accent" aria-hidden="true" />
+              Живой просмотр
+            </span>
             <span className="truncate font-mono">{previewSrc}</span>
             {page?.template && samples.length > 0 && (
               <label className="ml-auto flex items-center gap-1.5">
@@ -1029,6 +1073,7 @@ export default function DesignEditor({ initialUnpublished }: { initialUnpublishe
               onSelect={setSelectedId}
               onElementsFound={(ids) => setPresentIds(new Set(ids))}
               width={device === "custom" ? customWidth : DEVICE_WIDTH[device]}
+              liveCss={liveCss}
               onReload={(fn) => {
                 reloadPreview.current = fn;
               }}
