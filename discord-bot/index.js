@@ -38,6 +38,11 @@ const MAX_IMAGE_BYTES = 800_000; // должно совпадать с лими�
 const MAX_IMAGES = 12; // по 6 на раздел, столько принимает /api/bot/activities
 const MAX_NICK = 40; // должно совпадать с /api/bot/players/rename
 
+const { startNotifier } = require("./notifier");
+
+/** Ручка напоминаний — заполняется после подключения бота. */
+let notifier = null;
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Message, Partials.Channel],
@@ -68,8 +73,27 @@ client.once(Events.ClientReady, () => {
   }
 });
 
+// Напоминания запускаем отдельно от проверок каналов выше: они не зависят
+// от канала ренеймов и должны работать, даже если тот не настроен.
+client.once(Events.ClientReady, () => {
+  notifier = startNotifier(client, { siteApiUrl: SITE_API_URL, botSecret: BOT_API_SECRET });
+});
+
 client.on(Events.MessageCreate, async (message) => {
   if (message.author.bot) return;
+
+  // Ручная проверка напоминаний из любого канала, который слушает бот.
+  const command = message.content.trim().toLowerCase();
+  if (command === "!напоминания" || command === "!уведомления") {
+    if (!notifier) {
+      await message.reply("Напоминания ещё не запустились, попробуйте через секунду.");
+      return;
+    }
+    const result = await notifier.test({ ping: command.endsWith("пинг") });
+    if (!result.ok) await message.reply(`Не вышло: ${result.error}`);
+    return;
+  }
+
   if (DISCORD_RENAME_CHANNEL_ID && message.channelId === DISCORD_RENAME_CHANNEL_ID) {
     await handleRename(message);
     return;
