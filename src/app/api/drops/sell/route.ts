@@ -15,6 +15,36 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
 
+  // Продажа Мини-РБ: предмета в инвентаре нет, сумму вводит админ, и вся
+  // она относится к категории Мини-РБ. Категория пишется в саму операцию —
+  // иначе, без привязанного дропа, сумма осела бы в остатке, то есть в
+  // «Казне гильдии» (см. getTreasurySplitByCategory).
+  if (body?.miniRb === true) {
+    const playerId = typeof body?.playerId === "string" && body.playerId ? body.playerId : null;
+    const amount = Number(body?.amount);
+    const note = typeof body?.note === "string" ? body.note.replace(/[<>]/g, "").trim().slice(0, 120) : "";
+
+    if (!Number.isFinite(amount) || amount < 0) {
+      return NextResponse.json({ error: "Укажите сумму продажи (0 или больше)." }, { status: 400 });
+    }
+
+    let buyerName: string | null = null;
+    if (playerId) {
+      const player = await prisma.player.findUnique({ where: { id: playerId } });
+      if (!player) return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
+      buyerName = player.name;
+    }
+
+    await prisma.treasuryTransaction.create({
+      data: {
+        description: `Продажа Мини-РБ${note ? `: ${note}` : ""} — ${buyerName ?? "аукцион"}`,
+        amount: Math.round(amount),
+        category: "Мини-РБ",
+      },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
   if (body?.junk === true) {
     const quantity = Math.round(Number(body?.quantity ?? 1));
     const playerId = typeof body?.playerId === "string" && body.playerId ? body.playerId : null;

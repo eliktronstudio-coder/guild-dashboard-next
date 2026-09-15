@@ -7,6 +7,7 @@ import AutocompleteInput from "./AutocompleteInput";
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const AUCTION = "__auction__";
 const JUNK = "__junk__";
+const MINI_RB = "__mini_rb__";
 
 type DropEntry = { id: string; quantity: number; value: number };
 type DropOption = { item: string; quantity: number; totalValue: number; entries: DropEntry[] };
@@ -43,18 +44,23 @@ export default function SellDropForm({
   const [qty, setQty] = useState(1);
   const [buyer, setBuyer] = useState("");
   const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const isJunk = item === JUNK;
-  const selectedDrop = isJunk ? null : (drops.find((d) => d.item === item) ?? null);
+  const isMiniRb = item === MINI_RB;
+  // Продажа Мини-РБ и мусор не берутся из инвентаря: предмета нет, сумму
+  // вводит администратор.
+  const isFreeform = isJunk || isMiniRb;
+  const selectedDrop = isFreeform ? null : (drops.find((d) => d.item === item) ?? null);
   const isAuction = buyer === AUCTION;
   const fixedTotal = selectedDrop ? proportionalTotal(selectedDrop.entries, qty) : 0;
-  const showManualAmount = isAuction || isJunk;
+  const showManualAmount = isAuction || isFreeform;
 
   function handleItemChange(value: string) {
     setItem(value);
-    if (value === JUNK) {
+    if (value === JUNK || value === MINI_RB) {
       setQty(1);
       return;
     }
@@ -65,7 +71,7 @@ export default function SellDropForm({
   function handleQtyChange(value: string) {
     const n = Math.round(Number(value));
     if (!Number.isFinite(n)) return;
-    if (isJunk) {
+    if (isFreeform) {
       setQty(Math.max(1, n));
       return;
     }
@@ -76,15 +82,15 @@ export default function SellDropForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!isJunk && !selectedDrop) {
+    if (!isFreeform && !selectedDrop) {
       setError("Выберите предмет из инвентаря.");
       return;
     }
-    if (!isJunk && selectedDrop && (qty < 1 || qty > selectedDrop.quantity)) {
+    if (!isFreeform && selectedDrop && (qty < 1 || qty > selectedDrop.quantity)) {
       setError("Некорректное количество.");
       return;
     }
-    if (isJunk && (qty < 1 || !amount || !Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+    if (isFreeform && (qty < 1 || !amount || !Number.isFinite(Number(amount)) || Number(amount) < 0)) {
       setError("Укажите количество и сумму продажи.");
       return;
     }
@@ -92,10 +98,13 @@ export default function SellDropForm({
       setError("Выберите, кому продажа.");
       return;
     }
-    const itemLabel = isJunk ? "Мусор" : (selectedDrop?.item ?? "");
+    const itemLabel = isJunk ? "Мусор" : isMiniRb ? "Продажа Мини-РБ" : (selectedDrop?.item ?? "");
     const buyerLabel = isAuction ? "аукцион" : (players.find((p) => p.id === buyer)?.name ?? buyer);
     const totalLabel = showManualAmount ? (amount ? `${numberFmt.format(Number(amount))} золота` : "сумма не указана") : `${numberFmt.format(fixedTotal)} золота`;
-    if (!confirm(`Продать ×${qty} «${itemLabel}» — ${buyerLabel}, ${totalLabel}?`)) {
+    const confirmText = isMiniRb
+      ? `Провести продажу Мини-РБ — ${buyerLabel}, ${totalLabel}? Вся сумма пойдёт в Мини-РБ.`
+      : `Продать ×${qty} «${itemLabel}» — ${buyerLabel}, ${totalLabel}?`;
+    if (!confirm(confirmText)) {
       return;
     }
     setBusy(true);
@@ -104,7 +113,9 @@ export default function SellDropForm({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          isJunk
+          isMiniRb
+            ? { miniRb: true, amount: Number(amount), note, ...(isAuction ? {} : { playerId: buyer }) }
+            : isJunk
             ? { junk: true, quantity: qty, amount: Number(amount), ...(isAuction ? {} : { playerId: buyer }) }
             : {
                 entryIds: selectedDrop!.entries.map((en) => en.id),
@@ -136,8 +147,12 @@ export default function SellDropForm({
         <AutocompleteInput
           value={item}
           onChange={handleItemChange}
-          options={[{ value: JUNK, label: "Мусор" }, ...drops.map((d) => ({ value: d.item, label: d.item }))]}
-          pinnedValues={[JUNK]}
+          options={[
+            { value: MINI_RB, label: "Продажа Мини-РБ" },
+            { value: JUNK, label: "Мусор" },
+            ...drops.map((d) => ({ value: d.item, label: d.item })),
+          ]}
+          pinnedValues={[MINI_RB, JUNK]}
           placeholder="Поиск по дропу…"
         />
         {drops.length === 0 && (
@@ -160,8 +175,8 @@ export default function SellDropForm({
           value={qty}
           onChange={(e) => handleQtyChange(e.target.value)}
           min={1}
-          max={isJunk ? undefined : (selectedDrop?.quantity ?? 1)}
-          disabled={!selectedDrop && !isJunk}
+          max={isFreeform ? undefined : (selectedDrop?.quantity ?? 1)}
+          disabled={(!selectedDrop && !isJunk) || isMiniRb}
           required
           className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-60"
         />
@@ -196,6 +211,24 @@ export default function SellDropForm({
           </div>
         )}
       </div>
+
+      {isMiniRb && (
+        <div className="sm:col-span-3">
+          <label className="mb-1 block text-xs text-muted">
+            Примечание <span className="text-muted-2">(необязательно, попадёт в описание операции)</span>
+          </label>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={120}
+            placeholder="Например: Кракен, продажа эссенций"
+            className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+          />
+          <p className="mt-1 text-xs text-accent">
+            Вся сумма пойдёт в «Казну мини-РБ» — резерв гильдии с неё не удерживается.
+          </p>
+        </div>
+      )}
 
       {error && <p className="text-xs text-danger sm:col-span-3">{error}</p>}
 

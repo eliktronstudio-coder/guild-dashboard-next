@@ -88,6 +88,10 @@ model TreasuryTransaction {
   id          String   @id @default(cuid())
   description String
   amount      Int
+  /// Категория операции, когда к ней не привязан дроп («Мини-РБ»).
+  /// Обычные продажи дропа категорию не задают — она берётся из проданных
+  /// позиций, см. getTreasurySplitByCategory в src/lib/queries.ts.
+  category    String?
   date        DateTime @default(now())
   createdAt   DateTime @default(now())
 }

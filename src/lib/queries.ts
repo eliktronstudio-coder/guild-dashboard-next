@@ -502,7 +502,27 @@ async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: nu
     where: { status: "Продано", treasuryTransactionId: { not: null } },
     select: { treasuryTransactionId: true, category: true, value: true, quantity: true },
   });
-  if (sold.length === 0) return { prime: 0, miniRb: 0 };
+
+  // Операции с собственной категорией и без привязанного дропа («Продажа
+  // Мини-РБ»): вся сумма идёт в свою категорию. Без этого такая продажа
+  // не попадала бы ни в Прайм, ни в Мини-РБ и оседала в остатке, то есть
+  // в «Казне гильдии».
+  const tagged = await prisma.treasuryTransaction.findMany({
+    where: { category: { not: null } },
+    select: { id: true, amount: true, category: true },
+  });
+  const soldTxIds = new Set(sold.map((d) => d.treasuryTransactionId as string));
+  let taggedPrime = 0;
+  let taggedMiniRb = 0;
+  for (const tx of tagged) {
+    // Если к операции всё же привязан дроп, категория позиций точнее —
+    // её и используем, чтобы не посчитать сумму дважды.
+    if (soldTxIds.has(tx.id)) continue;
+    if (tx.category === "Мини-РБ") taggedMiniRb += tx.amount;
+    else taggedPrime += tx.amount;
+  }
+
+  if (sold.length === 0) return { prime: Math.round(taggedPrime), miniRb: Math.round(taggedMiniRb) };
 
   const txIds = [...new Set(sold.map((d) => d.treasuryTransactionId as string))];
   const transactions = await prisma.treasuryTransaction.findMany({
@@ -522,8 +542,8 @@ async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: nu
     byTx.set(txId, bucket);
   }
 
-  let prime = 0;
-  let miniRb = 0;
+  let prime = taggedPrime;
+  let miniRb = taggedMiniRb;
   for (const [txId, bucket] of byTx) {
     const amount = amountByTx.get(txId) ?? 0;
     if (bucket.nominalTotal <= 0) {
