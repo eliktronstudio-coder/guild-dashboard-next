@@ -20,24 +20,24 @@ export async function POST(request: NextRequest) {
   // иначе, без привязанного дропа, сумма осела бы в остатке, то есть в
   // «Казне гильдии» (см. getTreasurySplitByCategory).
   if (body?.miniRb === true) {
-    const playerId = typeof body?.playerId === "string" && body.playerId ? body.playerId : null;
     const amount = Number(body?.amount);
+    const xp = Math.round(Number(body?.xp));
     const note = typeof body?.note === "string" ? body.note.replace(/[<>]/g, "").trim().slice(0, 120) : "";
 
     if (!Number.isFinite(amount) || amount < 0) {
       return NextResponse.json({ error: "Укажите сумму продажи (0 или больше)." }, { status: 400 });
     }
-
-    let buyerName: string | null = null;
-    if (playerId) {
-      const player = await prisma.player.findUnique({ where: { id: playerId } });
-      if (!player) return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
-      buyerName = player.name;
+    if (!Number.isFinite(xp) || xp < 1) {
+      return NextResponse.json({ error: "Укажите количество РБ опыта." }, { status: 400 });
     }
 
+    // Покупателя у такой продажи нет: это общий доход гильдии, а не выкуп
+    // предмета игроком. Сколько продано опыта, пишем в описание — отдельного
+    // поля под это в казне нет, а в списке операций цифру видно сразу.
+    const xpLabel = new Intl.NumberFormat("ru-RU").format(xp);
     await prisma.treasuryTransaction.create({
       data: {
-        description: `Продажа Мини-РБ${note ? `: ${note}` : ""} — ${buyerName ?? "аукцион"}`,
+        description: `Продажа Мини-РБ: ${xpLabel} опыта${note ? ` — ${note}` : ""}`,
         amount: Math.round(amount),
         category: "Мини-РБ",
       },

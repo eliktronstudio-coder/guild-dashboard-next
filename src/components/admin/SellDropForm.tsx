@@ -57,6 +57,9 @@ export default function SellDropForm({
   const isAuction = buyer === AUCTION;
   const fixedTotal = selectedDrop ? proportionalTotal(selectedDrop.entries, qty) : 0;
   const showManualAmount = isAuction || isFreeform;
+  // У продажи Мини-РБ покупателя нет: это общий доход гильдии, а не выкуп
+  // предмета игроком. Поэтому поле «Кому продажа» скрыто.
+  const showBuyer = !isMiniRb;
 
   function handleItemChange(value: string) {
     setItem(value);
@@ -90,11 +93,15 @@ export default function SellDropForm({
       setError("Некорректное количество.");
       return;
     }
+    if (isMiniRb && qty < 1) {
+      setError("Укажите количество РБ опыта.");
+      return;
+    }
     if (isFreeform && (qty < 1 || !amount || !Number.isFinite(Number(amount)) || Number(amount) < 0)) {
       setError("Укажите количество и сумму продажи.");
       return;
     }
-    if (!buyer) {
+    if (showBuyer && !buyer) {
       setError("Выберите, кому продажа.");
       return;
     }
@@ -102,7 +109,7 @@ export default function SellDropForm({
     const buyerLabel = isAuction ? "аукцион" : (players.find((p) => p.id === buyer)?.name ?? buyer);
     const totalLabel = showManualAmount ? (amount ? `${numberFmt.format(Number(amount))} золота` : "сумма не указана") : `${numberFmt.format(fixedTotal)} золота`;
     const confirmText = isMiniRb
-      ? `Провести продажу Мини-РБ — ${buyerLabel}, ${totalLabel}? Вся сумма пойдёт в Мини-РБ.`
+      ? `Провести продажу Мини-РБ: ${numberFmt.format(qty)} опыта, ${totalLabel}? Вся сумма пойдёт в Мини-РБ.`
       : `Продать ×${qty} «${itemLabel}» — ${buyerLabel}, ${totalLabel}?`;
     if (!confirm(confirmText)) {
       return;
@@ -114,7 +121,7 @@ export default function SellDropForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
           isMiniRb
-            ? { miniRb: true, amount: Number(amount), note, ...(isAuction ? {} : { playerId: buyer }) }
+            ? { miniRb: true, xp: qty, amount: Number(amount), note }
             : isJunk
             ? { junk: true, quantity: qty, amount: Number(amount), ...(isAuction ? {} : { playerId: buyer }) }
             : {
@@ -162,7 +169,7 @@ export default function SellDropForm({
 
       <div>
         <label className="mb-1 block text-xs text-muted">
-          Количество
+          {isMiniRb ? "Количество РБ опыта" : "Количество"}
           {selectedDrop && (
             <span className="text-muted-2">
               {" "}
@@ -176,22 +183,24 @@ export default function SellDropForm({
           onChange={(e) => handleQtyChange(e.target.value)}
           min={1}
           max={isFreeform ? undefined : (selectedDrop?.quantity ?? 1)}
-          disabled={(!selectedDrop && !isJunk) || isMiniRb}
+          disabled={!selectedDrop && !isFreeform}
           required
           className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent disabled:opacity-60"
         />
       </div>
 
-      <div>
-        <label className="mb-1 block text-xs text-muted">Кому продажа</label>
-        <AutocompleteInput
-          value={buyer}
-          onChange={setBuyer}
-          options={[{ value: AUCTION, label: "Аукцион" }, ...players.map((p) => ({ value: p.id, label: p.name }))]}
-          pinnedValues={[AUCTION]}
-          placeholder="Поиск по нику…"
-        />
-      </div>
+      {showBuyer && (
+        <div>
+          <label className="mb-1 block text-xs text-muted">Кому продажа</label>
+          <AutocompleteInput
+            value={buyer}
+            onChange={setBuyer}
+            options={[{ value: AUCTION, label: "Аукцион" }, ...players.map((p) => ({ value: p.id, label: p.name }))]}
+            pinnedValues={[AUCTION]}
+            placeholder="Поиск по нику…"
+          />
+        </div>
+      )}
 
       <div>
         <label className="mb-1 block text-xs text-muted">Сумма (золото)</label>
