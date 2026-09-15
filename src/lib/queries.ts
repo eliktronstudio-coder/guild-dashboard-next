@@ -506,9 +506,11 @@ async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: nu
   // Операции с собственной категорией и без привязанного дропа («Продажа
   // Мини-РБ»): вся сумма идёт в свою категорию. Без этого такая продажа
   // не попадала бы ни в Прайм, ни в Мини-РБ и оседала в остатке, то есть
-  // в «Казне гильдии».
+  // в «Казне гильдии». Выплаты ЗП (kind="payout") сюда не входят — они
+  // расход, а не доход, и считаются отдельно в getTreasuryPayoutSplit,
+  // минуя 70%-й множитель (см. комментарий у поля kind в schema.prisma).
   const tagged = await prisma.treasuryTransaction.findMany({
-    where: { category: { not: null } },
+    where: { category: { not: null }, kind: null },
     select: { id: true, amount: true, category: true },
   });
   const soldTxIds = new Set(sold.map((d) => d.treasuryTransactionId as string));
@@ -559,18 +561,45 @@ async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: nu
 // Казна делится на основную (фонд ЗП) и казну гильдии (резерв) в пропорции 70/30.
 const TREASURY_MAIN_SHARE = 0.7;
 
+// Сколько уже выплачено по каждой категории (kind="payout", см. schema.prisma).
+// Считается отдельно от дохода и вычитается из prime/miniRb 1:1, ПОСЛЕ
+// 70%-го множителя — см. комментарий у поля kind.
+async function getTreasuryPayoutSplit(): Promise<{ prime: number; miniRb: number }> {
+  const rows = await prisma.treasuryTransaction.groupBy({
+    by: ["category"],
+    where: { kind: "payout" },
+    _sum: { amount: true },
+  });
+  let prime = 0;
+  let miniRb = 0;
+  for (const r of rows) {
+    // amount у выплат отрицательный (расход); переводим в положительную
+    // сумму "сколько выплачено".
+    const paid = -(r._sum.amount ?? 0);
+    if (r.category === "Мини-РБ") miniRb += paid;
+    else if (r.category === "Прайм") prime += paid;
+  }
+  return { prime, miniRb };
+}
+
 export async function getTreasuryBreakdown() {
-  const [total, { prime: primeGold, miniRb: miniRbGold }] = await Promise.all([
+  const [total, { prime: primeGold, miniRb: miniRbGold }, payout] = await Promise.all([
     getTreasuryGold(),
     getTreasurySplitByCategory(),
+    getTreasuryPayoutSplit(),
   ]);
   const main = Math.round(total * TREASURY_MAIN_SHARE);
-  const prime = Math.round(primeGold * TREASURY_MAIN_SHARE);
   // Мини-РБ без резерва гильдии — весь доход категории идёт на выплату,
   // поэтому 30%-й резерв гильдии считаем только с дохода Прайма (и прочих
   // операций вне категорий), а не со всей казны — иначе продажа дропа с
   // Мини-РБ ошибочно "прибавляла" гильдии 30% с чужих денег.
-  const miniRb = miniRbGold;
+  //
+  // Выплаченное вычитается уже из финальной суммы (после множителя для
+  // Прайма), а не из "сырого" дохода: total уменьшается на ту же сумму
+  // при создании операции выплаты (см. /api/payments/payout), поэтому
+  // казна гильдии (total - prime - miniRb) от выплаты не меняется.
+  const prime = Math.round(primeGold * TREASURY_MAIN_SHARE) - payout.prime;
+  const miniRb = miniRbGold - payout.miniRb;
   const guild = total - prime - miniRb;
   return { total, main, guild, prime, miniRb };
 }
@@ -822,6 +851,18 @@ export async function getAttendanceChartData() {
 
 export async function getAllPayments() {
   return prisma.payment.findMany({ orderBy: { date: "desc" }, include: { player: true } });
+}
+
+/**
+ * Какие П/М-выплаты уже проведены в текущем расчётном периоде — для
+ * переключателя статуса в «Расчёте распределения». Ключ — `${playerId}:${category}`.
+ */
+export async function getPayoutStatusMap(period: string): Promise<Set<string>> {
+  const rows = await prisma.payment.findMany({
+    where: { source: "payout", archiveMonth: period, status: "Выплачено", category: { not: null } },
+    select: { playerId: true, category: true },
+  });
+  return new Set(rows.map((r) => `${r.playerId}:${r.category}`));
 }
 
 /**

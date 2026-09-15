@@ -92,6 +92,12 @@ model TreasuryTransaction {
   /// Обычные продажи дропа категорию не задают — она берётся из проданных
   /// позиций, см. getTreasurySplitByCategory в src/lib/queries.ts.
   category    String?
+  /// "payout" — расход на выплату ЗП (см. /api/payments/payout). Такие
+  /// операции считаются отдельно от дохода (getTreasuryPayoutSplit) и
+  /// вычитаются из prime/miniRb 1:1, минуя 70%-й множитель фонда ЗП —
+  /// иначе выплата X золота уменьшала бы «Казну с Прайма» лишь на 0.7X,
+  /// а остаток разницы ошибочно списывался бы с резерва гильдии.
+  kind        String?
   date        DateTime @default(now())
   createdAt   DateTime @default(now())
 }
@@ -133,6 +139,10 @@ model Payment {
   date         DateTime @default(now())
   source       String   @default("manual")
   archiveMonth String?
+  /// "Прайм" | "Мини-РБ" — заполняется у выплат с /api/payments/payout
+  /// (кнопки статуса в строке «Расчёт распределения»). У ручных и архивных
+  /// записей остаётся null: они покрывают всю зарплату целиком.
+  category     String?
   createdAt    DateTime @default(now())
 }
 

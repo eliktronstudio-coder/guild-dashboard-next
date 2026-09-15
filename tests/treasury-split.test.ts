@@ -99,3 +99,68 @@ test("категория позиций дропа важнее категори
   assert.equal(b.prime + b.miniRb + b.guild, b.total, "сумма не должна разъехаться");
   assert.equal(b.miniRb, 0, "категория позиций точнее — сумма не должна попасть в Мини-РБ дважды");
 });
+
+test("выплата ЗП из Прайма списывает сумму полностью, минуя 70%-й множитель", async () => {
+  await prisma.treasuryTransaction.deleteMany({});
+  await prisma.dropItem.deleteMany({});
+
+  // 10 000 дохода Прайма (через проданный дроп) -> в фонд ЗП идёт 70% = 7000.
+  const tx = await prisma.treasuryTransaction.create({
+    data: { description: "Продажа дропа", amount: 10000 },
+  });
+  await prisma.dropItem.create({
+    data: { item: "Меч", quantity: 1, value: 10000, status: "Продано", category: "Прайм", treasuryTransactionId: tx.id },
+  });
+
+  const before = await queries.getTreasuryBreakdown();
+  assert.equal(before.prime, 7000);
+  const guildBefore = before.guild;
+
+  // Выплата 1000 золота из Прайма.
+  await prisma.treasuryTransaction.create({
+    data: { description: "Выплата ЗП (Прайм): Тест", amount: -1000, category: "Прайм", kind: "payout" },
+  });
+
+  const after = await queries.getTreasuryBreakdown();
+  assert.equal(after.total, before.total - 1000, "общая казна должна уменьшиться ровно на выплату");
+  assert.equal(after.prime, 7000 - 1000, "казна Прайма должна уменьшиться на полную сумму выплаты, не на 70%");
+  assert.equal(after.guild, guildBefore, "резерв гильдии не должен меняться от выплаты ЗП");
+});
+
+test("выплата ЗП из Мини-РБ списывает сумму полностью, гильдия не меняется", async () => {
+  await prisma.treasuryTransaction.deleteMany({});
+  await prisma.treasuryTransaction.create({
+    data: { description: "Продажа Мини-РБ", amount: 5000, category: "Мини-РБ" },
+  });
+
+  const before = await queries.getTreasuryBreakdown();
+  assert.equal(before.miniRb, 5000);
+
+  await prisma.treasuryTransaction.create({
+    data: { description: "Выплата ЗП (Мини-РБ): Тест", amount: -2000, category: "Мини-РБ", kind: "payout" },
+  });
+
+  const after = await queries.getTreasuryBreakdown();
+  assert.equal(after.miniRb, 3000);
+  assert.equal(after.total, before.total - 2000);
+  assert.equal(after.guild, before.guild);
+});
+
+test("отмена выплаты (компенсирующая операция) возвращает казну к исходному состоянию", async () => {
+  await prisma.treasuryTransaction.deleteMany({});
+  await prisma.treasuryTransaction.create({
+    data: { description: "Продажа Мини-РБ", amount: 5000, category: "Мини-РБ" },
+  });
+  const before = await queries.getTreasuryBreakdown();
+
+  await prisma.treasuryTransaction.create({
+    data: { description: "Выплата ЗП (Мини-РБ): Тест", amount: -1500, category: "Мини-РБ", kind: "payout" },
+  });
+  // Компенсация — ровно то, что делает DELETE /api/payments/payout.
+  await prisma.treasuryTransaction.create({
+    data: { description: "Отмена выплаты ЗП (Мини-РБ): Тест", amount: 1500, category: "Мини-РБ", kind: "payout" },
+  });
+
+  const after = await queries.getTreasuryBreakdown();
+  assert.deepEqual(after, before, "после отмены казна должна вернуться в точности к исходному состоянию");
+});

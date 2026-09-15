@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import EmptyState from "@/components/EmptyState";
 import BlurValue from "@/components/BlurValue";
@@ -15,22 +19,121 @@ type PlayerShare = {
   salaryMiniRb: number;
 };
 
+type Category = "Прайм" | "Мини-РБ";
+
 function attendanceColor(pct: number) {
   if (pct <= 20) return { text: "text-danger", bar: "bg-danger" };
   if (pct <= 50) return { text: "text-amber-500", bar: "bg-amber-500" };
   return { text: "text-success", bar: "bg-success" };
 }
 
+/**
+ * Переключатель «Ожидает / Выплачено» для одной доли (П или М) одного
+ * игрока. Выплата списывает сумму из соответствующей казны и переносит
+ * игрока в Журнал выплат — см. /api/payments/payout. Для read-only
+ * пользователей (не админ) рендерится как обычная подпись без кликов.
+ */
+function StatusToggle({
+  playerId,
+  category,
+  paid,
+  disabled,
+  canAct,
+  onChanged,
+}: {
+  playerId: string;
+  category: Category;
+  paid: boolean;
+  /** Доля равна нулю — переключать нечего. */
+  disabled: boolean;
+  canAct: boolean;
+  onChanged: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  if (!canAct) {
+    return (
+      <span className={clsx("text-[10px]", paid ? "text-success" : "text-muted-2")}>
+        {paid ? "Выплачено" : "Ожидает"}
+      </span>
+    );
+  }
+
+  async function setPaid(next: boolean) {
+    if (busy || next === paid) return;
+    if (next) {
+      if (!confirm(`Отметить долю (${category}) как выплаченную? Сумма спишется из соответствующей казны.`)) return;
+    } else {
+      if (!confirm(`Вернуть в «Ожидает»? Сумма вернётся в казну (${category}).`)) return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/payments/payout", {
+        method: next ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId, category }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error ?? "Не удалось изменить статус.");
+        return;
+      }
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className={clsx(
+        "inline-flex overflow-hidden rounded border border-border text-[10px]",
+        (disabled || busy) && "opacity-50"
+      )}
+    >
+      <button
+        type="button"
+        disabled={disabled || busy}
+        onClick={() => setPaid(false)}
+        className={clsx(
+          "px-1.5 py-0.5 transition-colors",
+          !paid ? "bg-surface-2 text-foreground" : "text-muted hover:bg-surface-2"
+        )}
+      >
+        Ожидает
+      </button>
+      <button
+        type="button"
+        disabled={disabled || busy}
+        onClick={() => setPaid(true)}
+        className={clsx(
+          "px-1.5 py-0.5 transition-colors",
+          paid ? "bg-success/20 text-success" : "text-muted hover:bg-surface-2"
+        )}
+      >
+        Выплата
+      </button>
+    </div>
+  );
+}
+
 export default function PayoutSummaryTable({
   players,
   totalPayout,
   isRandom = false,
+  isAdmin = false,
+  paidStatus = [],
 }: {
   players: PlayerShare[];
   totalPayout: number;
   isRandom?: boolean;
+  isAdmin?: boolean;
+  /** Ключи вида `${playerId}:${category}` — уже выплаченные в этом периоде. */
+  paidStatus?: string[];
 }) {
+  const router = useRouter();
   const rows = [...players].sort((a, b) => b.salary - a.salary);
+  const paidSet = new Set(paidStatus);
 
   return (
     <div className="rounded-lg border border-border bg-surface">
@@ -38,6 +141,7 @@ export default function PayoutSummaryTable({
         <h2 className="text-sm font-semibold">Расчёт распределения</h2>
         <p className="mt-0.5 text-xs text-muted">
           Основная казна делится между игроками по посещаемости с учётом индивидуального коэффициента.
+          {isAdmin && " Статус «Выплата» списывает долю из казны Прайма или Мини-РБ и переносит её в Журнал выплат."}
         </p>
       </div>
       {rows.length === 0 ? (
@@ -55,72 +159,98 @@ export default function PayoutSummaryTable({
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {rows.map((p) => (
-                <tr key={p.id} className="row-tint transition-colors">
-                  <td className="px-4 py-3">
-                    <span className="font-medium">{p.name}</span>
-                    <span className="ml-2 text-xs text-muted">{p.role}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <BlurValue blurred={isRandom}>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
-                            П
-                          </span>
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
-                            <div
-                              className={clsx("h-full rounded-full", attendanceColor(p.attendancePctPrime).bar)}
-                              style={{ width: `${Math.min(p.attendancePctPrime, 100)}%` }}
+              {rows.map((p) => {
+                const primePaid = paidSet.has(`${p.id}:Прайм`);
+                const miniRbPaid = paidSet.has(`${p.id}:Мини-РБ`);
+                return (
+                  <tr key={p.id} className="row-tint transition-colors">
+                    <td className="px-4 py-3">
+                      <span className="font-medium">{p.name}</span>
+                      <span className="ml-2 text-xs text-muted">{p.role}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <BlurValue blurred={isRandom}>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
+                              П
+                            </span>
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
+                              <div
+                                className={clsx("h-full rounded-full", attendanceColor(p.attendancePctPrime).bar)}
+                                style={{ width: `${Math.min(p.attendancePctPrime, 100)}%` }}
+                              />
+                            </div>
+                            <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
+                              {p.attendancePctPrime}%
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
+                              М
+                            </span>
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
+                              <div
+                                className={clsx("h-full rounded-full", attendanceColor(p.attendancePctMiniRb).bar)}
+                                style={{ width: `${Math.min(p.attendancePctMiniRb, 100)}%` }}
+                              />
+                            </div>
+                            <span
+                              className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}
+                            >
+                              {p.attendancePctMiniRb}%
+                            </span>
+                          </div>
+                        </div>
+                      </BlurValue>
+                    </td>
+                    <td className="px-4 py-3 font-mono tabular-nums text-muted">
+                      {totalPayout > 0 ? `${((p.salary / totalPayout) * 100).toFixed(1)}%` : "—"}
+                    </td>
+                    <td className="px-4 py-3 font-mono font-medium tabular-nums">
+                      <BlurValue blurred={isRandom}>{numberFmt.format(p.salary)}</BlurValue>
+                    </td>
+                    <td className="px-4 py-3">
+                      <BlurValue blurred={isRandom}>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
+                              П
+                            </span>
+                            <span className="w-16 flex-shrink-0 font-medium tabular-nums">
+                              {numberFmt.format(p.salaryPrime)}
+                            </span>
+                            <StatusToggle
+                              playerId={p.id}
+                              category="Прайм"
+                              paid={primePaid}
+                              disabled={p.salaryPrime <= 0}
+                              canAct={isAdmin}
+                              onChanged={() => router.refresh()}
                             />
                           </div>
-                          <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctPrime).text)}>
-                            {p.attendancePctPrime}%
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
-                            М
-                          </span>
-                          <div className="h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
-                            <div
-                              className={clsx("h-full rounded-full", attendanceColor(p.attendancePctMiniRb).bar)}
-                              style={{ width: `${Math.min(p.attendancePctMiniRb, 100)}%` }}
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
+                              М
+                            </span>
+                            <span className="w-16 flex-shrink-0 font-medium tabular-nums">
+                              {numberFmt.format(p.salaryMiniRb)}
+                            </span>
+                            <StatusToggle
+                              playerId={p.id}
+                              category="Мини-РБ"
+                              paid={miniRbPaid}
+                              disabled={p.salaryMiniRb <= 0}
+                              canAct={isAdmin}
+                              onChanged={() => router.refresh()}
                             />
                           </div>
-                          <span className={clsx("text-xs font-medium", attendanceColor(p.attendancePctMiniRb).text)}>
-                            {p.attendancePctMiniRb}%
-                          </span>
                         </div>
-                      </div>
-                    </BlurValue>
-                  </td>
-                  <td className="px-4 py-3 font-mono tabular-nums text-muted">
-                    {totalPayout > 0 ? `${((p.salary / totalPayout) * 100).toFixed(1)}%` : "—"}
-                  </td>
-                  <td className="px-4 py-3 font-mono font-medium tabular-nums">
-                    <BlurValue blurred={isRandom}>{numberFmt.format(p.salary)}</BlurValue>
-                  </td>
-                  <td className="px-4 py-3">
-                    <BlurValue blurred={isRandom}>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Прайм">
-                            П
-                          </span>
-                          <span className="font-medium tabular-nums">{numberFmt.format(p.salaryPrime)}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="w-3 flex-shrink-0 text-[10px] font-semibold text-muted" title="Мини-РБ">
-                            М
-                          </span>
-                          <span className="font-medium tabular-nums">{numberFmt.format(p.salaryMiniRb)}</span>
-                        </div>
-                      </div>
-                    </BlurValue>
-                  </td>
-                </tr>
-              ))}
+                      </BlurValue>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -2,8 +2,8 @@ import StatCard from "@/components/StatCard";
 import PayoutSummaryTable from "@/components/admin/PayoutSummaryTable";
 import PaymentsTable from "@/components/admin/PaymentsTable";
 import BlurValue from "@/components/BlurValue";
-import { daysUntilNextPayout, nextPayoutDate } from "@/lib/payout";
-import { getAllPayments, getAllPlayers, getTreasuryBreakdown } from "@/lib/queries";
+import { currentPayoutPeriod, daysUntilNextPayout, nextPayoutDate } from "@/lib/payout";
+import { getAllPayments, getAllPlayers, getPayoutStatusMap, getTreasuryBreakdown } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import { isFullAdminRole } from "@/lib/accountRoles";
 
@@ -11,16 +11,18 @@ const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long"
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
 export default async function PaymentsPage() {
-  const [payments, players, user, treasury] = await Promise.all([
+  const [payments, players, user, treasury, paidStatus] = await Promise.all([
     getAllPayments(),
     getAllPlayers(),
     getCurrentUser(),
     getTreasuryBreakdown(),
+    getPayoutStatusMap(currentPayoutPeriod()),
   ]);
 
   const totalPayout = players.reduce((sum, p) => sum + p.salary, 0);
   const recipients = players.filter((p) => p.salary > 0).length;
   const isRandom = user?.role === "random";
+  const isAdmin = isFullAdminRole(user?.role);
 
   // Сверка: вся казна Прайма и Мини-РБ обязана быть роздана текущему составу.
   // Показываем её явно, чтобы недостачу было видно сразу, а не искать её
@@ -74,6 +76,8 @@ export default async function PaymentsPage() {
         }))}
         totalPayout={totalPayout}
         isRandom={isRandom}
+        isAdmin={isAdmin}
+        paidStatus={[...paidStatus]}
       />
 
       <PaymentsTable
@@ -87,7 +91,7 @@ export default async function PaymentsPage() {
           source: p.source,
         }))}
         players={players.map((p) => ({ id: p.id, name: p.name }))}
-        isAdmin={isFullAdminRole(user?.role)}
+        isAdmin={isAdmin}
         isRandom={isRandom}
       />
     </div>

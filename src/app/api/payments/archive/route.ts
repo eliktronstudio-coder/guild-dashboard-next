@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { getAllPlayers } from "@/lib/queries";
-
-function currentArchiveMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
+import { currentPayoutPeriod } from "@/lib/payout";
 
 async function isAuthorized(request: NextRequest) {
   const secret = process.env.PAYOUT_ARCHIVE_SECRET;
@@ -21,7 +17,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
   }
 
-  const archiveMonth = currentArchiveMonth();
+  const archiveMonth = currentPayoutPeriod();
 
   const existing = await prisma.payment.findFirst({ where: { source: "archive", archiveMonth } });
   if (existing) {
