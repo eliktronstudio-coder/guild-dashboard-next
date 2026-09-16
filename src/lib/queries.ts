@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { splitProportionally } from "@/lib/proportionalSplit";
 import { getActivePeriodId } from "@/lib/period";
+import { activityAttendanceWeight } from "@/lib/activityWeights";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const shortDateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
@@ -40,6 +41,33 @@ function buildAttendanceMap(activities: ActivityForAttendance[]): Map<string, nu
   return map;
 }
 
+/**
+ * Посещаемость Прайма — не простая доля "сколько активностей из всех", а
+ * взвешенная по коэффициенту конкретного босса/контента (см.
+ * activityAttendanceWeight): лёгкий контент даёт меньше веса, тяжёлый —
+ * больше, PvP — всегда 1. Проценты по-прежнему ограничены 100%, потому что
+ * вес пришедшего игрока не может превысить вес всех активностей периода.
+ */
+function buildWeightedAttendanceMap(
+  activities: { name: string; mode: string; participants: { playerId: string }[] }[]
+): Map<string, number> {
+  const weights = activities.map((a) => activityAttendanceWeight(a.name, a.mode));
+  const totalWeight = weights.reduce((s, w) => s + w, 0);
+  const map = new Map<string, number>();
+  if (totalWeight <= 0) return map;
+
+  const weightByPlayer = new Map<string, number>();
+  activities.forEach((a, i) => {
+    for (const p of a.participants) {
+      weightByPlayer.set(p.playerId, (weightByPlayer.get(p.playerId) ?? 0) + weights[i]);
+    }
+  });
+  for (const [playerId, w] of weightByPlayer) {
+    map.set(playerId, Math.round((w / totalWeight) * 100));
+  }
+  return map;
+}
+
 // PvP считается отдельно от Прайм/Мини-РБ и не в процентах, а в "штуках"
 // участий (только для отображения активности — на казну/ЗП не влияет).
 function buildCountMap(activities: { participants: { playerId: string }[] }[]): Map<string, number> {
@@ -67,7 +95,7 @@ async function getAttendanceMaps(periodId: string): Promise<{
 }> {
   const activities = await prisma.activity.findMany({
     where: { periodId },
-    select: { category: true, mode: true, participants: { select: { playerId: true } } },
+    select: { name: true, category: true, mode: true, participants: { select: { playerId: true } } },
   });
 
   // PvP считается частью посещаемости Прайма независимо от того, какая
@@ -77,7 +105,7 @@ async function getAttendanceMaps(periodId: string): Promise<{
   // раз ходил", а не процентом — он не участвует в расчёте зарплаты.
   return {
     overall: buildAttendanceMap(activities),
-    prime: buildAttendanceMap(activities.filter((a) => a.category === "Прайм" || a.mode === "PvP")),
+    prime: buildWeightedAttendanceMap(activities.filter((a) => a.category === "Прайм" || a.mode === "PvP")),
     miniRb: buildAttendanceMap(activities.filter((a) => a.category === "Мини-РБ")),
     pvpCount: buildCountMap(activities.filter((a) => a.mode === "PvP")),
   };

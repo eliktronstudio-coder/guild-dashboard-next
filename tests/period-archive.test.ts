@@ -40,6 +40,44 @@ after(() => {
   }
 });
 
+test("посещаемость Прайма взвешивается по коэффициенту активности, а не считается поровну", async () => {
+  await prisma.activityParticipant.deleteMany({});
+  await prisma.activity.deleteMany({});
+  await prisma.player.deleteMany({});
+
+  const activePeriodId = await period.getActivePeriodId();
+
+  const a = await prisma.player.create({ data: { name: "Игрок А", role: "Танк" } });
+  const b = await prisma.player.create({ data: { name: "Игрок Б", role: "Хил" } });
+
+  // А ходит только на "Разъярённый Левиафан" (вес 1.5), Б — только на "АГЛ Т1" (вес 0.5,
+  // "Т1" в таблице нет — должен матчиться на базовое "АГЛ" по слову, а не на "АГЛ Т2").
+  // Суммарный вес периода: 1.5 + 0.5 = 2.
+  await prisma.activity.create({
+    data: {
+      name: "Разъярённый Левиафан",
+      category: "Прайм",
+      periodId: activePeriodId,
+      participants: { create: [{ playerId: a.id }] },
+    },
+  });
+  await prisma.activity.create({
+    data: {
+      name: "АГЛ Т1",
+      category: "Прайм",
+      periodId: activePeriodId,
+      participants: { create: [{ playerId: b.id }] },
+    },
+  });
+
+  const players = await queries.getAllPlayers();
+  const aRow = players.find((p) => p.id === a.id)!;
+  const bRow = players.find((p) => p.id === b.id)!;
+
+  assert.equal(aRow.attendancePctPrime, 75, "1.5 из суммарных 2.0 весов = 75%");
+  assert.equal(bRow.attendancePctPrime, 25, "0.5 из суммарных 2.0 весов = 25%, «АГЛ Т1» должен весить как «АГЛ», а не «АГЛ Т2»");
+});
+
 test("активность режима PvP засчитывается в посещаемость Прайма, но PvP-счётчик остаётся отдельным количеством", async () => {
   await prisma.activityParticipant.deleteMany({});
   await prisma.activity.deleteMany({});
