@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { splitProportionally } from "@/lib/proportionalSplit";
 import { getActivePeriodId } from "@/lib/period";
-import { activityAttendanceWeight } from "@/lib/activityWeights";
+import { activityAttendanceWeight, resolveAttendanceFund } from "@/lib/activityWeights";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const shortDateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
@@ -98,15 +98,16 @@ async function getAttendanceMaps(periodId: string): Promise<{
     select: { name: true, category: true, mode: true, participants: { select: { playerId: true } } },
   });
 
-  // PvP считается частью посещаемости Прайма независимо от того, какая
-  // категория проставлена у активности — заявка на выплату Прайма растёт от
-  // похода на PvP так же, как от похода на активность категории «Прайм».
-  // Отдельный счётчик pvpCount (см. ниже) при этом остаётся числом "сколько
-  // раз ходил", а не процентом — он не участвует в расчёте зарплаты.
+  // Какая казна засчитывает активность — определяется по названию
+  // (resolveAttendanceFund), а НЕ по категории, которую выбрал админ при
+  // создании: АГЛ/АГЛ Т2/Кошка всегда Мини-РБ, всё остальное — Прайм, PvP —
+  // всегда Прайм. Отдельный счётчик pvpCount (см. ниже) при этом остаётся
+  // числом "сколько раз ходил", а не процентом — он не участвует в расчёте
+  // зарплаты.
   return {
     overall: buildAttendanceMap(activities),
-    prime: buildWeightedAttendanceMap(activities.filter((a) => a.category === "Прайм" || a.mode === "PvP")),
-    miniRb: buildAttendanceMap(activities.filter((a) => a.category === "Мини-РБ")),
+    prime: buildWeightedAttendanceMap(activities.filter((a) => resolveAttendanceFund(a.name, a.mode) === "Прайм")),
+    miniRb: buildAttendanceMap(activities.filter((a) => resolveAttendanceFund(a.name, a.mode) === "Мини-РБ")),
     pvpCount: buildCountMap(activities.filter((a) => a.mode === "PvP")),
   };
 }

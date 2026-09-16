@@ -33,17 +33,18 @@ const DEFAULT_WEIGHT = 1;
 const isWordChar = (ch: string | undefined) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 
 /**
- * Ищет самое длинное известное название, встречающееся в названии активности
- * как отдельное слово — активности из игры называются длиннее записи в
- * таблице ("АГЛ Т1" -> "агл", "АГЛ Т2" -> "агл т2", "Кошка (вечер)" -> "кошка").
- * Специально БЕЗ опечаточной устойчивости (в отличие от findLabelMatch для
- * баннеров, там OCR-ошибки) — здесь название вводит админ вручную, а
- * коэффициент влияет на зарплату, так что нечёткое совпадение рискованно.
+ * Ищет самое длинное известное название из списка ключей, встречающееся в
+ * названии активности как отдельное слово — активности из игры называются
+ * длиннее записи в таблице ("АГЛ Т1" -> "агл", "АГЛ Т2" -> "агл т2", "Кошка
+ * (вечер)" -> "кошка"). Специально БЕЗ опечаточной устойчивости (в отличие
+ * от findLabelMatch для баннеров, там OCR-ошибки) — здесь название вводит
+ * админ вручную, а результат влияет на зарплату, так что нечёткое совпадение
+ * рискованно.
  */
-function matchWeightKey(raw: string): string | null {
+function matchLongestWord(raw: string, keys: string[]): string | null {
   const normalized = normalizeName(raw);
   let best: string | null = null;
-  for (const key of Object.keys(ACTIVITY_WEIGHTS)) {
+  for (const key of keys) {
     let from = 0;
     for (;;) {
       const at = normalized.indexOf(key, from);
@@ -66,6 +67,19 @@ function matchWeightKey(raw: string): string | null {
  */
 export function activityAttendanceWeight(name: string, mode: string): number {
   if (mode === "PvP") return 1;
-  const key = matchWeightKey(name);
+  const key = matchLongestWord(name, Object.keys(ACTIVITY_WEIGHTS));
   return key ? ACTIVITY_WEIGHTS[key] : DEFAULT_WEIGHT;
+}
+
+/**
+ * Какая казна засчитывает активность для целей посещаемости — определяется
+ * по названию, а не по категории, которую выбрал админ при создании: АГЛ,
+ * АГЛ Т2 и Кошка всегда Мини-РБ, всё остальное — Прайм. PvP — всегда Прайм,
+ * даже если по случайности совпало бы с одним из названий выше.
+ */
+const MINI_RB_NAMES = ["агл", "агл т2", "кошка"];
+
+export function resolveAttendanceFund(name: string, mode: string): "Прайм" | "Мини-РБ" {
+  if (mode === "PvP") return "Прайм";
+  return matchLongestWord(name, MINI_RB_NAMES) ? "Мини-РБ" : "Прайм";
 }

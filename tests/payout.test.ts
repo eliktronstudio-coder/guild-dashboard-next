@@ -204,10 +204,12 @@ test("до архивации удаление игрока увеличивае
   });
 
   // Три игрока с одинаковой посещаемостью Мини-РБ: по одной активности.
+  // Название "Кошка" — Мини-РБ теперь определяется по названию, а не по
+  // выбранной админом категории (см. resolveAttendanceFund).
   const players = await Promise.all([makePlayer("S1"), makePlayer("S2"), makePlayer("S3")]);
   await prisma.activity.create({
     data: {
-      name: "Тестовый РБ",
+      name: "Кошка",
       category: "Мини-РБ",
       periodId,
       participants: { create: players.map((p) => ({ playerId: p.id })) },
@@ -248,11 +250,13 @@ test("доля игрока ниже порога уходит остальны�
   });
 
   // Двое ходят на все активности, третий — на одну из десяти (10% < 20%).
+  // Название "Кошка" — Мини-РБ теперь определяется по названию (АГЛ/АГЛ
+  // Т2/Кошка), а не по выбранной админом категории.
   const [a, b, low] = await Promise.all([makePlayer("T1"), makePlayer("T2"), makePlayer("T3")]);
   for (let i = 0; i < 10; i++) {
     await prisma.activity.create({
       data: {
-        name: `РБ ${i}`,
+        name: `Кошка ${i}`,
         category: "Мини-РБ",
         periodId,
         participants: { create: i === 0 ? [a, b, low].map((p) => ({ playerId: p.id })) : [a, b].map((p) => ({ playerId: p.id })) },

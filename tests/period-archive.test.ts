@@ -50,12 +50,13 @@ test("посещаемость Прайма взвешивается по коэ
   const a = await prisma.player.create({ data: { name: "Игрок А", role: "Танк" } });
   const b = await prisma.player.create({ data: { name: "Игрок Б", role: "Хил" } });
 
-  // А ходит только на "Разъярённый Левиафан" (вес 1.5), Б — только на "АГЛ Т1" (вес 0.5,
-  // "Т1" в таблице нет — должен матчиться на базовое "АГЛ" по слову, а не на "АГЛ Т2").
-  // Суммарный вес периода: 1.5 + 0.5 = 2.
+  // А ходит только на "Разъярённый Левиафан Т1" (вес 1.5, матчится по слову
+  // "разъярённый левиафан"), Б — только на "Жук" (вес 0.5). Оба названия —
+  // Прайм (не входят в список Мини-РБ АГЛ/АГЛ Т2/Кошка). Суммарный вес
+  // периода: 1.5 + 0.5 = 2.
   await prisma.activity.create({
     data: {
-      name: "Разъярённый Левиафан",
+      name: "Разъярённый Левиафан Т1",
       category: "Прайм",
       periodId: activePeriodId,
       participants: { create: [{ playerId: a.id }] },
@@ -63,7 +64,7 @@ test("посещаемость Прайма взвешивается по коэ
   });
   await prisma.activity.create({
     data: {
-      name: "АГЛ Т1",
+      name: "Жук",
       category: "Прайм",
       periodId: activePeriodId,
       participants: { create: [{ playerId: b.id }] },
@@ -75,7 +76,47 @@ test("посещаемость Прайма взвешивается по коэ
   const bRow = players.find((p) => p.id === b.id)!;
 
   assert.equal(aRow.attendancePctPrime, 75, "1.5 из суммарных 2.0 весов = 75%");
-  assert.equal(bRow.attendancePctPrime, 25, "0.5 из суммарных 2.0 весов = 25%, «АГЛ Т1» должен весить как «АГЛ», а не «АГЛ Т2»");
+  assert.equal(bRow.attendancePctPrime, 25, "0.5 из суммарных 2.0 весов = 25%");
+});
+
+test("АГЛ, АГЛ Т2 и Кошка — Мини-РБ по названию, остальное — Прайм, независимо от выбранной категории", async () => {
+  await prisma.activityParticipant.deleteMany({});
+  await prisma.activity.deleteMany({});
+  await prisma.player.deleteMany({});
+
+  const activePeriodId = await period.getActivePeriodId();
+
+  const a = await prisma.player.create({ data: { name: "Игрок А", role: "Танк" } });
+  const b = await prisma.player.create({ data: { name: "Игрок Б", role: "Хил" } });
+  const c = await prisma.player.create({ data: { name: "Игрок В", role: "Маг" } });
+
+  // Категория в БД намеренно указана НЕПРАВИЛЬНО (наоборот) — проверяем, что
+  // расчёт опирается на название, а не на выбор админа.
+  await prisma.activity.create({
+    data: { name: "АГЛ Т1", category: "Прайм", periodId: activePeriodId, participants: { create: [{ playerId: a.id }] } },
+  });
+  await prisma.activity.create({
+    data: { name: "Кошка (вечер)", category: "Прайм", periodId: activePeriodId, participants: { create: [{ playerId: a.id }] } },
+  });
+  await prisma.activity.create({
+    data: { name: "Фесаникс", category: "Мини-РБ", periodId: activePeriodId, participants: { create: [{ playerId: b.id }] } },
+  });
+  // PvP всегда Прайм, даже если бы совпало по названию с Мини-РБ.
+  await prisma.activity.create({
+    data: { name: "Кошка", mode: "PvP", category: "Мини-РБ", periodId: activePeriodId, participants: { create: [{ playerId: c.id }] } },
+  });
+
+  const players = await queries.getAllPlayers();
+  const aRow = players.find((p) => p.id === a.id)!;
+  const bRow = players.find((p) => p.id === b.id)!;
+  const cRow = players.find((p) => p.id === c.id)!;
+
+  assert.ok(aRow.attendancePctMiniRb > 0, "АГЛ и Кошка должны попасть в Мини-РБ несмотря на category=Прайм в БД");
+  assert.equal(aRow.attendancePctPrime, 0, "А не ходил ни на одну активность категории Прайм по названию");
+  assert.ok(bRow.attendancePctPrime > 0, "Фесаникс — Прайм по названию несмотря на category=Мини-РБ в БД");
+  assert.equal(bRow.attendancePctMiniRb, 0);
+  assert.ok(cRow.attendancePctPrime > 0, "PvP всегда Прайм, даже если название совпадает с Кошкой");
+  assert.equal(cRow.attendancePctMiniRb, 0);
 });
 
 test("активность режима PvP засчитывается в посещаемость Прайма, но PvP-счётчик остаётся отдельным количеством", async () => {
