@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { matchNames } from "@/lib/nameMatch";
+import { getActivePeriodId } from "@/lib/period";
 
 const MAX_IMAGE_BYTES = 800_000;
 const MAX_PARTICIPANTS = 60;
@@ -92,11 +93,13 @@ export async function POST(request: NextRequest) {
   // в Общий инвентарь (та же логика, что и в /api/drops при ручном добавлении).
   const warehouse = category === "Мини-РБ" ? "ХД" : "Общий";
 
+  const periodId = await getActivePeriodId();
   const activity = await prisma.activity.create({
     data: {
       name,
       category,
       mode,
+      periodId,
       addedByUserId: null,
       participants: { create: players.matched.map((m) => ({ playerId: m.item.id })) },
       guests: { create: players.unmatched.map((n) => ({ name: n })) },

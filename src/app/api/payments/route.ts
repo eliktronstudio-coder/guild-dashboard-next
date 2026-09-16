@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { getActivePeriodId } from "@/lib/period";
 
 const STATUSES = ["Ожидает", "Подтверждено", "Выплачено"];
 
@@ -34,8 +35,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
   }
 
+  const periodId = await getActivePeriodId();
   const payment = await prisma.payment.create({
-    data: { playerId, amount, status, date },
+    data: { playerId, amount, status, date, periodId },
     include: { player: true },
   });
 
