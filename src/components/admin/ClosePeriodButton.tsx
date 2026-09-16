@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
-export default function ClosePeriodButton() {
+export default function ClosePeriodButton({ label = "Архивировать период" }: { label?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -52,7 +52,7 @@ export default function ClosePeriodButton() {
       disabled={busy}
       className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm font-medium text-danger hover:bg-danger/20 disabled:opacity-60"
     >
-      Архивировать период
+      {label}
     </button>
   );
 }

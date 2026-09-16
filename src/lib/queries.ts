@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { splitProportionally } from "@/lib/proportionalSplit";
+import { getActivePeriodId } from "@/lib/period";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const shortDateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
@@ -51,13 +52,21 @@ function buildCountMap(activities: { participants: { playerId: string }[] }[]): 
   return map;
 }
 
-async function getAttendanceMaps(): Promise<{
+/**
+ * Посещаемость считается только по активностям ТЕКУЩЕГО расчётного периода
+ * (15→15) — каждый новый период статистика начинается заново, чтобы старая
+ * активность не тянула процент вниз/вверх бесконечно. periodId берём заранее
+ * (getActivePeriodId), а не резолвим здесь — иначе каждый вызов рисковал бы
+ * молча создать новый период, если активного ещё нет.
+ */
+async function getAttendanceMaps(periodId: string): Promise<{
   overall: Map<string, number>;
   prime: Map<string, number>;
   miniRb: Map<string, number>;
   pvpCount: Map<string, number>;
 }> {
   const activities = await prisma.activity.findMany({
+    where: { periodId },
     select: { category: true, mode: true, participants: { select: { playerId: true } } },
   });
 
@@ -109,7 +118,8 @@ async function getSalaryMapForPool(attendanceMap: Map<string, number>, pool: num
 }
 
 async function getDerivedPlayerMaps() {
-  const [attendanceMaps, treasuryBreakdown] = await Promise.all([getAttendanceMaps(), getTreasuryBreakdown()]);
+  const periodId = await getActivePeriodId();
+  const [attendanceMaps, treasuryBreakdown] = await Promise.all([getAttendanceMaps(periodId), getTreasuryBreakdown()]);
   const [salaryPrime, salaryMiniRb] = await Promise.all([
     getSalaryMapForPool(attendanceMaps.prime, treasuryBreakdown.prime),
     getSalaryMapForPool(attendanceMaps.miniRb, treasuryBreakdown.miniRb),

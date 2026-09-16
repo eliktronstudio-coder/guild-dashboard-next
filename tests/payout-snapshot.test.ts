@@ -86,10 +86,13 @@ test("без снимка выплата одному двигает живую 
   await prisma.activityParticipant.deleteMany({});
   await prisma.player.deleteMany({});
 
+  const { getActivePeriodId } = await import("../src/lib/period");
+  const activePeriodId = await getActivePeriodId();
+
   // Два игрока с одинаковой посещаемостью Прайма — делят пул пополам.
   const a = await prisma.player.create({ data: { name: "Игрок А", role: "Танк" } });
   const b = await prisma.player.create({ data: { name: "Игрок Б", role: "Хил" } });
-  const activity = await prisma.activity.create({ data: { name: "Прайм", category: "Прайм" } });
+  const activity = await prisma.activity.create({ data: { name: "Прайм", category: "Прайм", periodId: activePeriodId } });
   await prisma.activityParticipant.createMany({
     data: [
       { activityId: activity.id, playerId: a.id },

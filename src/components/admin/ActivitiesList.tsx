@@ -10,6 +10,7 @@ import { ACTIVITY_CATEGORIES, ACTIVITY_MODES, ACTIVITY_DIFFICULTIES, ACTIVITY_ST
 import StatCard from "@/components/StatCard";
 import EmptyState from "@/components/EmptyState";
 import BannerMedia from "@/components/BannerMedia";
+import ClosePeriodButton from "@/components/admin/ClosePeriodButton";
 
 const MAX_IMAGE_BYTES = 800_000;
 const MAX_SCREENSHOTS = 6;
@@ -73,6 +74,7 @@ export default function ActivitiesList({
   players,
   catalog,
   isAdmin,
+  canArchivePeriod = false,
   summary,
 }: {
   activities: ActivityRow[];
@@ -83,6 +85,8 @@ export default function ActivitiesList({
   players: PlayerOption[];
   catalog: CatalogItem[];
   isAdmin: boolean;
+  /** Полный админ/gm — архивация периода отдельно от прав на добавление активностей (rl). */
+  canArchivePeriod?: boolean;
   summary: Summary;
 }) {
   const router = useRouter();
@@ -291,6 +295,12 @@ export default function ActivitiesList({
 
   return (
     <div className="space-y-4">
+      {canArchivePeriod && (
+        <div className="flex flex-wrap items-center gap-2">
+          <ClosePeriodButton label="Архив активностей" />
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Активностей за период" value={String(summary.total)} hint="в текущей выборке" />
         <StatCard label="Средняя посещаемость" value={String(summary.avgAttendance)} hint="участников на активность" />

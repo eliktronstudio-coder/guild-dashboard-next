@@ -1,17 +1,26 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { getActivePeriod, computePeriodBounds, periodLabel } from "@/lib/period";
 import { getAllPlayers, getTreasuryBreakdown } from "@/lib/queries";
+
+/** Админ из сессии — либо cron/бот по общему секрету (тот же, что у /api/payments/archive). */
+async function authorize(request: NextRequest): Promise<{ closedBy: string } | null> {
+  const secret = process.env.PAYOUT_ARCHIVE_SECRET;
+  const header = request.headers.get("authorization");
+  if (secret && header === `Bearer ${secret}`) return { closedBy: "авто (15 число)" };
+  const admin = await requireAdmin();
+  return admin ? { closedBy: admin.username } : null;
+}
 
 /**
  * Сводка для подтверждения перед архивацией (п.16/37 ТЗ): показывает, что
  * попадёт в архив, и предупреждает об отрицательном балансе казны — если он
  * отрицательный, закрытие блокируется тем же способом, что и в POST ниже.
  */
-export async function GET() {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+export async function GET(request: NextRequest) {
+  const auth = await authorize(request);
+  if (!auth) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const active = await getActivePeriod();
   const [players, treasury, activityCount, unsoldDrops] = await Promise.all([
@@ -46,9 +55,9 @@ export async function GET() {
  * Задолженность (accrued - paid) остаётся доступной к погашению через
  * /api/archive/[periodId]/pay, списывающий из ТЕКУЩЕЙ казны.
  */
-export async function POST() {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+export async function POST(request: NextRequest) {
+  const auth = await authorize(request);
+  if (!auth) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const active = await getActivePeriod();
   if (active.status !== "active") {
@@ -102,7 +111,7 @@ export async function POST() {
 
   await prisma.accountingPeriod.update({
     where: { id: active.id },
-    data: { status: "closed", closedAt: new Date(), closedBy: admin.username },
+    data: { status: "closed", closedAt: new Date(), closedBy: auth.closedBy },
   });
 
   return NextResponse.json({ ok: true, closedPeriodId: active.id, newPeriodId: newPeriod.id, players: snapshotRows.length });

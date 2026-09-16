@@ -192,6 +192,8 @@ test("остаток от нацело неделимой суммы не тер
 
 test("до архивации удаление игрока увеличивает доли остальных, а не теряет золото", async () => {
   const { getAllPlayers } = await import("../src/lib/queries");
+  const { getActivePeriodId } = await import("../src/lib/period");
+  const periodId = await getActivePeriodId();
 
   // Казна Мини-РБ: продажа дропа категории «Мини-РБ» на 1000 золота.
   const tx = await prisma.treasuryTransaction.create({
@@ -207,6 +209,7 @@ test("до архивации удаление игрока увеличивае
     data: {
       name: "Тестовый РБ",
       category: "Мини-РБ",
+      periodId,
       participants: { create: players.map((p) => ({ playerId: p.id })) },
     },
   });
@@ -234,6 +237,8 @@ test("до архивации удаление игрока увеличивае
 
 test("доля игрока ниже порога уходит остальным, а не пропадает", async () => {
   const { getAllPlayers } = await import("../src/lib/queries");
+  const { getActivePeriodId } = await import("../src/lib/period");
+  const periodId = await getActivePeriodId();
 
   const tx = await prisma.treasuryTransaction.create({
     data: { description: "Порог", amount: 900 },
@@ -249,6 +254,7 @@ test("доля игрока ниже порога уходит остальны�
       data: {
         name: `РБ ${i}`,
         category: "Мини-РБ",
+        periodId,
         participants: { create: i === 0 ? [a, b, low].map((p) => ({ playerId: p.id })) : [a, b].map((p) => ({ playerId: p.id })) },
       },
     });
