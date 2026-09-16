@@ -70,9 +70,14 @@ async function getAttendanceMaps(periodId: string): Promise<{
     select: { category: true, mode: true, participants: { select: { playerId: true } } },
   });
 
+  // PvP считается частью посещаемости Прайма независимо от того, какая
+  // категория проставлена у активности — заявка на выплату Прайма растёт от
+  // похода на PvP так же, как от похода на активность категории «Прайм».
+  // Отдельный счётчик pvpCount (см. ниже) при этом остаётся числом "сколько
+  // раз ходил", а не процентом — он не участвует в расчёте зарплаты.
   return {
     overall: buildAttendanceMap(activities),
-    prime: buildAttendanceMap(activities.filter((a) => a.category === "Прайм")),
+    prime: buildAttendanceMap(activities.filter((a) => a.category === "Прайм" || a.mode === "PvP")),
     miniRb: buildAttendanceMap(activities.filter((a) => a.category === "Мини-РБ")),
     pvpCount: buildCountMap(activities.filter((a) => a.mode === "PvP")),
   };

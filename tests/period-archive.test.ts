@@ -40,6 +40,33 @@ after(() => {
   }
 });
 
+test("активность режима PvP засчитывается в посещаемость Прайма, но PvP-счётчик остаётся отдельным количеством", async () => {
+  await prisma.activityParticipant.deleteMany({});
+  await prisma.activity.deleteMany({});
+  await prisma.player.deleteMany({});
+
+  const activePeriodId = await period.getActivePeriodId();
+
+  const a = await prisma.player.create({ data: { name: "Игрок А", role: "Танк" } });
+  const b = await prisma.player.create({ data: { name: "Игрок Б", role: "Хил" } });
+
+  // У активности категория «Мини-РБ» (или вообще не проставлена явно на
+  // Прайм), но режим PvP — она всё равно должна считаться как поход на
+  // Прайм. Игрок Б на неё не ходил.
+  const pvpActivity = await prisma.activity.create({
+    data: { name: "PvP ивент", category: "Мини-РБ", mode: "PvP", periodId: activePeriodId },
+  });
+  await prisma.activityParticipant.create({ data: { activityId: pvpActivity.id, playerId: a.id } });
+
+  const players = await queries.getAllPlayers();
+  const aRow = players.find((p) => p.id === a.id)!;
+  const bRow = players.find((p) => p.id === b.id)!;
+
+  assert.equal(aRow.attendancePctPrime, 100, "поход на PvP должен засчитаться в посещаемость Прайма");
+  assert.equal(bRow.attendancePctPrime, 0, "не ходивший игрок не получает посещаемость Прайма");
+  assert.equal(aRow.pvpCount, 1, "PvP-счётчик — это количество походов, а не процент");
+});
+
 test("computePeriodBounds охватывает цикл 15→15", () => {
   const { startDate, endDate } = period.computePeriodBounds(new Date(2026, 8, 20)); // 20 сентября
   assert.equal(startDate.getDate(), 15);
