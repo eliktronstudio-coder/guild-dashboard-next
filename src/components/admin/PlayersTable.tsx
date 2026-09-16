@@ -21,6 +21,8 @@ type Player = {
   salary: number;
   salaryPrime: number;
   salaryMiniRb: number;
+  /** Выплачено за текущий расчётный период (15→15). */
+  paidPeriod: number;
   userId: string | null;
 };
 
@@ -286,6 +288,12 @@ export default function PlayersTable({
                 >
                   Зарплата
                 </th>
+                <th className="px-4 py-3 font-medium" title="Сколько уже выплачено игроку в текущем расчётном периоде (15→15)">
+                  Выплачено
+                </th>
+                <th className="px-4 py-3 font-medium" title="Остаток к выплате за текущий период = зарплата (живая доля)">
+                  Остаток
+                </th>
                 {isAdmin && <th className="px-4 py-3 font-medium" />}
               </tr>
             </thead>
@@ -388,6 +396,16 @@ export default function PlayersTable({
                             <span className="font-medium tabular-nums">{numberFmt.format(p.salaryMiniRb)}</span>
                           </div>
                         </div>
+                      </BlurValue>
+                    </td>
+                    <td className="px-4 py-3">
+                      <BlurValue blurred={isRandom}>
+                        <span className="font-medium tabular-nums text-success">{numberFmt.format(p.paidPeriod)}</span>
+                      </BlurValue>
+                    </td>
+                    <td className="px-4 py-3">
+                      <BlurValue blurred={isRandom}>
+                        <span className="font-medium tabular-nums">{numberFmt.format(p.salary)}</span>
                       </BlurValue>
                     </td>
                     {isAdmin && (

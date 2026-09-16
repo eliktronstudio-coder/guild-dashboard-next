@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
   }
 
-  const archiveMonth = currentPayoutPeriod();
+  const archiveMonth = await currentPayoutPeriod();
 
   const existing = await prisma.payment.findFirst({ where: { source: "archive", archiveMonth } });
   if (existing) {

@@ -452,8 +452,9 @@ export async function getActivityById(id: string) {
   };
 }
 
-export async function getTreasuryTransactions(limit?: number) {
+export async function getTreasuryTransactions(limit?: number, periodId?: string) {
   const transactions = await prisma.treasuryTransaction.findMany({
+    where: periodId ? { periodId } : undefined,
     orderBy: { date: "desc" },
     take: limit,
   });
@@ -863,6 +864,87 @@ export async function getPayoutStatusMap(period: string): Promise<Set<string>> {
     select: { playerId: true, category: true },
   });
   return new Set(rows.map((r) => `${r.playerId}:${r.category}`));
+}
+
+/** Снимок зарплаты за период — кнопка «Зарплата». Пусто, если не фиксировали. */
+export async function getPayoutSnapshotMap(
+  period: string
+): Promise<Map<string, { salaryPrime: number; salaryMiniRb: number }>> {
+  const rows = await prisma.payoutSnapshot.findMany({
+    where: { period },
+    select: { playerId: true, salaryPrime: true, salaryMiniRb: true },
+  });
+  return new Map(rows.map((r) => [r.playerId, { salaryPrime: r.salaryPrime, salaryMiniRb: r.salaryMiniRb }]));
+}
+
+/** Все периоды (активный + закрытые), новые сверху — для фильтра в финансовом журнале. */
+export async function getAllPeriodsForFilter() {
+  return prisma.accountingPeriod.findMany({
+    orderBy: { startDate: "desc" },
+    select: { id: true, label: true, status: true },
+  });
+}
+
+/** Сколько игроку выплачено (по обеим казнам) в рамках указанного периода — для «Состава». */
+export async function getPlayerPeriodPaidMap(periodId: string): Promise<Map<string, number>> {
+  const rows = await prisma.payment.groupBy({
+    by: ["playerId"],
+    where: { periodId, source: "payout", status: "Выплачено" },
+    _sum: { amount: true },
+  });
+  return new Map(rows.map((r) => [r.playerId, r._sum.amount ?? 0]));
+}
+
+/** Закрытые расчётные периоды, новые сверху — для раздела «Архив». */
+export async function getArchivePeriods() {
+  const periods = await prisma.accountingPeriod.findMany({
+    where: { status: "closed" },
+    orderBy: { startDate: "desc" },
+    include: { archive: true },
+  });
+  return periods.map((p) => {
+    const accrued = p.archive.reduce((sum, a) => sum + a.accruedPrime + a.accruedMiniRb, 0);
+    const paid = p.archive.reduce((sum, a) => sum + a.paidPrime + a.paidMiniRb, 0);
+    return {
+      id: p.id,
+      label: p.label,
+      startDate: p.startDate,
+      endDate: p.endDate,
+      closedAt: p.closedAt,
+      closedBy: p.closedBy,
+      playerCount: p.archive.length,
+      accrued,
+      paid,
+      debt: accrued - paid,
+    };
+  });
+}
+
+/** Один закрытый период с постатейной задолженностью по игрокам. */
+export async function getArchivePeriodDetail(periodId: string) {
+  const period = await prisma.accountingPeriod.findUnique({
+    where: { id: periodId },
+    include: { archive: { orderBy: { playerName: "asc" } } },
+  });
+  if (!period || period.status !== "closed") return null;
+  return {
+    id: period.id,
+    label: period.label,
+    startDate: period.startDate,
+    endDate: period.endDate,
+    closedAt: period.closedAt,
+    closedBy: period.closedBy,
+    players: period.archive.map((a) => ({
+      playerId: a.playerId,
+      playerName: a.playerName,
+      accruedPrime: a.accruedPrime,
+      accruedMiniRb: a.accruedMiniRb,
+      paidPrime: a.paidPrime,
+      paidMiniRb: a.paidMiniRb,
+      remainingPrime: a.accruedPrime - a.paidPrime,
+      remainingMiniRb: a.accruedMiniRb - a.paidMiniRb,
+    })),
+  };
 }
 
 /**

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { getActivePeriodId } from "@/lib/period";
 
 // Продажа предмета из инвентаря — можно продать не весь остаток, а
 // только часть (любое количество от 1 до суммарного остатка). Единицы
@@ -35,11 +36,13 @@ export async function POST(request: NextRequest) {
     // предмета игроком. Сколько продано опыта, пишем в описание — отдельного
     // поля под это в казне нет, а в списке операций цифру видно сразу.
     const xpLabel = new Intl.NumberFormat("ru-RU").format(xp);
+    const periodId = await getActivePeriodId();
     await prisma.treasuryTransaction.create({
       data: {
         description: `Продажа Мини-РБ: ${xpLabel} опыта${note ? ` — ${note}` : ""}`,
         amount: Math.round(amount),
         category: "Мини-РБ",
+        periodId,
       },
     });
     return NextResponse.json({ ok: true });
@@ -64,8 +67,13 @@ export async function POST(request: NextRequest) {
       buyerName = player.name;
     }
 
+    const periodId = await getActivePeriodId();
     await prisma.treasuryTransaction.create({
-      data: { description: `Продажа дропа: Мусор ×${quantity} — ${buyerName ?? "аукцион"}`, amount: Math.round(amount) },
+      data: {
+        description: `Продажа дропа: Мусор ×${quantity} — ${buyerName ?? "аукцион"}`,
+        amount: Math.round(amount),
+        periodId,
+      },
     });
     return NextResponse.json({ ok: true });
   }
@@ -125,9 +133,10 @@ export async function POST(request: NextRequest) {
   const totalAmount = playerId ? fixedTotal : Math.round(manualAmount as number);
   const description = `Продажа дропа: ${entries[0].item} — ${buyerName ?? "аукцион"}`;
 
+  const periodId = await getActivePeriodId();
   await prisma.$transaction(async (tx) => {
     const transaction = await tx.treasuryTransaction.create({
-      data: { description, amount: totalAmount },
+      data: { description, amount: totalAmount, periodId },
     });
 
     if (fullySoldIds.length > 0) {

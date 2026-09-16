@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActivitiesManager } from "@/lib/auth";
+import { getActivePeriodId } from "@/lib/period";
 
 const CATEGORIES = ["Мини-РБ", "Прайм"];
 const MODES = ["PvE", "PvP"];
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
   // с Мини-РБ активности — сразу на склад ХД, с Прайм — в Общий инвентарь.
   const dropWarehouse = category === "Мини-РБ" ? "ХД" : "Общий";
 
+  const periodId = await getActivePeriodId();
   const activity = await prisma.activity.create({
     data: {
       name,
@@ -99,6 +101,7 @@ export async function POST(request: NextRequest) {
       isNight,
       perAttendanceValue,
       addedByUserId: admin.sub,
+      periodId,
       participants: { create: participantIds.map((playerId: string) => ({ playerId })) },
       drops: {
         create: dropEntries

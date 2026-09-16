@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
+import { getActivePeriodId } from "@/lib/period";
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
@@ -23,8 +24,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Неверная дата." }, { status: 400 });
   }
 
+  const periodId = await getActivePeriodId();
   const transaction = await prisma.treasuryTransaction.create({
-    data: { description, amount, date },
+    data: { description, amount, date, periodId },
   });
 
   return NextResponse.json(transaction, { status: 201 });

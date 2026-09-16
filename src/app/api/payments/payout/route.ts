@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-import { currentPayoutPeriod } from "@/lib/payout";
+import { getActivePeriodId } from "@/lib/period";
 import { getPlayerById } from "@/lib/queries";
 
 const CATEGORIES = ["Прайм", "Мини-РБ"] as const;
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   if (!parsed) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
   const { playerId, category } = parsed;
 
-  const period = currentPayoutPeriod();
+  const period = await getActivePeriodId();
 
   const already = await prisma.payment.findFirst({
     where: { playerId, category, source: "payout", archiveMonth: period, status: "Выплачено" },
@@ -39,12 +39,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "За этот период уже выплачено." }, { status: 409 });
   }
 
-  // Сумму берём из текущего расчёта зарплаты игрока (salaryPrime/salaryMiniRb),
-  // а не из тела запроса — иначе с клиента можно было бы прислать любую цифру.
   const player = await getPlayerById(playerId);
   if (!player) return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
 
-  const amount = category === "Мини-РБ" ? player.salaryMiniRb : player.salaryPrime;
+  // Сумму берём из снимка за период, если зарплата зафиксирована кнопкой
+  // «Зарплата» — иначе она пересчитывалась бы от остатка казны при каждой
+  // следующей выплате, и уже показанные игрокам суммы «плыли» бы. Без
+  // снимка (кнопку ещё не нажимали) используем текущий живой расчёт — это
+  // прежнее поведение, сохранено для совместимости.
+  const snapshot = await prisma.payoutSnapshot.findUnique({
+    where: { period_playerId: { period, playerId } },
+  });
+  const amount = snapshot
+    ? category === "Мини-РБ"
+      ? snapshot.salaryMiniRb
+      : snapshot.salaryPrime
+    : category === "Мини-РБ"
+      ? player.salaryMiniRb
+      : player.salaryPrime;
   if (amount <= 0) {
     return NextResponse.json({ error: "Нечего выплачивать — доля равна нулю." }, { status: 400 });
   }
@@ -57,6 +69,7 @@ export async function POST(request: NextRequest) {
         status: "Выплачено",
         source: "payout",
         archiveMonth: period,
+        periodId: period,
         category,
       },
     }),
@@ -66,6 +79,7 @@ export async function POST(request: NextRequest) {
         amount: -amount,
         category,
         kind: "payout",
+        periodId: period,
       },
     }),
   ]);
@@ -86,7 +100,7 @@ export async function DELETE(request: NextRequest) {
   if (!parsed) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
   const { playerId, category } = parsed;
 
-  const period = currentPayoutPeriod();
+  const period = await getActivePeriodId();
 
   const payment = await prisma.payment.findFirst({
     where: { playerId, category, source: "payout", archiveMonth: period, status: "Выплачено" },
@@ -104,6 +118,7 @@ export async function DELETE(request: NextRequest) {
         amount: payment.amount,
         category,
         kind: "payout",
+        periodId: period,
       },
     }),
   ]);

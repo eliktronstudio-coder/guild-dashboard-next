@@ -14,10 +14,10 @@ export function daysUntilNextPayout(): number {
   return Math.round((nextPayoutDate().getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-/** Текущий расчётный период выплат — "YYYY-MM". Общий для архива и для
-    переключателя статуса П/М в «Расчёте распределения», чтобы выплата
-    считалась актуальной ровно один месяц, а не бессрочно. */
-export function currentPayoutPeriod(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
+/**
+ * @deprecated Период выплат теперь — цикл 15→15 с собственным ID
+ * (см. src/lib/period.ts, getActivePeriodId()), а не календарный месяц.
+ * Функция оставлена только как алиас на случай прямого импорта из старого
+ * кода; новый код должен использовать getActivePeriodId() напрямую.
+ */
+export { getActivePeriodId as currentPayoutPeriod } from "@/lib/period";
