@@ -47,6 +47,11 @@ model Activity {
   status             String                @default("К выплате")
   isNight            Boolean               @default(false)
   perAttendanceValue Int                   @default(0)
+  /// Коэффициент для расчёта посещаемости Прайма (0.5 для лёгкого контента,
+  /// 1.5 для разъярённых боссов и т.д.) — при создании подставляется по
+  /// названию (см. activityAttendanceWeight в src/lib/activityWeights.ts),
+  /// дальше админ может поправить вручную под конкретную активность.
+  weight             Float                 @default(1)
   addedByUserId      String?
   addedBy            User?                 @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
   periodId           String?

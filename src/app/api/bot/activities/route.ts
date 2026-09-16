@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { matchNames } from "@/lib/nameMatch";
 import { getActivePeriodId } from "@/lib/period";
+import { activityAttendanceWeight } from "@/lib/activityWeights";
 
 const MAX_IMAGE_BYTES = 800_000;
 const MAX_PARTICIPANTS = 60;
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
       name,
       category,
       mode,
+      weight: activityAttendanceWeight(name, mode),
       periodId,
       addedByUserId: null,
       participants: { create: players.matched.map((m) => ({ playerId: m.item.id })) },

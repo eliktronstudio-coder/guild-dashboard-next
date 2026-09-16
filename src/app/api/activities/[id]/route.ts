@@ -56,6 +56,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     data.perAttendanceValue = value;
   }
+  if (body?.weight !== undefined) {
+    const value = Number(body.weight);
+    if (!Number.isFinite(value) || value < 0 || value > 10) {
+      return NextResponse.json({ error: "Коэффициент должен быть от 0 до 10." }, { status: 400 });
+    }
+    data.weight = value;
+  }
 
   const participantIds: string[] | null = Array.isArray(body?.participantIds)
     ? body.participantIds.filter((pid: unknown): pid is string => typeof pid === "string")

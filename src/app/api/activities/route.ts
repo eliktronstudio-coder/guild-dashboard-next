@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActivitiesManager } from "@/lib/auth";
 import { getActivePeriodId } from "@/lib/period";
+import { activityAttendanceWeight } from "@/lib/activityWeights";
 
 const CATEGORIES = ["Мини-РБ", "Прайм"];
 const MODES = ["PvE", "PvP"];
@@ -57,8 +58,18 @@ export async function POST(request: NextRequest) {
         .filter((n: string) => n.length > 0 && n.length <= 40)
     : [];
 
+  // Коэффициент можно прислать явно (в форме админ мог поправить
+  // подсказку) — иначе подставляется автоматически по названию/режиму.
+  const weight =
+    body?.weight !== undefined && Number.isFinite(Number(body.weight))
+      ? Number(body.weight)
+      : activityAttendanceWeight(name, mode);
+
   if (!name || name.length > 60) {
     return NextResponse.json({ error: "Укажите название активности (до 60 символов)." }, { status: 400 });
+  }
+  if (weight < 0 || weight > 10) {
+    return NextResponse.json({ error: "Коэффициент должен быть от 0 до 10." }, { status: 400 });
   }
 
   const date = dateStr ? new Date(dateStr) : new Date();
@@ -100,6 +111,7 @@ export async function POST(request: NextRequest) {
       difficulty,
       isNight,
       perAttendanceValue,
+      weight,
       addedByUserId: admin.sub,
       periodId,
       participants: { create: participantIds.map((playerId: string) => ({ playerId })) },

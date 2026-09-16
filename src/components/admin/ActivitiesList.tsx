@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import { Plus, Trash2, X, Search, RotateCcw, ChevronLeft, ChevronRight, Filter } from "lucide-react";
 import clsx from "clsx";
 import { ACTIVITY_CATEGORIES, ACTIVITY_MODES, ACTIVITY_DIFFICULTIES, ACTIVITY_STATUSES, statusColor } from "@/lib/activityOptions";
+import { activityAttendanceWeight } from "@/lib/activityWeights";
 import StatCard from "@/components/StatCard";
 import EmptyState from "@/components/EmptyState";
 import BannerMedia from "@/components/BannerMedia";
@@ -32,6 +33,7 @@ type ActivityRow = {
   difficulty: string;
   status: string;
   isNight: boolean;
+  weight: number;
   date: string;
   dateIso: string;
   participants: number;
@@ -108,6 +110,8 @@ export default function ActivitiesList({
   const [newDifficulty, setNewDifficulty] = useState(ACTIVITY_DIFFICULTIES[0]);
   const [newIsNight, setNewIsNight] = useState(false);
   const [newPerAttendance, setNewPerAttendance] = useState("0");
+  const [newWeight, setNewWeight] = useState("1");
+  const [weightTouched, setWeightTouched] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [dropSelected, setDropSelected] = useState<Record<string, string>>({});
@@ -118,6 +122,13 @@ export default function ActivitiesList({
   const [guestInput, setGuestInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Коэффициент подсказывается по названию/режиму (та же таблица, что и на
+  // сервере) — пока админ не тронул поле руками, оно едет вслед за названием.
+  useEffect(() => {
+    if (weightTouched) return;
+    setNewWeight(String(activityAttendanceWeight(newName, newMode)));
+  }, [newName, newMode, weightTouched]);
 
   async function handleShotFiles(e: ChangeEvent<HTMLInputElement>, setShots: (fn: (prev: string[]) => string[]) => void) {
     const files = Array.from(e.target.files ?? []);
@@ -190,6 +201,8 @@ export default function ActivitiesList({
     setNewDifficulty(ACTIVITY_DIFFICULTIES[0]);
     setNewIsNight(false);
     setNewPerAttendance("0");
+    setNewWeight("1");
+    setWeightTouched(false);
     setSelected(new Set());
     setSearch("");
     setDropSelected({});
@@ -254,6 +267,7 @@ export default function ActivitiesList({
           difficulty: newDifficulty,
           isNight: newIsNight,
           perAttendanceValue: Number(newPerAttendance),
+          weight: Number(newWeight),
           participantIds: [...selected],
           drops: Object.entries(dropSelected).map(([catalogItemId, quantity]) => ({
             catalogItemId,
@@ -495,6 +509,23 @@ export default function ActivitiesList({
                     value={newPerAttendance}
                     onChange={(e) => setNewPerAttendance(e.target.value)}
                     min={0}
+                    className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted" title="Вес активности для посещаемости Прайма — подставляется по названию, можно поправить">
+                    Коэффициент
+                  </label>
+                  <input
+                    type="number"
+                    value={newWeight}
+                    onChange={(e) => {
+                      setNewWeight(e.target.value);
+                      setWeightTouched(true);
+                    }}
+                    min={0}
+                    max={10}
+                    step={0.25}
                     className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
                   />
                 </div>

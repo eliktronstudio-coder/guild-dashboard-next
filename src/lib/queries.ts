@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { splitProportionally } from "@/lib/proportionalSplit";
 import { getActivePeriodId } from "@/lib/period";
-import { activityAttendanceWeight, resolveAttendanceFund } from "@/lib/activityWeights";
+import { resolveAttendanceFund } from "@/lib/activityWeights";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const shortDateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
@@ -43,15 +43,18 @@ function buildAttendanceMap(activities: ActivityForAttendance[]): Map<string, nu
 
 /**
  * Посещаемость Прайма — не простая доля "сколько активностей из всех", а
- * взвешенная по коэффициенту конкретного босса/контента (см.
- * activityAttendanceWeight): лёгкий контент даёт меньше веса, тяжёлый —
- * больше, PvP — всегда 1. Проценты по-прежнему ограничены 100%, потому что
- * вес пришедшего игрока не может превысить вес всех активностей периода.
+ * взвешенная по коэффициенту конкретной активности (Activity.weight):
+ * лёгкий контент даёт меньше веса, тяжёлый — больше. При создании
+ * подставляется автоматически по названию (activityAttendanceWeight),
+ * дальше админ может поправить под конкретный поход — расчёт всегда берёт
+ * сохранённое значение, а не пересчитывает его из названия заново. Проценты
+ * по-прежнему ограничены 100%, потому что вес пришедшего игрока не может
+ * превысить вес всех активностей периода.
  */
 function buildWeightedAttendanceMap(
-  activities: { name: string; mode: string; participants: { playerId: string }[] }[]
+  activities: { weight: number; participants: { playerId: string }[] }[]
 ): Map<string, number> {
-  const weights = activities.map((a) => activityAttendanceWeight(a.name, a.mode));
+  const weights = activities.map((a) => a.weight);
   const totalWeight = weights.reduce((s, w) => s + w, 0);
   const map = new Map<string, number>();
   if (totalWeight <= 0) return map;
@@ -95,7 +98,7 @@ async function getAttendanceMaps(periodId: string): Promise<{
 }> {
   const activities = await prisma.activity.findMany({
     where: { periodId },
-    select: { name: true, category: true, mode: true, participants: { select: { playerId: true } } },
+    select: { name: true, category: true, mode: true, weight: true, participants: { select: { playerId: true } } },
   });
 
   // Какая казна засчитывает активность — определяется по названию
@@ -434,6 +437,7 @@ export async function getFilteredActivities(filters: ActivityFilters) {
       difficulty: a.difficulty,
       status: a.status,
       isNight: a.isNight,
+      weight: a.weight,
       date: dateFmt.format(a.date),
       dateIso: a.date.toISOString().slice(0, 10),
       participants: a._count.participants,
@@ -472,6 +476,7 @@ export async function getActivityById(id: string) {
     status: activity.status,
     isNight: activity.isNight,
     perAttendanceValue: activity.perAttendanceValue,
+    weight: activity.weight,
     addedByUsername: activity.addedBy?.username ?? null,
     date: dateFmt.format(activity.date),
     dateIso: activity.date.toISOString().slice(0, 10),

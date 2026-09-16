@@ -39,6 +39,7 @@ type Activity = {
   status: string;
   isNight: boolean;
   perAttendanceValue: number;
+  weight: number;
   addedByUsername: string | null;
   date: string;
   dateIso: string;
@@ -83,6 +84,8 @@ export default function ActivityDetailPanel({
   const [status, setStatus] = useState(activity.status);
   const [editingPerAttendance, setEditingPerAttendance] = useState(false);
   const [perAttendance, setPerAttendance] = useState(String(activity.perAttendanceValue));
+  const [editingWeight, setEditingWeight] = useState(false);
+  const [weightValue, setWeightValue] = useState(String(activity.weight));
   const [addingDrop, setAddingDrop] = useState(false);
   const [dropCatalogId, setDropCatalogId] = useState("");
   const [dropItem, setDropItem] = useState("");
@@ -270,6 +273,23 @@ export default function ActivityDetailPanel({
     if (res.ok) {
       setEditingPerAttendance(false);
       router.refresh();
+    }
+  }
+
+  async function handleSaveWeight() {
+    setBusy(true);
+    const res = await fetch(`/api/activities/${activity.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ weight: Number(weightValue) }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (res.ok) {
+      setEditingWeight(false);
+      router.refresh();
+    } else {
+      setError(data.error ?? "Не удалось сохранить коэффициент.");
     }
   }
 
@@ -598,6 +618,49 @@ export default function ActivityDetailPanel({
                 </p>
               )}
               <p className="text-xs text-muted">с посещения</p>
+            </div>
+            <div>
+              {editingWeight ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={weightValue}
+                    onChange={(e) => setWeightValue(e.target.value)}
+                    min={0}
+                    max={10}
+                    step={0.25}
+                    className="w-20 rounded-md border border-border bg-surface-2 px-2 py-1 text-lg outline-none focus:border-accent"
+                    autoFocus
+                  />
+                  <button type="button" onClick={handleSaveWeight} className="rounded p-1 text-success hover:bg-surface-2">
+                    <Check size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingWeight(false);
+                      setWeightValue(String(activity.weight));
+                    }}
+                    className="rounded p-1 text-muted hover:bg-surface-2"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ) : (
+                <p className="flex items-center gap-1.5 text-2xl font-semibold" title="Вес активности для посещаемости Прайма">
+                  {activity.weight}
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingWeight(true)}
+                      className="rounded p-1 text-muted hover:bg-surface-2 hover:text-foreground"
+                    >
+                      <Pencil size={13} />
+                    </button>
+                  )}
+                </p>
+              )}
+              <p className="text-xs text-muted">коэффициент</p>
             </div>
           </div>
           )}
