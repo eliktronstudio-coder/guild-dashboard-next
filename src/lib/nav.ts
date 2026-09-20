@@ -13,6 +13,7 @@ import {
   Coins,
   House,
   Palette,
+  Archive,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +45,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: "/treasury", label: "Казна", icon: Landmark },
       { href: "/payments", label: "Выплаты", icon: Wallet },
+      { href: "/archive", label: "Архив", icon: Archive, adminOnly: true },
     ],
   },
   {

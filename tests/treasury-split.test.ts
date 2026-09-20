@@ -164,3 +164,59 @@ test("отмена выплаты (компенсирующая операция
   const after = await queries.getTreasuryBreakdown();
   assert.deepEqual(after, before, "после отмены казна должна вернуться в точности к исходному состоянию");
 });
+
+test("ручная архивация обнуляет живую казну и живую посещаемость, история остаётся в архиве", async () => {
+  await prisma.treasuryTransaction.deleteMany({});
+  await prisma.activity.deleteMany({});
+  await prisma.activityParticipant.deleteMany({});
+  await prisma.archive.deleteMany({});
+  await prisma.player.deleteMany({});
+
+  const player = await prisma.player.create({ data: { name: "Игрок", role: "Танк" } });
+  const activityDate = new Date("2026-05-10T12:00:00Z");
+  const activity = await prisma.activity.create({
+    data: { name: "Тест", category: "Прайм", date: activityDate, participants: { create: [{ playerId: player.id }] } },
+  });
+  await prisma.treasuryTransaction.create({
+    data: { description: "Продажа дропа", amount: 8000, date: activityDate },
+  });
+
+  const before = await queries.getTreasuryBreakdown();
+  assert.ok(before.total > 0, "казна должна быть ненулевой до архивации");
+
+  // То же, что делает POST /api/archive: создаёт запись Archive и помечает
+  // Activity/TreasuryTransaction в диапазоне дат archiveId, ничего не удаляя.
+  const dateFrom = new Date("2026-05-01T00:00:00Z");
+  const dateTo = new Date("2026-05-31T23:59:59Z");
+  const archive = await prisma.$transaction(async (tx) => {
+    const created = await tx.archive.create({
+      data: { dateFrom, dateTo, label: "01.05.2026 — 31.05.2026" },
+    });
+    await tx.activity.updateMany({ where: { date: { gte: dateFrom, lte: dateTo } }, data: { archiveId: created.id } });
+    await tx.treasuryTransaction.updateMany({
+      where: { date: { gte: dateFrom, lte: dateTo } },
+      data: { archiveId: created.id },
+    });
+    return created;
+  });
+
+  const after = await queries.getTreasuryBreakdown();
+  assert.equal(after.total, 0, "живая казна должна обнулиться после архивации");
+  assert.equal(after.prime, 0);
+  assert.equal(after.miniRb, 0);
+  assert.equal(after.guild, 0);
+
+  const activities = await queries.getAllActivities();
+  assert.equal(activities.length, 0, "заархивированная активность не должна быть видна на /activities");
+
+  const detail = await queries.getArchiveDetail(archive.id);
+  assert.ok(detail, "детали архива должны быть доступны");
+  assert.equal(detail!.activities.length, 1, "активность должна быть видна внутри архива");
+  assert.equal(detail!.transactions.length, 1, "операция казны должна быть видна внутри архива");
+  assert.equal(detail!.transactions[0].amount, 8000, "сумма операции сохраняется, а не удаляется");
+
+  // Новая операция ПОСЛЕ архивации должна считаться в живой казне, не в архиве.
+  await prisma.treasuryTransaction.create({ data: { description: "Новая продажа", amount: 3000 } });
+  const afterNewIncome = await queries.getTreasuryBreakdown();
+  assert.equal(afterNewIncome.total, 3000, "казна снова копится с 0 после архивации");
+});

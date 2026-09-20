@@ -97,7 +97,7 @@ async function getAttendanceMaps(periodId: string): Promise<{
   pvpCount: Map<string, number>;
 }> {
   const activities = await prisma.activity.findMany({
-    where: { periodId },
+    where: { periodId, archiveId: null },
     select: { name: true, category: true, mode: true, weight: true, participants: { select: { playerId: true } } },
   });
 
@@ -364,6 +364,7 @@ export async function topPlayersByXp(count = 5) {
 
 export async function getAllActivities() {
   const activities = await prisma.activity.findMany({
+    where: { archiveId: null },
     orderBy: { date: "desc" },
     include: { _count: { select: { participants: true } } },
   });
@@ -378,6 +379,7 @@ export async function getAllActivities() {
 
 export async function getDistinctActivityNames() {
   const rows = await prisma.activity.findMany({
+    where: { archiveId: null },
     distinct: ["name"],
     select: { name: true },
     orderBy: { name: "asc" },
@@ -400,7 +402,7 @@ export type ActivityFilters = {
 export async function getFilteredActivities(filters: ActivityFilters) {
   const { dateFrom, dateTo, status, mode, category, name, player, page = 1, pageSize = 15 } = filters;
 
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { archiveId: null };
   const dateFilter: Record<string, Date> = {};
   if (dateFrom) dateFilter.gte = new Date(dateFrom);
   if (dateTo) {
@@ -503,6 +505,7 @@ export async function getActivityById(id: string) {
 
 export async function getTreasuryTransactions(limit?: number) {
   const transactions = await prisma.treasuryTransaction.findMany({
+    where: { archiveId: null },
     orderBy: { date: "desc" },
     take: limit,
   });
@@ -528,7 +531,10 @@ export async function getTreasuryTransactions(limit?: number) {
 }
 
 export async function getTreasuryGold() {
-  const result = await prisma.treasuryTransaction.aggregate({ _sum: { amount: true } });
+  const result = await prisma.treasuryTransaction.aggregate({
+    where: { archiveId: null },
+    _sum: { amount: true },
+  });
   return result._sum.amount ?? 0;
 }
 
@@ -547,10 +553,17 @@ export async function getTreasuryGold() {
 // активности) считаются как Прайм — тот же порядок, что и в "Дроп с
 // Мини-РБ / Дроп с Прайм".
 async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: number }> {
-  const sold = await prisma.dropItem.findMany({
+  // Только незаархивированные операции — заархивированные не входят в
+  // живой баланс (см. Archive в schema.prisma).
+  const liveTxIds = new Set(
+    (await prisma.treasuryTransaction.findMany({ where: { archiveId: null }, select: { id: true } })).map((t) => t.id)
+  );
+
+  const soldAll = await prisma.dropItem.findMany({
     where: { status: "Продано", treasuryTransactionId: { not: null } },
     select: { treasuryTransactionId: true, category: true, value: true, quantity: true },
   });
+  const sold = soldAll.filter((d) => liveTxIds.has(d.treasuryTransactionId as string));
 
   // Операции с собственной категорией и без привязанного дропа («Продажа
   // Мини-РБ»): вся сумма идёт в свою категорию. Без этого такая продажа
@@ -559,7 +572,7 @@ async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: nu
   // расход, а не доход, и считаются отдельно в getTreasuryPayoutSplit,
   // минуя 70%-й множитель (см. комментарий у поля kind в schema.prisma).
   const tagged = await prisma.treasuryTransaction.findMany({
-    where: { category: { not: null }, kind: null },
+    where: { category: { not: null }, kind: null, archiveId: null },
     select: { id: true, amount: true, category: true },
   });
   const soldTxIds = new Set(sold.map((d) => d.treasuryTransactionId as string));
@@ -616,7 +629,7 @@ const TREASURY_MAIN_SHARE = 0.7;
 async function getTreasuryPayoutSplit(): Promise<{ prime: number; miniRb: number }> {
   const rows = await prisma.treasuryTransaction.groupBy({
     by: ["category"],
-    where: { kind: "payout" },
+    where: { kind: "payout", archiveId: null },
     _sum: { amount: true },
   });
   let prime = 0;
@@ -933,6 +946,93 @@ export async function getPlayerPeriodPaidMap(periodId: string): Promise<Map<stri
     _sum: { amount: true },
   });
   return new Map(rows.map((r) => [r.playerId, r._sum.amount ?? 0]));
+}
+
+/** Сводка за диапазон дат ДО архивации — сколько активностей/операций попадёт в архив и сколько сейчас в казне. */
+export async function getArchivePreview(dateFrom: Date, dateTo: Date) {
+  const dateWhere = { gte: dateFrom, lte: dateTo };
+  const [activityCount, txCount, treasury] = await Promise.all([
+    prisma.activity.count({ where: { date: dateWhere, archiveId: null } }),
+    prisma.treasuryTransaction.count({ where: { date: dateWhere, archiveId: null } }),
+    getTreasuryBreakdown(),
+  ]);
+  return {
+    activityCount,
+    transactionCount: txCount,
+    treasuryPrime: treasury.prime,
+    treasuryMiniRb: treasury.miniRb,
+    treasuryGuild: treasury.guild,
+  };
+}
+
+/** Список архивов, новые сверху — для раздела «Экономика → Архив». */
+export async function getArchives() {
+  const archives = await prisma.archive.findMany({
+    orderBy: { dateFrom: "desc" },
+    include: { _count: { select: { activities: true, transactions: true } } },
+  });
+  const totals = await prisma.treasuryTransaction.groupBy({
+    by: ["archiveId"],
+    where: { archiveId: { not: null } },
+    _sum: { amount: true },
+  });
+  const totalByArchive = new Map(totals.map((t) => [t.archiveId as string, t._sum.amount ?? 0]));
+  return archives.map((a) => ({
+    id: a.id,
+    label: a.label,
+    dateFrom: a.dateFrom,
+    dateTo: a.dateTo,
+    createdAt: a.createdAt,
+    createdBy: a.createdBy,
+    activityCount: a._count.activities,
+    transactionCount: a._count.transactions,
+    treasuryTotal: totalByArchive.get(a.id) ?? 0,
+  }));
+}
+
+/** Один архив с полным содержимым — для страницы просмотра. */
+export async function getArchiveDetail(id: string) {
+  const archive = await prisma.archive.findUnique({
+    where: { id },
+    include: {
+      activities: { orderBy: { date: "desc" }, include: { _count: { select: { participants: true } } } },
+      transactions: { orderBy: { date: "desc" } },
+    },
+  });
+  if (!archive) return null;
+
+  const prime = archive.transactions
+    .filter((t) => t.category !== "Мини-РБ")
+    .reduce((s, t) => s + t.amount, 0);
+  const miniRb = archive.transactions.filter((t) => t.category === "Мини-РБ").reduce((s, t) => s + t.amount, 0);
+
+  return {
+    id: archive.id,
+    label: archive.label,
+    dateFrom: archive.dateFrom,
+    dateTo: archive.dateTo,
+    createdAt: archive.createdAt,
+    createdBy: archive.createdBy,
+    treasuryPrime: prime,
+    treasuryMiniRb: miniRb,
+    treasuryTotal: prime + miniRb,
+    activities: archive.activities.map((a) => ({
+      id: a.id,
+      name: a.name,
+      category: a.category,
+      mode: a.mode,
+      date: dateFmt.format(a.date),
+      participants: a._count.participants,
+    })),
+    transactions: archive.transactions.map((t) => ({
+      id: t.id,
+      description: t.description,
+      amount: t.amount,
+      category: t.category,
+      kind: t.kind,
+      date: t.date,
+    })),
+  };
 }
 
 /**

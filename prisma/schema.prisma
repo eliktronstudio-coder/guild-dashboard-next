@@ -56,12 +56,19 @@ model Activity {
   addedBy            User?                 @relation(fields: [addedByUserId], references: [id], onDelete: SetNull)
   periodId           String?
   period             AccountingPeriod?     @relation(fields: [periodId], references: [id], onDelete: SetNull)
+  /// Ручная архивация за выбранный диапазон дат (раздел «Экономика → Архив»).
+  /// Архивные активности не показываются на /activities и не считаются в
+  /// живой посещаемости — но данные не удаляются, только помечаются.
+  archiveId          String?
+  archive             Archive?             @relation(fields: [archiveId], references: [id], onDelete: SetNull)
   date               DateTime              @default(now())
   createdAt          DateTime              @default(now())
   participants       ActivityParticipant[]
   drops              DropItem[]
   screenshots        ActivityScreenshot[]
   guests             ActivityGuest[]
+
+  @@index([archiveId])
 
   @@index([periodId])
 }
@@ -112,10 +119,35 @@ model TreasuryTransaction {
   /// и не мешают уже архивированным/текущему периоду.
   periodId    String?
   period      AccountingPeriod? @relation(fields: [periodId], references: [id], onDelete: SetNull)
+  /// Ручная архивация (см. Activity.archiveId) — архивные операции не
+  /// участвуют в живом балансе казны (getTreasuryBreakdown и т.д.), только
+  /// хранятся для просмотра в разделе «Архив».
+  archiveId   String?
+  archive     Archive? @relation(fields: [archiveId], references: [id], onDelete: SetNull)
   date        DateTime @default(now())
   createdAt   DateTime @default(now())
 
   @@index([periodId])
+  @@index([archiveId])
+}
+
+/// Ручная архивация за произвольный диапазон дат (раздел «Экономика → Архив»,
+/// кнопка «Архив периода»). В отличие от AccountingPeriod (авто-цикл 15→15,
+/// влияет только на посещаемость), архивация здесь бьёт по живому балансу
+/// казны: заархивированные TreasuryTransaction/Activity помечаются, а не
+/// удаляются, и живые расчёты их просто больше не считают — баланс на
+/// сайте показывает 0 и копится заново, история остаётся доступна в архиве.
+model Archive {
+  id        String   @id @default(cuid())
+  dateFrom  DateTime
+  dateTo    DateTime
+  /// "01.09.2026 — 15.09.2026" — человекочитаемая метка.
+  label     String
+  createdAt DateTime @default(now())
+  createdBy String?
+
+  transactions TreasuryTransaction[]
+  activities   Activity[]
 }
 
 /// Расчётный период гильдии: с 15-го числа одного месяца по 15-е следующего.
