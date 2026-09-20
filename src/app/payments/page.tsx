@@ -4,8 +4,6 @@ import PaymentsTable from "@/components/admin/PaymentsTable";
 import FreezeSalaryButton from "@/components/admin/FreezeSalaryButton";
 import BlurValue from "@/components/BlurValue";
 import { getActivePeriod, daysUntilPeriodEnd } from "@/lib/period";
-import ClosePeriodButton from "@/components/admin/ClosePeriodButton";
-import Link from "next/link";
 import {
   getAllPayments,
   getAllPlayers,
@@ -71,7 +69,7 @@ export default async function PaymentsPage() {
         </div>
         <span className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
           <span className="h-2 w-2 rounded-full bg-success" /> Активный
-          {daysLeft >= 0 ? ` · осталось ${daysLeft} дн.` : " · период завершён, доступна архивация"}
+          {daysLeft >= 0 ? ` · осталось ${daysLeft} дн.` : ""}
         </span>
       </div>
 
@@ -108,29 +106,14 @@ export default async function PaymentsPage() {
       {isAdmin && (
         <div className="flex flex-wrap items-center gap-2">
           <FreezeSalaryButton alreadyFrozen={hasSnapshot} />
-          <ClosePeriodButton />
-          <Link
-            href="/archive"
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium hover:bg-surface-2"
-          >
-            Архив периодов
-          </Link>
-          <Link
-            href="/journal"
-            className="rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium hover:bg-surface-2"
-          >
-            Финансовый журнал
-          </Link>
         </div>
       )}
 
-      {isAdmin && daysLeft <= 1 && (
+      {isAdmin && daysLeft >= 0 && daysLeft <= 1 && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-600">
           {daysLeft > 0
             ? `Расчётный период заканчивается через ${daysLeft} дн.`
-            : daysLeft === 0
-              ? "Расчётный период заканчивается сегодня."
-              : "Расчётный период завершён. Доступна архивация."}
+            : "Расчётный период заканчивается сегодня."}
         </div>
       )}
 

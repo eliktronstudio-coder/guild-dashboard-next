@@ -6,9 +6,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 /**
- * Расчётный период 15→15: закрытие периода фиксирует задолженность в
- * ArchiveSnapshot, казна не обнуляется, а погашение долга из архива
- * списывает из ТЕКУЩЕЙ казны, а не из архивной записи.
+ * Расчётный период 15→15: посещаемость взвешивается по коэффициенту
+ * активности и делится на Прайм/Мини-РБ по названию, а период сам
+ * автоматически сменяется на новый, как только реальная дата переходит
+ * его endDate — без ручного закрытия и без архивной задолженности.
  */
 
 let dir: string;
@@ -170,106 +171,33 @@ test("getActivePeriod создаёт период при первом обращ
   assert.equal(a.status, "active");
 });
 
-test("закрытие периода создаёт снимок задолженности, казну не обнуляет, открывает новый период", async () => {
-  await prisma.archiveSnapshot.deleteMany({});
+test("истёкший период автоматически закрывается и заменяется следующим циклом, казна не трогается", async () => {
   await prisma.payment.deleteMany({});
   await prisma.treasuryTransaction.deleteMany({});
-  await prisma.dropItem.deleteMany({});
-  await prisma.activityParticipant.deleteMany({});
   await prisma.accountingPeriod.deleteMany({});
-  await prisma.player.deleteMany({});
+
+  // Период, чей endDate уже в прошлом — как если бы сайт не открывали
+  // несколько дней после 15-го числа.
+  const staleStart = new Date(2026, 6, 15);
+  const staleEnd = new Date(2026, 7, 15);
+  const stale = await prisma.accountingPeriod.create({
+    data: { startDate: staleStart, endDate: staleEnd, label: period.periodLabel(staleStart, staleEnd), status: "active" },
+  });
+  await prisma.treasuryTransaction.create({ data: { description: "Продажа", amount: 5000, periodId: stale.id } });
+  const treasuryBefore = await queries.getTreasuryBreakdown();
 
   const active = await period.getActivePeriod();
 
-  const a = await prisma.player.create({ data: { name: "Игрок А", role: "Танк" } });
-  const b = await prisma.player.create({ data: { name: "Игрок Б", role: "Хил" } });
-  const activity = await prisma.activity.create({ data: { name: "Прайм", category: "Прайм", periodId: active.id } });
-  await prisma.activityParticipant.createMany({
-    data: [
-      { activityId: activity.id, playerId: a.id },
-      { activityId: activity.id, playerId: b.id },
-    ],
-  });
+  assert.notEqual(active.id, stale.id, "должен вернуться новый период, а не истёкший");
+  assert.equal(active.status, "active");
 
-  const tx = await prisma.treasuryTransaction.create({
-    data: { description: "Продажа дропа", amount: 10000, periodId: active.id },
-  });
-  await prisma.dropItem.create({
-    data: { item: "Меч", quantity: 1, value: 10000, status: "Продано", category: "Прайм", treasuryTransactionId: tx.id },
-  });
+  const closedStale = await prisma.accountingPeriod.findUnique({ where: { id: stale.id } });
+  assert.equal(closedStale?.status, "closed", "старый период помечается closed");
+  assert.ok(closedStale?.closedAt, "проставляется дата закрытия");
 
-  const players = await queries.getAllPlayers();
-  const aLive = players.find((p) => p.id === a.id)!;
-  const bLive = players.find((p) => p.id === b.id)!;
-  assert.ok(aLive.salaryPrime > 0 && bLive.salaryPrime > 0);
+  const treasuryAfter = await queries.getTreasuryBreakdown();
+  assert.deepEqual(treasuryAfter, treasuryBefore, "автоматическая смена периода не должна менять баланс казны");
 
-  // Игрок А получает частичную выплату ДО закрытия периода.
-  await prisma.$transaction([
-    prisma.payment.create({
-      data: { playerId: a.id, amount: aLive.salaryPrime, status: "Выплачено", source: "payout", category: "Прайм", periodId: active.id, archiveMonth: active.id },
-    }),
-    prisma.treasuryTransaction.create({
-      data: { description: "Выплата ЗП (Прайм): Игрок А", amount: -aLive.salaryPrime, category: "Прайм", kind: "payout", periodId: active.id },
-    }),
-  ]);
-
-  const treasuryBeforeClose = await queries.getTreasuryBreakdown();
-
-  // Симулируем закрытие периода (та же логика, что в /api/periods/close).
-  const playersAfterPayout = await queries.getAllPlayers();
-  const bLiveAfterPayout = playersAfterPayout.find((p) => p.id === b.id)!;
-  const paidA = aLive.salaryPrime;
-
-  await prisma.archiveSnapshot.createMany({
-    data: [
-      { periodId: active.id, playerId: a.id, playerName: "Игрок А", accruedPrime: paidA, accruedMiniRb: 0, paidPrime: paidA, paidMiniRb: 0 },
-      { periodId: active.id, playerId: b.id, playerName: "Игрок Б", accruedPrime: bLiveAfterPayout.salaryPrime, accruedMiniRb: 0, paidPrime: 0, paidMiniRb: 0 },
-    ],
-  });
-  await prisma.accountingPeriod.update({ where: { id: active.id }, data: { status: "closed", closedAt: new Date(), closedBy: "test" } });
-  const { startDate: nextStart, endDate: nextEnd } = period.computePeriodBounds(active.endDate);
-  const newPeriod = await prisma.accountingPeriod.create({
-    data: { startDate: nextStart, endDate: nextEnd, label: period.periodLabel(nextStart, nextEnd), status: "active" },
-  });
-
-  // Казна не обнуляется при закрытии.
-  const treasuryAfterClose = await queries.getTreasuryBreakdown();
-  assert.deepEqual(treasuryAfterClose, treasuryBeforeClose, "закрытие периода не должно менять баланс казны");
-
-  // Новый период стал активным.
-  const newActive = await period.getActivePeriod();
-  assert.equal(newActive.id, newPeriod.id);
-  assert.notEqual(newActive.id, active.id);
-
-  // Задолженность Б осталась в архиве.
-  const detail = await queries.getArchivePeriodDetail(active.id);
-  assert.ok(detail);
-  const bDebt = detail!.players.find((p) => p.playerId === b.id)!;
-  assert.equal(bDebt.remainingPrime, bLiveAfterPayout.salaryPrime);
-
-  // Погашение долга Б списывает из ТЕКУЩЕЙ (новой) казны, а не влияет на old-period снимок иначе как через paid-поле.
-  const poolBefore = treasuryAfterClose.prime + treasuryAfterClose.miniRb;
-  await prisma.$transaction([
-    prisma.archiveSnapshot.update({
-      where: { periodId_playerId: { periodId: active.id, playerId: b.id } },
-      data: { paidPrime: { increment: bDebt.remainingPrime } },
-    }),
-    prisma.payment.create({
-      data: { playerId: b.id, amount: bDebt.remainingPrime, status: "Выплачено", source: "archive", category: "Прайм", periodId: newPeriod.id, archivePeriodId: active.id },
-    }),
-    prisma.treasuryTransaction.create({
-      data: { description: "Погашение долга", amount: -bDebt.remainingPrime, category: "Прайм", kind: "payout", periodId: newPeriod.id },
-    }),
-  ]);
-
-  const treasuryAfterDebtPay = await queries.getTreasuryBreakdown();
-  assert.equal(
-    treasuryAfterDebtPay.prime + treasuryAfterDebtPay.miniRb,
-    poolBefore - bDebt.remainingPrime,
-    "погашение архивного долга должно списываться из текущей казны"
-  );
-
-  const detailAfterPay = await queries.getArchivePeriodDetail(active.id);
-  const bDebtAfter = detailAfterPay!.players.find((p) => p.playerId === b.id)!;
-  assert.equal(bDebtAfter.remainingPrime, 0, "долг должен быть погашен полностью");
+  const again = await period.getActivePeriod();
+  assert.equal(again.id, active.id, "повторный вызов возвращает тот же новый период, не плодит ещё один");
 });

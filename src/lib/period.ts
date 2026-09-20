@@ -21,20 +21,33 @@ export function computePeriodBounds(date: Date): { startDate: Date; endDate: Dat
 }
 
 /**
- * Возвращает текущий активный расчётный период, создавая его при первом
- * обращении. Период НЕ закрывается сам по прошествии времени — только явным
- * действием администратора (см. /api/periods/[id]/close), поэтому здесь мы
- * только чиним случай "активного периода ещё никогда не было" (первый
- * запуск фичи), а не разъезд между активным периодом и текущей датой.
+ * Возвращает текущий активный расчётный период. Нет архива и ручного
+ * закрытия — период просто автоматически сменяется на следующий 15→15
+ * цикл, как только реальная дата переходит его endDate: старый помечается
+ * closed (без снимка задолженности), новый создаётся с чистой посещаемостью.
  */
 export async function getActivePeriod() {
   const existing = await prisma.accountingPeriod.findFirst({
     where: { status: "active" },
     orderBy: { startDate: "desc" },
   });
-  if (existing) return existing;
 
-  const { startDate, endDate } = computePeriodBounds(new Date());
+  const now = new Date();
+  if (existing && existing.endDate > now) return existing;
+
+  const { startDate, endDate } = computePeriodBounds(now);
+  if (existing) {
+    // Реальное время обогнало период (сайт не открывали несколько дней) —
+    // закрываем старый и открываем актуальный цикл одной транзакцией.
+    const [, created] = await prisma.$transaction([
+      prisma.accountingPeriod.update({ where: { id: existing.id }, data: { status: "closed", closedAt: now } }),
+      prisma.accountingPeriod.create({
+        data: { startDate, endDate, label: periodLabel(startDate, endDate), status: "active" },
+      }),
+    ]);
+    return created;
+  }
+
   return prisma.accountingPeriod.create({
     data: { startDate, endDate, label: periodLabel(startDate, endDate), status: "active" },
   });

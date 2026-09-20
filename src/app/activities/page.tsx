@@ -8,7 +8,7 @@ import {
 } from "@/lib/queries";
 import { findLabelMatch } from "@/lib/nameMatch";
 import { getCurrentUser } from "@/lib/auth";
-import { canManageActivitiesRole, isFullAdminRole } from "@/lib/accountRoles";
+import { canManageActivitiesRole } from "@/lib/accountRoles";
 import ActivitiesList from "@/components/admin/ActivitiesList";
 import BlurGate from "@/components/BlurGate";
 
@@ -77,7 +77,6 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
         players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
         catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
         isAdmin={canManageActivitiesRole(user?.role)}
-        canArchivePeriod={isFullAdminRole(user?.role)}
         summary={{
           total: result.total,
           avgAttendance,

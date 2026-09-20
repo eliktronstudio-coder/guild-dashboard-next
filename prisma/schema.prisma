@@ -118,11 +118,11 @@ model TreasuryTransaction {
   @@index([periodId])
 }
 
-/// Расчётный период гильдии: с 15-го числа одного месяца по 15-е следующего
-/// (см. AGENTS-спеку «система финансового учёта»). Ровно один период имеет
-/// status="active" в любой момент времени — его создаёт/возвращает
-/// getActivePeriod() из src/lib/period.ts. Закрытие периода (архивация)
-/// — явное административное действие, не происходит само по времени.
+/// Расчётный период гильдии: с 15-го числа одного месяца по 15-е следующего.
+/// Ровно один период имеет status="active" в любой момент времени —
+/// getActivePeriod() из src/lib/period.ts автоматически закрывает истёкший
+/// период и открывает следующий по факту даты, без ручного действия и без
+/// архивной задолженности — посещаемость просто начинает считаться заново.
 model AccountingPeriod {
   id          String    @id @default(cuid())
   startDate   DateTime
@@ -137,31 +137,8 @@ model AccountingPeriod {
   transactions TreasuryTransaction[]
   activities   Activity[]
   payments     Payment[]
-  archive      ArchiveSnapshot[]
 
   @@index([status])
-}
-
-/// Неизменяемый снимок игрока на момент закрытия периода — начислено по
-/// живой формуле (getDerivedPlayerMaps), сколько из этого уже выплачено
-/// внутри периода, и что осталось игроку должны. После закрытия периода
-/// коэффициенты/состав могут меняться — эта таблица не пересчитывается.
-/// Погашение остатка идёт через ту же кнопку «Выплатить», но списывает
-/// золото из ТЕКУЩЕЙ (не архивной) казны — см. /api/archive/[periodId]/pay.
-model ArchiveSnapshot {
-  id           String   @id @default(cuid())
-  periodId     String
-  period       AccountingPeriod @relation(fields: [periodId], references: [id], onDelete: Cascade)
-  playerId     String
-  playerName   String
-  accruedPrime  Int
-  accruedMiniRb Int
-  paidPrime     Int      @default(0)
-  paidMiniRb    Int      @default(0)
-  createdAt    DateTime @default(now())
-
-  @@unique([periodId, playerId])
-  @@index([periodId])
 }
 
 model DropCatalogItem {
@@ -205,17 +182,12 @@ model Payment {
   /// (кнопки статуса в строке «Расчёт распределения»). У ручных и архивных
   /// записей остаётся null: они покрывают всю зарплату целиком.
   category     String?
-  /// Расчётный период (15→15), в который произведена выплата — включая
-  /// погашение задолженности из уже закрытого периода (тогда periodId
-  /// указывает на ТЕКУЩИЙ активный период, а archivePeriodId — на тот,
-  /// чей долг гасится).
-  periodId        String?
-  period          AccountingPeriod? @relation(fields: [periodId], references: [id], onDelete: SetNull)
-  archivePeriodId String?
+  /// Расчётный период (15→15), в который произведена выплата.
+  periodId     String?
+  period       AccountingPeriod? @relation(fields: [periodId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())
 
   @@index([periodId])
-  @@index([archivePeriodId])
 }
 
 /// Снимок расчётной зарплаты игрока на день выплаты — кнопка «Зарплата» на
