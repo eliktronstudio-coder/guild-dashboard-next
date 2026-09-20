@@ -959,9 +959,11 @@ export async function getPlayerPeriodPaidMap(periodId: string): Promise<Map<stri
 /** Сводка за диапазон дат ДО архивации — сколько активностей/операций попадёт в архив и сколько сейчас в казне. */
 export async function getArchivePreview(dateFrom: Date, dateTo: Date) {
   const dateWhere = { gte: dateFrom, lte: dateTo };
+  // Совпадает с тем, что реально заархивирует POST /api/archive: выплаты
+  // ЗП архивируются все, независимо от даты (см. комментарий там же).
   const [activityCount, txCount, treasury] = await Promise.all([
     prisma.activity.count({ where: { date: dateWhere, archiveId: null } }),
-    prisma.treasuryTransaction.count({ where: { date: dateWhere, archiveId: null } }),
+    prisma.treasuryTransaction.count({ where: { archiveId: null, OR: [{ date: dateWhere }, { kind: "payout" }] } }),
     getTreasuryBreakdown(),
   ]);
   return {

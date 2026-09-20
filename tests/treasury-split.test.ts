@@ -265,3 +265,47 @@ test("удаление архива возвращает активности и
   const tx = await prisma.treasuryTransaction.findFirst();
   assert.equal(tx?.archiveId, null, "archiveId должен сброситься в null, а не удалиться сама операция");
 });
+
+test("выплата, сделанная ПОСЛЕ архивируемого диапазона, всё равно уходит в архив вместе с доходом", async () => {
+  await prisma.treasuryTransaction.deleteMany({});
+  await prisma.activity.deleteMany({});
+  await prisma.archive.deleteMany({});
+
+  // Доход пришёл в июле, а выплату по нему сделали только в августе —
+  // реальный сценарий: казна общий пул, выплата не привязана к конкретной
+  // продаже и обычно делается через день-два. Архивируем только июль.
+  await prisma.treasuryTransaction.create({
+    data: { description: "Продажа дропа", amount: 10000, date: new Date("2026-07-20T12:00:00Z") },
+  });
+  await prisma.treasuryTransaction.create({
+    data: {
+      description: "Выплата ЗП (Прайм): Тест",
+      amount: -4900,
+      category: "Прайм",
+      kind: "payout",
+      date: new Date("2026-08-02T09:00:00Z"), // после конца архивируемого диапазона
+    },
+  });
+
+  const dateFrom = new Date("2026-07-01T00:00:00Z");
+  const dateTo = new Date("2026-07-31T23:59:59Z");
+
+  // Та же логика, что в POST /api/archive: выплаты подхватываются все,
+  // независимо от даты, а не только попавшие в dateFrom..dateTo.
+  const dateWhere = { gte: dateFrom, lte: dateTo };
+  const archive = await prisma.$transaction(async (tx) => {
+    const created = await tx.archive.create({ data: { dateFrom, dateTo, label: "июль" } });
+    await tx.treasuryTransaction.updateMany({
+      where: { archiveId: null, OR: [{ date: dateWhere }, { kind: "payout" }] },
+      data: { archiveId: created.id },
+    });
+    return created;
+  });
+
+  const after = await queries.getTreasuryBreakdown();
+  assert.equal(after.total, 0, "и доход, и выплата по нему архивированы — живая казна пуста, а не в минусе или плюсе из ниоткуда");
+  assert.equal(after.guild, 0, "Казна Гильдии не должна показывать фиктивную сумму");
+
+  const detail = await queries.getArchiveDetail(archive.id);
+  assert.equal(detail!.transactions.length, 2, "доход и связанная с ним выплата должны попасть в один архив");
+});
