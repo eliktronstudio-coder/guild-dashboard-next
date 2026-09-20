@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
 import CreateArchiveButton from "@/components/admin/CreateArchiveButton";
+import DeleteArchiveButton from "@/components/admin/DeleteArchiveButton";
 import { getArchives } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import { isFullAdminRole } from "@/lib/accountRoles";
@@ -39,6 +40,7 @@ export default async function ArchivePage() {
                 <th className="px-4 py-3 font-medium">Операций казны</th>
                 <th className="px-4 py-3 font-medium">Сумма казны</th>
                 <th className="px-4 py-3 font-medium">Архивировано</th>
+                <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -55,6 +57,9 @@ export default async function ArchivePage() {
                   <td className="px-4 py-3 text-xs text-muted">
                     {dateFmt.format(a.createdAt)}
                     {a.createdBy ? ` · ${a.createdBy}` : ""}
+                  </td>
+                  <td className="px-4 py-3">
+                    <DeleteArchiveButton id={a.id} label={a.label} />
                   </td>
                 </tr>
               ))}

@@ -667,7 +667,7 @@ export async function getTreasuryBreakdown() {
 }
 
 export async function getTreasuryChartData() {
-  const transactions = await prisma.treasuryTransaction.findMany({ orderBy: { date: "asc" } });
+  const transactions = await prisma.treasuryTransaction.findMany({ where: { archiveId: null }, orderBy: { date: "asc" } });
   const byDay = new Map<string, number>();
   for (const t of transactions) {
     const key = dayKey(t.date);
@@ -682,7 +682,10 @@ export async function getTreasuryChartData() {
 }
 
 async function getTreasuryDailyDeltas(): Promise<Map<string, number>> {
-  const transactions = await prisma.treasuryTransaction.findMany({ select: { date: true, amount: true } });
+  const transactions = await prisma.treasuryTransaction.findMany({
+    where: { archiveId: null },
+    select: { date: true, amount: true },
+  });
   const byDay = new Map<string, number>();
   for (const t of transactions) {
     const key = dayKey(t.date);
@@ -705,7 +708,7 @@ async function getCategoryDailyDeltas(category: string): Promise<Map<string, num
   if (txIds.length === 0) return byDay;
 
   const transactions = await prisma.treasuryTransaction.findMany({
-    where: { id: { in: txIds } },
+    where: { id: { in: txIds }, archiveId: null },
     select: { date: true, amount: true },
   });
   for (const t of transactions) {
@@ -880,7 +883,7 @@ export async function getAvgAttendanceLast30Days() {
   const since = new Date();
   since.setDate(since.getDate() - 30);
   const activities = await prisma.activity.findMany({
-    where: { date: { gte: since } },
+    where: { date: { gte: since }, archiveId: null },
     include: { _count: { select: { participants: true } } },
   });
   if (activities.length === 0) return 0;
@@ -889,7 +892,11 @@ export async function getAvgAttendanceLast30Days() {
 }
 
 export async function getAvgActivityDays() {
-  const activities = await prisma.activity.findMany({ orderBy: { date: "asc" }, select: { date: true } });
+  const activities = await prisma.activity.findMany({
+    where: { archiveId: null },
+    orderBy: { date: "asc" },
+    select: { date: true },
+  });
   if (activities.length < 2) return 0;
   const first = activities[0].date.getTime();
   const last = activities[activities.length - 1].date.getTime();
@@ -899,6 +906,7 @@ export async function getAvgActivityDays() {
 
 export async function getAttendanceChartData() {
   const activities = await prisma.activity.findMany({
+    where: { archiveId: null },
     orderBy: { date: "asc" },
     include: { _count: { select: { participants: true } } },
   });
