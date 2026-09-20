@@ -75,7 +75,7 @@ test("настройки по умолчанию соответствуют за
 
 test("в расписании есть ровно те слоты Алтаря, которые будут анонсированы", () => {
   const watched = SCHEDULE.filter((s) => WATCHED.includes(s.name));
-  assert.equal(watched.length, 10, "5 дней × 2 слота");
+  assert.equal(watched.length, 5, "5 дней × 1 слот (только 20:00)");
 
   // Для каждого слота момент «за 15 минут» обязан попадать в окно.
   for (const slot of watched) {

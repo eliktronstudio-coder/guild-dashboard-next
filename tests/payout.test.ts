@@ -53,11 +53,11 @@ test("Алтарь стоит в понедельник, среду, четве�
   assert.deepEqual(days, [1, 3, 4, 5, 6]);
 });
 
-test("Алтарь идёт в 16:00 и 20:00, по два слота в день", () => {
+test("Алтарь идёт только в 20:00, по одному слоту в день", () => {
   const altar = SCHEDULE.filter((s) => s.name === "Алтарь");
-  assert.equal(altar.length, 10, "5 дней × 2 слота");
-  const times = [...new Set(altar.map((s) => s.minutes))].sort((a, b) => a - b);
-  assert.deepEqual(times, [16 * 60, 20 * 60]);
+  assert.equal(altar.length, 5, "5 дней × 1 слот");
+  const times = [...new Set(altar.map((s) => s.minutes))];
+  assert.deepEqual(times, [20 * 60]);
 });
 
 test("во вторник и воскресенье Алтаря нет", () => {
