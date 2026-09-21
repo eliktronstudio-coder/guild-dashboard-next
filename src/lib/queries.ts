@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import { splitProportionally } from "@/lib/proportionalSplit";
 import { getActivePeriodId } from "@/lib/period";
 import { computeAttendanceMaps } from "@/lib/attendance";
+import { computeSalaryMap } from "@/lib/salary";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const shortDateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
@@ -33,43 +33,13 @@ async function getAttendanceMaps(periodId: string) {
   return computeAttendanceMaps(activities);
 }
 
-// Зарплата считается динамически и отдельно по каждой казне — Прайм
-// (70% с продаж категории Прайм) и Мини-РБ (100% с продаж категории
-// Мини-РБ) — и делится между игроками пропорционально ИХ посещаемости
-// той же категории, скорректированной индивидуальным коэффициентом
-// (0.0–1.25). Игрок с посещаемостью по категории ниже
-// SALARY_MIN_ATTENDANCE_PCT в расчёте зарплаты за эту категорию не
-// участвует вовсе (не платит и не получает) — его доля пропорционально
-// перераспределяется между остальными.
-const SALARY_MIN_ATTENDANCE_PCT = 20;
-
+// Зарплата считается динамически и отдельно по каждой казне — Прайм (70% с
+// продаж категории Прайм) и Мини-РБ (100% с продаж категории Мини-РБ) — и
+// делится между игроками пропорционально ИХ посещаемости той же категории.
+// Сам расчёт — в src/lib/salary.ts, общий со снимком при архивации.
 async function getSalaryMapForPool(attendanceMap: Map<string, number>, pool: number): Promise<Map<string, number>> {
   const players = await prisma.player.findMany({ select: { id: true, salaryCoefficient: true } });
-
-  const map = new Map<string, number>();
-  if (pool <= 0) {
-    for (const p of players) map.set(p.id, 0);
-    return map;
-  }
-
-  const weights = players.map((p) => {
-    const pct = attendanceMap.get(p.id) ?? 0;
-    const eligible = pct >= SALARY_MIN_ATTENDANCE_PCT;
-    return { item: p.id, weight: eligible ? pct * p.salaryCoefficient : 0 };
-  });
-  const totalWeight = weights.reduce((sum, w) => sum + w.weight, 0);
-  if (totalWeight <= 0) {
-    for (const p of players) map.set(p.id, 0);
-    return map;
-  }
-
-  // Метод наибольшего остатка, а не округление каждой доли по отдельности:
-  // при round() сумма долей не сходилась с казной и часть золота просто
-  // исчезала из выплат — до нескольких десятков на большом составе.
-  for (const share of splitProportionally(weights, pool)) {
-    map.set(share.item, share.amount);
-  }
-  return map;
+  return computeSalaryMap(players, attendanceMap, pool);
 }
 
 async function getDerivedPlayerMaps() {
@@ -978,6 +948,9 @@ export async function getArchiveDetail(id: string) {
       pvpCount: s.pvpCount,
       attended: s.attended,
       activitiesTotal: s.activitiesTotal,
+      salaryPrime: s.salaryPrime,
+      salaryMiniRb: s.salaryMiniRb,
+      salary: s.salaryPrime + s.salaryMiniRb,
     })),
     transactions: archive.transactions.map((t) => ({
       id: t.id,
@@ -1010,4 +983,63 @@ export async function getActivityBannerNames() {
     },
     orderBy: { name: "asc" },
   });
+}
+
+/**
+ * Состав архивного периода с суммами к выплате — для страницы «Выплаты»,
+ * когда выбран закрытый период.
+ *
+ * Суммы берутся из снимка (ArchivePlayerStat), а не пересчитываются: живая
+ * казна после архивации нулевая, пересчёт дал бы всем нули. Статус
+ * «Выплачено» — из Payment, как и у текущего периода, чтобы источник правды
+ * был один.
+ */
+export async function getArchivePayout(archiveId: string) {
+  const archive = await prisma.archive.findUnique({
+    where: { id: archiveId },
+    include: { playerStats: { orderBy: [{ playerName: "asc" }] } },
+  });
+  if (!archive) return null;
+
+  const paid = await prisma.payment.findMany({
+    where: { source: "payout", archiveMonth: archiveId, status: "Выплачено", category: { not: null } },
+    select: { playerId: true, category: true, amount: true },
+  });
+  const paidKeys = new Set(paid.map((p) => `${p.playerId}:${p.category}`));
+  const paidTotal = paid.reduce((s, p) => s + p.amount, 0);
+
+  const players = archive.playerStats.map((s) => ({
+    id: s.playerId,
+    statId: s.id,
+    name: s.playerName,
+    role: s.role,
+    attendancePctPrime: s.attendancePctPrime,
+    attendancePctMiniRb: s.attendancePctMiniRb,
+    salaryPrime: s.salaryPrime,
+    salaryMiniRb: s.salaryMiniRb,
+    salary: s.salaryPrime + s.salaryMiniRb,
+    paidPrime: s.playerId ? paidKeys.has(`${s.playerId}:Прайм`) : false,
+    paidMiniRb: s.playerId ? paidKeys.has(`${s.playerId}:Мини-РБ`) : false,
+  }));
+
+  const total = players.reduce((s, p) => s + p.salary, 0);
+  return {
+    id: archive.id,
+    label: archive.label,
+    createdAt: archive.createdAt,
+    players,
+    total,
+    paidTotal,
+    remaining: total - paidTotal,
+    recipients: players.filter((p) => p.salary > 0).length,
+  };
+}
+
+/** Список архивов для выпадающего списка «Выплата за период». */
+export async function getArchiveOptions() {
+  const archives = await prisma.archive.findMany({
+    orderBy: { dateFrom: "desc" },
+    include: { _count: { select: { playerStats: true } } },
+  });
+  return archives.map((a) => ({ id: a.id, label: a.label, hasRoster: a._count.playerStats > 0 }));
 }

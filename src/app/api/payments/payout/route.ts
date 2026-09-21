@@ -1,26 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-import { getActivePeriodId } from "@/lib/period";
-import { getPlayerById } from "@/lib/queries";
+import {
+  PAYOUT_CATEGORIES,
+  cancelPayout,
+  recordPayout,
+  resolvePayoutAmount,
+  resolvePayoutTarget,
+  type PayoutCategory,
+} from "@/lib/payoutLedger";
 
-const CATEGORIES = ["Прайм", "Мини-РБ"] as const;
-type Category = (typeof CATEGORIES)[number];
+type Parsed = { playerId: string; category: PayoutCategory; archiveId: string | null };
 
-function parseBody(body: unknown): { playerId: string; category: Category } | null {
-  const playerId = typeof (body as { playerId?: unknown })?.playerId === "string" ? (body as { playerId: string }).playerId : "";
-  const category = (body as { category?: unknown })?.category;
-  if (!playerId || typeof category !== "string" || !CATEGORIES.includes(category as Category)) return null;
-  return { playerId, category: category as Category };
+function parseBody(body: unknown): Parsed | null {
+  const b = body as { playerId?: unknown; category?: unknown; archiveId?: unknown };
+  const playerId = typeof b?.playerId === "string" ? b.playerId : "";
+  const category = b?.category;
+  if (!playerId || typeof category !== "string" || !PAYOUT_CATEGORIES.includes(category as PayoutCategory)) {
+    return null;
+  }
+  return {
+    playerId,
+    category: category as PayoutCategory,
+    archiveId: typeof b?.archiveId === "string" && b.archiveId ? b.archiveId : null,
+  };
 }
 
 /**
  * Переключатель статуса «Ожидает / Выплачено» для доли Прайма или Мини-РБ
  * конкретного игрока (строка «Расчёт распределения» на /payments).
  *
- * POST — перевести в «Выплачено»: сумма списывается из соответствующей
- * казны и переносится в Журнал выплат. Сумма фиксируется в момент нажатия
- * (текущая доля игрока), а не пересчитывается позже.
+ * POST — перевести в «Выплачено»: сумма списывается из казны того периода, за
+ * который платим (текущего или закрытого), и переносится в Журнал выплат.
+ * Сама механика — в src/lib/payoutLedger.ts, общая с тестами.
  */
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
@@ -28,69 +40,36 @@ export async function POST(request: NextRequest) {
 
   const parsed = parseBody(await request.json().catch(() => null));
   if (!parsed) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
-  const { playerId, category } = parsed;
+  const { playerId, category, archiveId } = parsed;
 
-  const period = await getActivePeriodId();
+  const target = await resolvePayoutTarget(archiveId);
+  if (!target) return NextResponse.json({ error: "Период не найден." }, { status: 404 });
 
   const already = await prisma.payment.findFirst({
-    where: { playerId, category, source: "payout", archiveMonth: period, status: "Выплачено" },
+    where: { playerId, category, source: "payout", archiveMonth: target.key, status: "Выплачено" },
   });
   if (already) {
     return NextResponse.json({ error: "За этот период уже выплачено." }, { status: 409 });
   }
 
-  const player = await getPlayerById(playerId);
+  const player = await prisma.player.findUnique({ where: { id: playerId }, select: { name: true } });
   if (!player) return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
 
-  // Сумму берём из снимка за период, если зарплата зафиксирована кнопкой
-  // «Зарплата» — иначе она пересчитывалась бы от остатка казны при каждой
-  // следующей выплате, и уже показанные игрокам суммы «плыли» бы. Без
-  // снимка (кнопку ещё не нажимали) используем текущий живой расчёт — это
-  // прежнее поведение, сохранено для совместимости.
-  const snapshot = await prisma.payoutSnapshot.findUnique({
-    where: { period_playerId: { period, playerId } },
-  });
-  const amount = snapshot
-    ? category === "Мини-РБ"
-      ? snapshot.salaryMiniRb
-      : snapshot.salaryPrime
-    : category === "Мини-РБ"
-      ? player.salaryMiniRb
-      : player.salaryPrime;
+  const amount = await resolvePayoutAmount(playerId, category, target);
+  if (amount === null) return NextResponse.json({ error: "Игрок не найден в этом периоде." }, { status: 404 });
   if (amount <= 0) {
     return NextResponse.json({ error: "Нечего выплачивать — доля равна нулю." }, { status: 400 });
   }
 
-  await prisma.$transaction([
-    prisma.payment.create({
-      data: {
-        playerId,
-        amount,
-        status: "Выплачено",
-        source: "payout",
-        archiveMonth: period,
-        periodId: period,
-        category,
-      },
-    }),
-    prisma.treasuryTransaction.create({
-      data: {
-        description: `Выплата ЗП (${category}): ${player.name}`,
-        amount: -amount,
-        category,
-        kind: "payout",
-        periodId: period,
-      },
-    }),
-  ]);
+  await recordPayout({ playerId, playerName: player.name, category, amount, target });
 
   return NextResponse.json({ ok: true, amount });
 }
 
 /**
  * DELETE — вернуть в «Ожидает»: отменяет выплату, найденную по игроку,
- * категории и текущему периоду, и компенсирующей операцией возвращает
- * сумму в казну.
+ * категории и периоду, и компенсирующей операцией возвращает сумму в ту же
+ * казну, из которой она была списана (живую или архивную).
  */
 export async function DELETE(request: NextRequest) {
   const admin = await requireAdmin();
@@ -98,30 +77,26 @@ export async function DELETE(request: NextRequest) {
 
   const parsed = parseBody(await request.json().catch(() => null));
   if (!parsed) return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
-  const { playerId, category } = parsed;
+  const { playerId, category, archiveId } = parsed;
 
-  const period = await getActivePeriodId();
+  const target = await resolvePayoutTarget(archiveId);
+  if (!target) return NextResponse.json({ error: "Период не найден." }, { status: 404 });
 
   const payment = await prisma.payment.findFirst({
-    where: { playerId, category, source: "payout", archiveMonth: period, status: "Выплачено" },
+    where: { playerId, category, source: "payout", archiveMonth: target.key, status: "Выплачено" },
     include: { player: true },
   });
   if (!payment) {
     return NextResponse.json({ error: "Выплата за этот период не найдена." }, { status: 404 });
   }
 
-  await prisma.$transaction([
-    prisma.payment.delete({ where: { id: payment.id } }),
-    prisma.treasuryTransaction.create({
-      data: {
-        description: `Отмена выплаты ЗП (${category}): ${payment.player.name}`,
-        amount: payment.amount,
-        category,
-        kind: "payout",
-        periodId: period,
-      },
-    }),
-  ]);
+  await cancelPayout({
+    paymentId: payment.id,
+    playerName: payment.player.name,
+    category,
+    amount: payment.amount,
+    target,
+  });
 
   return NextResponse.json({ ok: true });
 }

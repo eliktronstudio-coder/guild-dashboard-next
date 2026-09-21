@@ -35,10 +35,13 @@ function StatusToggle({
   paid,
   disabled,
   canAct,
+  archiveId,
   onChanged,
 }: {
   playerId: string;
   category: Category;
+  /** id закрытого периода; null — выплата за текущий. */
+  archiveId?: string | null;
   paid: boolean;
   /** Доля равна нулю — переключать нечего. */
   disabled: boolean;
@@ -58,16 +61,18 @@ function StatusToggle({
   async function setPaid(next: boolean) {
     if (busy || next === paid) return;
     if (next) {
-      if (!confirm(`Отметить долю (${category}) как выплаченную? Сумма спишется из соответствующей казны.`)) return;
+      const where = archiveId ? "из казны закрытого периода" : "из соответствующей казны";
+      if (!confirm(`Отметить долю (${category}) как выплаченную? Сумма спишется ${where}.`)) return;
     } else {
-      if (!confirm(`Вернуть в «Ожидает»? Сумма вернётся в казну (${category}).`)) return;
+      const where = archiveId ? "в казну закрытого периода" : `в казну (${category})`;
+      if (!confirm(`Вернуть в «Ожидает»? Сумма вернётся ${where}.`)) return;
     }
     setBusy(true);
     try {
       const res = await fetch("/api/payments/payout", {
         method: next ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ playerId, category }),
+        body: JSON.stringify({ playerId, category, archiveId }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -119,11 +124,14 @@ export default function PayoutSummaryTable({
   isRandom = false,
   isAdmin = false,
   paidStatus = [],
+  archiveId = null,
 }: {
   players: PlayerShare[];
   totalPayout: number;
   isRandom?: boolean;
   isAdmin?: boolean;
+  /** Выбран закрытый период — выплата пойдёт в его книги, не в живую казну. */
+  archiveId?: string | null;
   /** Ключи вида `${playerId}:${category}` — уже выплаченные в этом периоде. */
   paidStatus?: string[];
 }) {
@@ -222,6 +230,7 @@ export default function PayoutSummaryTable({
                               paid={primePaid}
                               disabled={p.salaryPrime <= 0}
                               canAct={isAdmin}
+                              archiveId={archiveId}
                               onChanged={() => router.refresh()}
                             />
                           </div>
@@ -238,6 +247,7 @@ export default function PayoutSummaryTable({
                               paid={miniRbPaid}
                               disabled={p.salaryMiniRb <= 0}
                               canAct={isAdmin}
+                              archiveId={archiveId}
                               onChanged={() => router.refresh()}
                             />
                           </div>

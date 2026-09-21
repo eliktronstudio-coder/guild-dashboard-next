@@ -174,6 +174,11 @@ model ArchivePlayerStat {
   attendancePctPrime  Int
   attendancePctMiniRb Int
   pvpCount            Int     @default(0)
+  /// Доля зарплаты за этот период, зафиксированная в момент архивации.
+  /// Считается от казны, какой она была ДО архивации (после неё живая казна
+  /// обнуляется), тем же кодом, что и живая зарплата — src/lib/salary.ts.
+  salaryPrime         Int     @default(0)
+  salaryMiniRb        Int     @default(0)
   /// «Был на N из M» — счётчики, чтобы процент можно было проверить глазами.
   attended            Int     @default(0)
   activitiesTotal     Int     @default(0)

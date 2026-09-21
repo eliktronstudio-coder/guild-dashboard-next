@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
-import { getArchivePreview } from "@/lib/queries";
+import { getArchivePreview, getTreasuryBreakdown } from "@/lib/queries";
 import { createArchiveInTx } from "@/lib/archive";
 
 const dateLabelFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -50,8 +50,14 @@ export async function POST(request: NextRequest) {
 
   const label = `${dateLabelFmt.format(range.dateFrom)} — ${dateLabelFmt.format(range.dateTo)}`;
 
+  // Пул к выплате фиксируем ДО транзакции: внутри неё казна уезжает в архив
+  // и живой остаток становится нулевым, так что посчитать, сколько было к
+  // распределению за этот период, было бы уже не из чего.
+  const breakdown = await getTreasuryBreakdown();
+  const pools = { prime: breakdown.prime, miniRb: breakdown.miniRb };
+
   const archive = await prisma.$transaction((tx) =>
-    createArchiveInTx(tx, { ...range, label, createdBy: admin.username })
+    createArchiveInTx(tx, { ...range, label, createdBy: admin.username, pools })
   );
 
   return NextResponse.json({ ok: true, archiveId: archive.id, label: archive.label });

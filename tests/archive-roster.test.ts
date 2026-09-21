@@ -75,8 +75,11 @@ async function makeActivity(name: string, mode: string, playerIds: string[]) {
   });
 }
 
-function archive(label = "01.05.2026 — 31.05.2026") {
-  return prisma.$transaction((tx) => createArchiveInTx(tx, { dateFrom: DATE_FROM, dateTo: DATE_TO, label }));
+/** Архивация ровно так же, как это делает POST /api/archive. */
+async function archive(label = "01.05.2026 — 31.05.2026") {
+  const b = await queries.getTreasuryBreakdown();
+  const pools = { prime: b.prime, miniRb: b.miniRb };
+  return prisma.$transaction((tx) => createArchiveInTx(tx, { dateFrom: DATE_FROM, dateTo: DATE_TO, label, pools }));
 }
 
 test("в архив попадает весь состав, включая тех, кто никуда не ходил", async () => {

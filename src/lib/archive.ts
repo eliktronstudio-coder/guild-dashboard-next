@@ -1,5 +1,9 @@
 import { computeAttendanceMaps } from "@/lib/attendance";
+import { computeSalaryMap } from "@/lib/salary";
 import type { Prisma } from "@/generated/prisma/client";
+
+/** Пул к распределению по каждой казне на момент архивации. */
+export type ArchivePools = { prime: number; miniRb: number };
 
 /**
  * Архивация за диапазон дат — одной функцией, чтобы у маршрута и у тестов
@@ -8,10 +12,20 @@ import type { Prisma } from "@/generated/prisma/client";
  *
  * Вызывать строго внутри prisma.$transaction: снимок состава обязан быть
  * согласован с тем набором активностей, который только что уехал в архив.
+ *
+ * `pools` считаются ДО открытия транзакции (getTreasuryBreakdown) — после
+ * updateMany ниже живая казна становится нулевой, и посчитать, сколько было
+ * к выплате за этот период, стало бы уже не из чего.
  */
 export async function createArchiveInTx(
   tx: Prisma.TransactionClient,
-  { dateFrom, dateTo, label, createdBy }: { dateFrom: Date; dateTo: Date; label: string; createdBy?: string | null }
+  {
+    dateFrom,
+    dateTo,
+    label,
+    createdBy,
+    pools,
+  }: { dateFrom: Date; dateTo: Date; label: string; createdBy?: string | null; pools: ArchivePools }
 ) {
   const dateWhere = { gte: dateFrom, lte: dateTo };
 
@@ -38,20 +52,25 @@ export async function createArchiveInTx(
     data: { archiveId: created.id },
   });
 
-  await snapshotRosterInTx(tx, created.id);
+  await snapshotRosterInTx(tx, created.id, pools);
 
   return created;
 }
 
 /**
- * Снимок состава с процентами посещаемости на момент архивации.
+ * Снимок состава с процентами посещаемости и суммами к выплате на момент
+ * архивации.
  *
  * Именно снимок, а не расчёт на лету при открытии архива: посещаемость
  * считается от участий (ActivityParticipant), а они каскадно удаляются вместе
  * с игроком. Без фиксации достаточно было бы убрать человека из состава — и он
  * бесследно исчез бы из уже закрытого архива вместе со своими процентами.
  */
-export async function snapshotRosterInTx(tx: Prisma.TransactionClient, archiveId: string) {
+export async function snapshotRosterInTx(
+  tx: Prisma.TransactionClient,
+  archiveId: string,
+  pools: ArchivePools
+) {
   const archived = await tx.activity.findMany({
     where: { archiveId },
     select: { name: true, category: true, mode: true, weight: true, participants: { select: { playerId: true } } },
@@ -61,8 +80,11 @@ export async function snapshotRosterInTx(tx: Prisma.TransactionClient, archiveId
   // Берём весь текущий состав, а не только участников: тот, кто за период не
   // сходил никуда, обязан попасть в архив с честным 0% — иначе «состав» в
   // архиве это не состав, а список отличившихся.
-  const players = await tx.player.findMany({ select: { id: true, name: true, role: true } });
+  const players = await tx.player.findMany({ select: { id: true, name: true, role: true, salaryCoefficient: true } });
   if (players.length === 0) return 0;
+
+  const salaryPrime = computeSalaryMap(players, maps.prime, pools.prime);
+  const salaryMiniRb = computeSalaryMap(players, maps.miniRb, pools.miniRb);
 
   await tx.archivePlayerStat.createMany({
     data: players.map((p) => ({
@@ -76,6 +98,8 @@ export async function snapshotRosterInTx(tx: Prisma.TransactionClient, archiveId
       pvpCount: maps.pvpCount.get(p.id) ?? 0,
       attended: maps.attended.get(p.id) ?? 0,
       activitiesTotal: maps.totals.overall,
+      salaryPrime: salaryPrime.get(p.id) ?? 0,
+      salaryMiniRb: salaryMiniRb.get(p.id) ?? 0,
     })),
   });
 

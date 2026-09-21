@@ -2,11 +2,14 @@ import StatCard from "@/components/StatCard";
 import PayoutSummaryTable from "@/components/admin/PayoutSummaryTable";
 import PaymentsTable from "@/components/admin/PaymentsTable";
 import FreezeSalaryButton from "@/components/admin/FreezeSalaryButton";
+import PeriodPicker from "@/components/admin/PeriodPicker";
 import BlurValue from "@/components/BlurValue";
 import { getActivePeriod, daysUntilPeriodEnd } from "@/lib/period";
 import {
   getAllPayments,
   getAllPlayers,
+  getArchiveOptions,
+  getArchivePayout,
   getPayoutSnapshotMap,
   getPayoutStatusMap,
   getTreasuryBreakdown,
@@ -17,13 +20,105 @@ import { isFullAdminRole } from "@/lib/accountRoles";
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
-export default async function PaymentsPage() {
-  const activePeriod = await getActivePeriod();
+export default async function PaymentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const [{ period: requested }, activePeriod, user, archives] = await Promise.all([
+    searchParams,
+    getActivePeriod(),
+    getCurrentUser(),
+    getArchiveOptions(),
+  ]);
+
+  const isRandom = user?.role === "random";
+  const isAdmin = isFullAdminRole(user?.role);
+
+  // Выбранный архив принимаем только если он есть в списке — иначе чужой
+  // ?period= в адресе показывал бы пустую страницу вместо текущего периода.
+  const selectedArchiveId = requested && archives.some((a) => a.id === requested) ? requested : null;
+
+  const picker = (
+    <PeriodPicker current={activePeriod.label} archives={archives} selected={selectedArchiveId} />
+  );
+
+  /* ——— Закрытый период: всё из снимка архива ——— */
+  if (selectedArchiveId) {
+    const archive = await getArchivePayout(selectedArchiveId);
+    if (!archive) return <div className="space-y-6">{picker}</div>;
+
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface px-4 py-3">
+          <div className="text-sm">
+            <span className="text-muted">Закрытый период: </span>
+            <span className="font-medium">{archive.label}</span>
+          </div>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted">
+            <span className="h-2 w-2 rounded-full bg-muted" /> В архиве
+          </span>
+        </div>
+
+        {picker}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <BlurValue blurred={isRandom}>
+            <StatCard
+              label="Сумма к выплате"
+              value={`${numberFmt.format(archive.total)} золота`}
+              hint="зафиксирована при архивации"
+            />
+          </BlurValue>
+          <BlurValue blurred={isRandom}>
+            <StatCard
+              label="Уже выплачено"
+              value={`${numberFmt.format(archive.paidTotal)} золота`}
+              hint={`осталось ${numberFmt.format(archive.remaining)}`}
+            />
+          </BlurValue>
+          <StatCard label="Получателей" value={String(archive.recipients)} hint="игроков с ненулевой долей" />
+        </div>
+
+        {!isRandom && (
+          <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
+            Суммы взяты из снимка, сделанного при архивации, и не пересчитываются: живая казна после архивации
+            обнуляется. Выплата за закрытый период списывается из казны этого же периода и живой баланс не трогает.
+          </div>
+        )}
+
+        <PayoutSummaryTable
+          players={archive.players.map((p) => ({
+            // Строки удалённых игроков остаются в архиве, но платить им уже
+            // некому — id нет, переключатель для них отключается сам.
+            id: p.id ?? p.statId,
+            name: p.name,
+            role: p.role,
+            attendancePctPrime: p.attendancePctPrime,
+            attendancePctMiniRb: p.attendancePctMiniRb,
+            salary: p.salary,
+            salaryPrime: p.id ? p.salaryPrime : 0,
+            salaryMiniRb: p.id ? p.salaryMiniRb : 0,
+          }))}
+          totalPayout={archive.total}
+          isRandom={isRandom}
+          isAdmin={isAdmin}
+          archiveId={archive.id}
+          paidStatus={archive.players.flatMap((p) =>
+            p.id
+              ? [...(p.paidPrime ? [`${p.id}:Прайм`] : []), ...(p.paidMiniRb ? [`${p.id}:Мини-РБ`] : [])]
+              : []
+          )}
+        />
+      </div>
+    );
+  }
+
+  /* ——— Текущий период ——— */
   const period = activePeriod.id;
-  const [payments, players, user, treasury, paidStatus, snapshot] = await Promise.all([
+  const [payments, players, treasury, paidStatus, snapshot] = await Promise.all([
     getAllPayments(),
     getAllPlayers(),
-    getCurrentUser(),
     getTreasuryBreakdown(),
     getPayoutStatusMap(period),
     getPayoutSnapshotMap(period),
@@ -42,8 +137,6 @@ export default async function PaymentsPage() {
 
   const totalPayout = effective.reduce((sum, p) => sum + p.salary, 0);
   const recipients = effective.filter((p) => p.salary > 0).length;
-  const isRandom = user?.role === "random";
-  const isAdmin = isFullAdminRole(user?.role);
   const hasSnapshot = snapshot.size > 0;
 
   // Сколько уже фактически списано в этом периоде — нужно для сверки ниже:
@@ -73,8 +166,14 @@ export default async function PaymentsPage() {
         </span>
       </div>
 
+      {picker}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard label="Конец периода" value={dateFmt.format(activePeriod.endDate)} hint={daysLeft >= 0 ? `через ${daysLeft} дн.` : "период завершён"} />
+        <StatCard
+          label="Конец периода"
+          value={dateFmt.format(activePeriod.endDate)}
+          hint={daysLeft >= 0 ? `через ${daysLeft} дн.` : "период завершён"}
+        />
         <BlurValue blurred={isRandom}>
           <StatCard label="Сумма к выплате" value={`${numberFmt.format(totalPayout)} золота`} hint="расчётная сумма" />
         </BlurValue>
