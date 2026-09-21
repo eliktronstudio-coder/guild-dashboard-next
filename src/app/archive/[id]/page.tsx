@@ -32,18 +32,26 @@ export default async function ArchiveDetailPage({ params }: { params: Promise<{ 
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div className="rounded-lg border border-border bg-surface p-4">
-          <p className="text-xs text-muted">Казна Прайм (в архиве)</p>
+          <p className="text-xs text-muted">Казна Прайм</p>
           <p className="mt-1 text-xl font-semibold">{numberFmt.format(archive.treasuryPrime)}</p>
+          <p className="mt-0.5 text-xs text-muted">фонд ЗП, 70% с продаж</p>
         </div>
         <div className="rounded-lg border border-border bg-surface p-4">
-          <p className="text-xs text-muted">Казна Мини-РБ (в архиве)</p>
+          <p className="text-xs text-muted">Казна Мини-РБ</p>
           <p className="mt-1 text-xl font-semibold">{numberFmt.format(archive.treasuryMiniRb)}</p>
+          <p className="mt-0.5 text-xs text-muted">целиком на выплату</p>
         </div>
         <div className="rounded-lg border border-border bg-surface p-4">
-          <p className="text-xs text-muted">Всего операций казны</p>
+          <p className="text-xs text-muted">Казна гильдии</p>
+          <p className="mt-1 text-xl font-semibold">{numberFmt.format(archive.treasuryGuild)}</p>
+          <p className="mt-0.5 text-xs text-muted">резерв, 30% с Прайма</p>
+        </div>
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <p className="text-xs text-muted">Всего в казне</p>
           <p className="mt-1 text-xl font-semibold">{numberFmt.format(archive.treasuryTotal)}</p>
+          <p className="mt-0.5 text-xs text-muted">{archive.transactions.length} операций</p>
         </div>
       </div>
 

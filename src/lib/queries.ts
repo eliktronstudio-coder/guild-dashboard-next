@@ -418,9 +418,20 @@ export async function getTreasuryTransactions(limit?: number) {
   }));
 }
 
-export async function getTreasuryGold() {
+/**
+ * Область расчёта казны: живой баланс (archiveId: null) или книги одного
+ * архива. Все функции ниже принимают её, чтобы архив считался ТЕМ ЖЕ кодом,
+ * что и живая казна. Раньше архив суммировал операции по полю category
+ * напрямую — без разбора категорий по проданным позициям, без резерва
+ * гильдии и без учёта выплат, — и показывал неверные Мини-РБ и итог.
+ */
+export type TreasuryScope = { archiveId: string | null };
+
+const LIVE: TreasuryScope = { archiveId: null };
+
+export async function getTreasuryGold(scope: TreasuryScope = LIVE) {
   const result = await prisma.treasuryTransaction.aggregate({
-    where: { archiveId: null },
+    where: { archiveId: scope.archiveId },
     _sum: { amount: true },
   });
   return result._sum.amount ?? 0;
@@ -440,11 +451,11 @@ export async function getTreasuryGold() {
 // один раз. Позиции без категории (ручное добавление в Общий без
 // активности) считаются как Прайм — тот же порядок, что и в "Дроп с
 // Мини-РБ / Дроп с Прайм".
-async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: number }> {
-  // Только незаархивированные операции — заархивированные не входят в
-  // живой баланс (см. Archive в schema.prisma).
+async function getTreasurySplitByCategory(scope: TreasuryScope = LIVE): Promise<{ prime: number; miniRb: number }> {
+  // Операции только из своей области: для живого баланса — незаархивированные,
+  // для архива — его собственные (см. Archive в schema.prisma).
   const liveTxIds = new Set(
-    (await prisma.treasuryTransaction.findMany({ where: { archiveId: null }, select: { id: true } })).map((t) => t.id)
+    (await prisma.treasuryTransaction.findMany({ where: { archiveId: scope.archiveId }, select: { id: true } })).map((t) => t.id)
   );
 
   const soldAll = await prisma.dropItem.findMany({
@@ -460,7 +471,7 @@ async function getTreasurySplitByCategory(): Promise<{ prime: number; miniRb: nu
   // расход, а не доход, и считаются отдельно в getTreasuryPayoutSplit,
   // минуя 70%-й множитель (см. комментарий у поля kind в schema.prisma).
   const tagged = await prisma.treasuryTransaction.findMany({
-    where: { category: { not: null }, kind: null, archiveId: null },
+    where: { category: { not: null }, kind: null, archiveId: scope.archiveId },
     select: { id: true, amount: true, category: true },
   });
   const soldTxIds = new Set(sold.map((d) => d.treasuryTransactionId as string));
@@ -514,10 +525,10 @@ const TREASURY_MAIN_SHARE = 0.7;
 // Сколько уже выплачено по каждой категории (kind="payout", см. schema.prisma).
 // Считается отдельно от дохода и вычитается из prime/miniRb 1:1, ПОСЛЕ
 // 70%-го множителя — см. комментарий у поля kind.
-async function getTreasuryPayoutSplit(): Promise<{ prime: number; miniRb: number }> {
+async function getTreasuryPayoutSplit(scope: TreasuryScope = LIVE): Promise<{ prime: number; miniRb: number }> {
   const rows = await prisma.treasuryTransaction.groupBy({
     by: ["category"],
-    where: { kind: "payout", archiveId: null },
+    where: { kind: "payout", archiveId: scope.archiveId },
     _sum: { amount: true },
   });
   let prime = 0;
@@ -532,11 +543,11 @@ async function getTreasuryPayoutSplit(): Promise<{ prime: number; miniRb: number
   return { prime, miniRb };
 }
 
-export async function getTreasuryBreakdown() {
+export async function getTreasuryBreakdown(scope: TreasuryScope = LIVE) {
   const [total, { prime: primeGold, miniRb: miniRbGold }, payout] = await Promise.all([
-    getTreasuryGold(),
-    getTreasurySplitByCategory(),
-    getTreasuryPayoutSplit(),
+    getTreasuryGold(scope),
+    getTreasurySplitByCategory(scope),
+    getTreasuryPayoutSplit(scope),
   ]);
   const main = Math.round(total * TREASURY_MAIN_SHARE);
   // Мини-РБ без резерва гильдии — весь доход категории идёт на выплату,
@@ -869,12 +880,12 @@ export async function getArchives() {
     orderBy: { dateFrom: "desc" },
     include: { _count: { select: { activities: true, transactions: true, playerStats: true } } },
   });
-  const totals = await prisma.treasuryTransaction.groupBy({
-    by: ["archiveId"],
-    where: { archiveId: { not: null } },
-    _sum: { amount: true },
-  });
-  const totalByArchive = new Map(totals.map((t) => [t.archiveId as string, t._sum.amount ?? 0]));
+  // Итог по каждому архиву считаем тем же кодом, что и живую казну —
+  // иначе в списке стояла бы одна сумма, а внутри архива другая.
+  const breakdowns = await Promise.all(
+    archives.map(async (a) => [a.id, await getTreasuryBreakdown({ archiveId: a.id })] as const)
+  );
+  const totalByArchive = new Map(breakdowns.map(([id, b]) => [id, b.total]));
   return archives.map((a) => ({
     id: a.id,
     label: a.label,
@@ -907,10 +918,12 @@ export async function getArchiveDetail(id: string) {
   });
   if (!archive) return null;
 
-  const prime = archive.transactions
-    .filter((t) => t.category !== "Мини-РБ")
-    .reduce((s, t) => s + t.amount, 0);
-  const miniRb = archive.transactions.filter((t) => t.category === "Мини-РБ").reduce((s, t) => s + t.amount, 0);
+  // Тот же расчёт, что и для живой казны, только по книгам этого архива.
+  // Наивная сумма по полю category здесь была неверной: у продаж дропа
+  // category обычно пустая, категория лежит на проданных позициях — поэтому
+  // Мини-РБ недосчитывался, всё сваливалось в Прайм, резерв гильдии не
+  // удерживался и итог не сходился с реальной казной.
+  const breakdown = await getTreasuryBreakdown({ archiveId: archive.id });
 
   return {
     id: archive.id,
@@ -919,9 +932,10 @@ export async function getArchiveDetail(id: string) {
     dateTo: archive.dateTo,
     createdAt: archive.createdAt,
     createdBy: archive.createdBy,
-    treasuryPrime: prime,
-    treasuryMiniRb: miniRb,
-    treasuryTotal: prime + miniRb,
+    treasuryPrime: breakdown.prime,
+    treasuryMiniRb: breakdown.miniRb,
+    treasuryGuild: breakdown.guild,
+    treasuryTotal: breakdown.total,
     activities: archive.activities.map((a) => ({
       id: a.id,
       name: a.name,
