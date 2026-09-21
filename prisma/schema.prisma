@@ -36,6 +36,7 @@ model Player {
   user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
   payments      Payment[]
   drops         DropItem[]
+  archiveStats  ArchivePlayerStat[]
 }
 
 model Activity {
@@ -148,7 +149,40 @@ model Archive {
 
   transactions TreasuryTransaction[]
   activities   Activity[]
+  playerStats  ArchivePlayerStat[]
 }
+
+/// Снимок состава на момент архивации: кто был в гильдии и с каким процентом
+/// посещаемости. Именно снимок, а не расчёт на лету: посещаемость считается от
+/// списка участников (ActivityParticipant), а он каскадно удаляется вместе с
+/// игроком — то есть стоит убрать человека из состава, и он бесследно исчез бы
+/// из уже закрытого архива вместе со своими процентами. Архив обязан оставаться
+/// неизменным, поэтому цифры фиксируются в момент создания архива.
+/// playerId держим с onDelete: SetNull — ссылка на живого игрока пропадёт,
+/// а имя, роль и проценты в строке останутся.
+model ArchivePlayerStat {
+  id                  String  @id @default(cuid())
+  archiveId           String
+  archive             Archive @relation(fields: [archiveId], references: [id], onDelete: Cascade)
+  playerId            String?
+  player              Player? @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  /// Имя и роль на момент архивации — переименование игрока не должно
+  /// задним числом переписывать историю.
+  playerName          String
+  role                String
+  attendancePct       Int
+  attendancePctPrime  Int
+  attendancePctMiniRb Int
+  pvpCount            Int     @default(0)
+  /// «Был на N из M» — счётчики, чтобы процент можно было проверить глазами.
+  attended            Int     @default(0)
+  activitiesTotal     Int     @default(0)
+
+  @@unique([archiveId, playerName])
+  @@index([archiveId])
+  @@index([playerId])
+}
+
 
 /// Расчётный период гильдии: с 15-го числа одного месяца по 15-е следующего.
 /// Ровно один период имеет status="active" в любой момент времени —

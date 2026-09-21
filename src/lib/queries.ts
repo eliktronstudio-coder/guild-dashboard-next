@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { splitProportionally } from "@/lib/proportionalSplit";
 import { getActivePeriodId } from "@/lib/period";
-import { resolveAttendanceFund } from "@/lib/activityWeights";
+import { computeAttendanceMaps } from "@/lib/attendance";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
 const shortDateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
@@ -18,71 +18,6 @@ function weekKey(d: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-// Посещаемость считается динамически: доля активностей, в которых игрок
-// реально участвовал. Считается отдельно для всех активностей и отдельно
-// по каждой категории (Прайм / Мини-РБ), чтобы можно было смотреть
-// посещаемость по типу активности, а не только в среднем.
-type ActivityForAttendance = { category: string; participants: { playerId: string }[] };
-
-function buildAttendanceMap(activities: ActivityForAttendance[]): Map<string, number> {
-  const total = activities.length;
-  const map = new Map<string, number>();
-  if (total === 0) return map;
-
-  const counts = new Map<string, number>();
-  for (const a of activities) {
-    for (const p of a.participants) {
-      counts.set(p.playerId, (counts.get(p.playerId) ?? 0) + 1);
-    }
-  }
-  for (const [playerId, count] of counts) {
-    map.set(playerId, Math.round((count / total) * 100));
-  }
-  return map;
-}
-
-/**
- * Посещаемость Прайма — не простая доля "сколько активностей из всех", а
- * взвешенная по коэффициенту конкретной активности (Activity.weight):
- * лёгкий контент даёт меньше веса, тяжёлый — больше. При создании
- * подставляется автоматически по названию (activityAttendanceWeight),
- * дальше админ может поправить под конкретный поход — расчёт всегда берёт
- * сохранённое значение, а не пересчитывает его из названия заново. Проценты
- * по-прежнему ограничены 100%, потому что вес пришедшего игрока не может
- * превысить вес всех активностей периода.
- */
-function buildWeightedAttendanceMap(
-  activities: { weight: number; participants: { playerId: string }[] }[]
-): Map<string, number> {
-  const weights = activities.map((a) => a.weight);
-  const totalWeight = weights.reduce((s, w) => s + w, 0);
-  const map = new Map<string, number>();
-  if (totalWeight <= 0) return map;
-
-  const weightByPlayer = new Map<string, number>();
-  activities.forEach((a, i) => {
-    for (const p of a.participants) {
-      weightByPlayer.set(p.playerId, (weightByPlayer.get(p.playerId) ?? 0) + weights[i]);
-    }
-  });
-  for (const [playerId, w] of weightByPlayer) {
-    map.set(playerId, Math.round((w / totalWeight) * 100));
-  }
-  return map;
-}
-
-// PvP считается отдельно от Прайм/Мини-РБ и не в процентах, а в "штуках"
-// участий (только для отображения активности — на казну/ЗП не влияет).
-function buildCountMap(activities: { participants: { playerId: string }[] }[]): Map<string, number> {
-  const map = new Map<string, number>();
-  for (const a of activities) {
-    for (const p of a.participants) {
-      map.set(p.playerId, (map.get(p.playerId) ?? 0) + 1);
-    }
-  }
-  return map;
-}
-
 /**
  * Посещаемость считается только по активностям ТЕКУЩЕГО расчётного периода
  * (15→15) — каждый новый период статистика начинается заново, чтобы старая
@@ -90,29 +25,12 @@ function buildCountMap(activities: { participants: { playerId: string }[] }[]): 
  * (getActivePeriodId), а не резолвим здесь — иначе каждый вызов рисковал бы
  * молча создать новый период, если активного ещё нет.
  */
-async function getAttendanceMaps(periodId: string): Promise<{
-  overall: Map<string, number>;
-  prime: Map<string, number>;
-  miniRb: Map<string, number>;
-  pvpCount: Map<string, number>;
-}> {
+async function getAttendanceMaps(periodId: string) {
   const activities = await prisma.activity.findMany({
     where: { periodId, archiveId: null },
     select: { name: true, category: true, mode: true, weight: true, participants: { select: { playerId: true } } },
   });
-
-  // Какая казна засчитывает активность — определяется по названию
-  // (resolveAttendanceFund), а НЕ по категории, которую выбрал админ при
-  // создании: АГЛ/АГЛ Т2/Кошка всегда Мини-РБ, всё остальное — Прайм, PvP —
-  // всегда Прайм. Отдельный счётчик pvpCount (см. ниже) при этом остаётся
-  // числом "сколько раз ходил", а не процентом — он не участвует в расчёте
-  // зарплаты.
-  return {
-    overall: buildAttendanceMap(activities),
-    prime: buildWeightedAttendanceMap(activities.filter((a) => resolveAttendanceFund(a.name, a.mode) === "Прайм")),
-    miniRb: buildAttendanceMap(activities.filter((a) => resolveAttendanceFund(a.name, a.mode) === "Мини-РБ")),
-    pvpCount: buildCountMap(activities.filter((a) => a.mode === "PvP")),
-  };
+  return computeAttendanceMaps(activities);
 }
 
 // Зарплата считается динамически и отдельно по каждой казне — Прайм
@@ -979,7 +897,7 @@ export async function getArchivePreview(dateFrom: Date, dateTo: Date) {
 export async function getArchives() {
   const archives = await prisma.archive.findMany({
     orderBy: { dateFrom: "desc" },
-    include: { _count: { select: { activities: true, transactions: true } } },
+    include: { _count: { select: { activities: true, transactions: true, playerStats: true } } },
   });
   const totals = await prisma.treasuryTransaction.groupBy({
     by: ["archiveId"],
@@ -996,6 +914,7 @@ export async function getArchives() {
     createdBy: a.createdBy,
     activityCount: a._count.activities,
     transactionCount: a._count.transactions,
+    playerCount: a._count.playerStats,
     treasuryTotal: totalByArchive.get(a.id) ?? 0,
   }));
 }
@@ -1005,8 +924,15 @@ export async function getArchiveDetail(id: string) {
   const archive = await prisma.archive.findUnique({
     where: { id },
     include: {
-      activities: { orderBy: { date: "desc" }, include: { _count: { select: { participants: true } } } },
+      activities: {
+        orderBy: { date: "desc" },
+        include: {
+          _count: { select: { participants: true, guests: true, screenshots: true } },
+          drops: { select: { value: true, quantity: true } },
+        },
+      },
       transactions: { orderBy: { date: "desc" } },
+      playerStats: { orderBy: [{ attendancePct: "desc" }, { playerName: "asc" }] },
     },
   });
   if (!archive) return null;
@@ -1031,8 +957,27 @@ export async function getArchiveDetail(id: string) {
       name: a.name,
       category: a.category,
       mode: a.mode,
+      difficulty: a.difficulty,
+      status: a.status,
+      isNight: a.isNight,
       date: dateFmt.format(a.date),
       participants: a._count.participants,
+      guests: a._count.guests,
+      screenshots: a._count.screenshots,
+      dropTotal: a.drops.reduce((sum, d) => sum + d.value * d.quantity, 0),
+      dropCount: a.drops.length,
+    })),
+    playerStats: archive.playerStats.map((s) => ({
+      id: s.id,
+      playerId: s.playerId,
+      playerName: s.playerName,
+      role: s.role,
+      attendancePct: s.attendancePct,
+      attendancePctPrime: s.attendancePctPrime,
+      attendancePctMiniRb: s.attendancePctMiniRb,
+      pvpCount: s.pvpCount,
+      attended: s.attended,
+      activitiesTotal: s.activitiesTotal,
     })),
     transactions: archive.transactions.map((t) => ({
       id: t.id,

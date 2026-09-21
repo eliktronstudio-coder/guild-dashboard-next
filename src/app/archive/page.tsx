@@ -37,6 +37,7 @@ export default async function ArchivePage() {
               <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted">
                 <th className="px-4 py-3 font-medium">Период</th>
                 <th className="px-4 py-3 font-medium">Активностей</th>
+                <th className="px-4 py-3 font-medium">Состав</th>
                 <th className="px-4 py-3 font-medium">Операций казны</th>
                 <th className="px-4 py-3 font-medium">Сумма казны</th>
                 <th className="px-4 py-3 font-medium">Архивировано</th>
@@ -52,6 +53,7 @@ export default async function ArchivePage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 font-mono tabular-nums text-muted">{a.activityCount}</td>
+                  <td className="px-4 py-3 font-mono tabular-nums text-muted">{a.playerCount || "—"}</td>
                   <td className="px-4 py-3 font-mono tabular-nums text-muted">{a.transactionCount}</td>
                   <td className="px-4 py-3 font-mono tabular-nums">{numberFmt.format(a.treasuryTotal)}</td>
                   <td className="px-4 py-3 text-xs text-muted">

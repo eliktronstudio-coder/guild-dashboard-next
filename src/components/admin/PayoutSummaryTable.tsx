@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import EmptyState from "@/components/EmptyState";
 import BlurValue from "@/components/BlurValue";
+import { attendanceColor } from "@/components/AttendanceBar";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -21,11 +22,6 @@ type PlayerShare = {
 
 type Category = "Прайм" | "Мини-РБ";
 
-function attendanceColor(pct: number) {
-  if (pct <= 20) return { text: "text-danger", bar: "bg-danger" };
-  if (pct <= 50) return { text: "text-amber-500", bar: "bg-amber-500" };
-  return { text: "text-success", bar: "bg-success" };
-}
 
 /**
  * Переключатель «Ожидает / Выплачено» для одной доли (П или М) одного

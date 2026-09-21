@@ -8,6 +8,7 @@ import clsx from "clsx";
 import { ROLES } from "@/lib/roles";
 import EmptyState from "@/components/EmptyState";
 import BlurValue from "@/components/BlurValue";
+import { attendanceColor } from "@/components/AttendanceBar";
 
 type Player = {
   id: string;
@@ -39,11 +40,6 @@ const emptyForm: FormState = { name: "", role: ROLES[0], salaryCoefficient: "1" 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function attendanceColor(pct: number) {
-  if (pct <= 20) return { text: "text-danger", bar: "bg-danger" };
-  if (pct <= 50) return { text: "text-amber-500", bar: "bg-amber-500" };
-  return { text: "text-success", bar: "bg-success" };
-}
 
 export default function PlayersTable({
   players,

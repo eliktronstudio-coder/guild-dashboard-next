@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth";
 import { getArchivePreview } from "@/lib/queries";
+import { createArchiveInTx } from "@/lib/archive";
 
 const dateLabelFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
 
@@ -29,46 +30,29 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Создаёт архив за диапазон дат: помечает Activity/TreasuryTransaction в
- * этом диапазоне archiveId (не удаляет), после чего живые расчёты казны и
- * страница активностей их больше не видят — баланс на сайте начинает
- * считаться заново с 0, а история остаётся доступна в самом архиве.
+ * Создаёт архив за диапазон дат: помечает Activity/TreasuryTransaction в этом
+ * диапазоне archiveId (не удаляет) и снимает состав с процентами
+ * посещаемости, после чего живые расчёты казны и страница активностей их
+ * больше не видят — баланс на сайте начинает считаться заново с 0, а история
+ * остаётся доступна в самом архиве. Сама механика — в src/lib/archive.ts,
+ * общая с тестами.
  */
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const body = await request.json().catch(() => null);
-  const range = parseRange(typeof body?.dateFrom === "string" ? body.dateFrom : null, typeof body?.dateTo === "string" ? body.dateTo : null);
+  const range = parseRange(
+    typeof body?.dateFrom === "string" ? body.dateFrom : null,
+    typeof body?.dateTo === "string" ? body.dateTo : null
+  );
   if (!range) return NextResponse.json({ error: "Укажите корректный диапазон дат." }, { status: 400 });
 
   const label = `${dateLabelFmt.format(range.dateFrom)} — ${dateLabelFmt.format(range.dateTo)}`;
-  const dateWhere = { gte: range.dateFrom, lte: range.dateTo };
 
-  const archive = await prisma.$transaction(async (tx) => {
-    const created = await tx.archive.create({
-      data: { dateFrom: range.dateFrom, dateTo: range.dateTo, label, createdBy: admin.username },
-    });
-    await tx.activity.updateMany({
-      where: { date: dateWhere, archiveId: null },
-      data: { archiveId: created.id },
-    });
-    // Выплаты ЗП (kind="payout") архивируем ВСЕ, какая бы дата у них ни
-    // стояла — не только попавшие в выбранный диапазон. Выплата обычно
-    // делается через день-два ПОСЛЕ дня, когда пришёл доход, из которого она
-    // списана (казна — общий пул, не привязана к конкретной продаже), так
-    // что если архивировать только доход по датам, а выплату по нему
-    // оставить "живой", Прайм/Мини-РБ/Гильдия разъезжаются: пул дохода
-    // обнуляется, а расход остаётся его вычитать — получается фиктивный
-    // отрицательный Прайм и "лишнее" золото в Казне Гильдии на пустом месте.
-    // На момент архивации вся уже сделанная выплата — это закрытая книга
-    // старого периода независимо от даты самой операции списания.
-    await tx.treasuryTransaction.updateMany({
-      where: { archiveId: null, OR: [{ date: dateWhere }, { kind: "payout" }] },
-      data: { archiveId: created.id },
-    });
-    return created;
-  });
+  const archive = await prisma.$transaction((tx) =>
+    createArchiveInTx(tx, { ...range, label, createdBy: admin.username })
+  );
 
   return NextResponse.json({ ok: true, archiveId: archive.id, label: archive.label });
 }
