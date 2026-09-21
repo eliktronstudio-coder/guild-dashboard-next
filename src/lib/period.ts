@@ -27,15 +27,34 @@ export function computePeriodBounds(date: Date): { startDate: Date; endDate: Dat
  * closed (без снимка задолженности), новый создаётся с чистой посещаемостью.
  */
 export async function getActivePeriod() {
-  const existing = await prisma.accountingPeriod.findFirst({
+  const now = new Date();
+  const active = await prisma.accountingPeriod.findMany({
     where: { status: "active" },
     orderBy: { startDate: "desc" },
   });
 
-  const now = new Date();
-  if (existing && existing.endDate > now) return existing;
+  // Если активных вдруг несколько, берём тот, внутри которого мы сейчас, а не
+  // просто самый поздний: иначе один лишний период "в будущем" навсегда
+  // перетянул бы на себя весь учёт.
+  const existing = active.find((p) => p.startDate <= now && p.endDate > now) ?? active[0] ?? null;
 
   const { startDate, endDate } = computePeriodBounds(now);
+
+  // Период, который ещё не начался, — всегда порча данных: такой оставила
+  // после себя удалённая кнопка ручного закрытия (она считала следующий цикл
+  // от endDate закрываемого периода, а не от текущей даты, и при досрочном
+  // закрытии уезжала на месяц вперёд). Чиним на месте, а не создаём новый:
+  // к этому периоду уже привязаны активности и операции, и закрыть его значило
+  // бы обнулить всю посещаемость.
+  if (existing && existing.startDate > now) {
+    return prisma.accountingPeriod.update({
+      where: { id: existing.id },
+      data: { startDate, endDate, label: periodLabel(startDate, endDate) },
+    });
+  }
+
+  if (existing && existing.endDate > now) return existing;
+
   if (existing) {
     // Реальное время обогнало период (сайт не открывали несколько дней) —
     // закрываем старый и открываем актуальный цикл одной транзакцией.
