@@ -11,6 +11,7 @@ import {
   Map,
   UserCircle,
   Coins,
+  Gavel,
   House,
   Palette,
   Archive,
@@ -53,6 +54,7 @@ export const navSections: NavSection[] = [
     items: [
       { href: "/calculator", label: "Калькуляторы", icon: Calculator },
       { href: "/archeage", label: "ArcheAge", icon: Map, adminOnly: true },
+      { href: "/auction", label: "Аукцион", icon: Gavel, adminOnly: true },
     ],
   },
   {
