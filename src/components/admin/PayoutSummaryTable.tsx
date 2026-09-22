@@ -125,6 +125,8 @@ export default function PayoutSummaryTable({
   isAdmin = false,
   paidStatus = [],
   archiveId = null,
+  title = "Расчёт распределения",
+  subtitle,
 }: {
   players: PlayerShare[];
   totalPayout: number;
@@ -132,6 +134,9 @@ export default function PayoutSummaryTable({
   isAdmin?: boolean;
   /** Выбран закрытый период — выплата пойдёт в его книги, не в живую казну. */
   archiveId?: string | null;
+  /** Заголовок блока: у закрытого периода ничего не «рассчитывается». */
+  title?: string;
+  subtitle?: string;
   /** Ключи вида `${playerId}:${category}` — уже выплаченные в этом периоде. */
   paidStatus?: string[];
 }) {
@@ -142,10 +147,14 @@ export default function PayoutSummaryTable({
   return (
     <div className="rounded-lg border border-border bg-surface">
       <div className="border-b border-border p-4">
-        <h2 className="text-sm font-semibold">Расчёт распределения</h2>
+        <h2 className="text-sm font-semibold">{title}</h2>
         <p className="mt-0.5 text-xs text-muted">
-          Основная казна делится между игроками по посещаемости с учётом индивидуального коэффициента.
-          {isAdmin && " Статус «Выплата» списывает долю из казны Прайма или Мини-РБ и переносит её в Журнал выплат."}
+          {subtitle ?? (
+            <>
+              Основная казна делится между игроками по посещаемости с учётом индивидуального коэффициента.
+              {isAdmin && " Статус «Выплата» списывает долю из казны Прайма или Мини-РБ и переносит её в Журнал выплат."}
+            </>
+          )}
         </p>
       </div>
       {rows.length === 0 ? (

@@ -261,22 +261,6 @@ model Payment {
   @@index([periodId])
 }
 
-/// Снимок расчётной зарплаты игрока на день выплаты — кнопка «Зарплата» на
-/// /payments. Без снимка salaryPrime/salaryMiniRb пересчитываются на лету
-/// от ОСТАТКА казны (см. getDerivedPlayerMaps), поэтому выплата одному
-/// игроку тут же меняла бы отображаемую сумму у всех остальных. Снимок
-/// фиксирует суммы на момент нажатия — дальнейшие выплаты их не двигают.
-model PayoutSnapshot {
-  id           String   @id @default(cuid())
-  /// "YYYY-MM" — тот же ключ периода, что у Payment.archiveMonth.
-  period       String
-  playerId     String
-  salaryPrime  Int
-  salaryMiniRb Int
-  createdAt    DateTime @default(now())
-
-  @@unique([period, playerId])
-}
 
 /// Оформление одной страницы. pageKey берётся из реестра (src/lib/design/registry.ts);
 /// служебный ключ "__shared__" хранит общие элементы и тему.

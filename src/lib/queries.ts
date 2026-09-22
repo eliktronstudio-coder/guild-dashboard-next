@@ -42,12 +42,31 @@ async function getSalaryMapForPool(attendanceMap: Map<string, number>, pool: num
   return computeSalaryMap(players, attendanceMap, pool);
 }
 
+/**
+ * Фонд, который делится между игроками, — исходная сумма периода, а не
+ * остаток казны. Остаток уменьшается с каждой выплатой, поэтому доли,
+ * посчитанные от него, «плыли»: заплатили одному — у всех остальных
+ * показанная сумма падала, хотя они ничего не получили. Раньше это лечили
+ * ручной кнопкой «Зарплата» (снимок PayoutSnapshot); теперь лечить нечего.
+ */
+export function distributionPools(breakdown: {
+  prime: number;
+  miniRb: number;
+  payout: { prime: number; miniRb: number };
+}) {
+  return {
+    prime: breakdown.prime + breakdown.payout.prime,
+    miniRb: breakdown.miniRb + breakdown.payout.miniRb,
+  };
+}
+
 async function getDerivedPlayerMaps() {
   const periodId = await getActivePeriodId();
   const [attendanceMaps, treasuryBreakdown] = await Promise.all([getAttendanceMaps(periodId), getTreasuryBreakdown()]);
+  const pools = distributionPools(treasuryBreakdown);
   const [salaryPrime, salaryMiniRb] = await Promise.all([
-    getSalaryMapForPool(attendanceMaps.prime, treasuryBreakdown.prime),
-    getSalaryMapForPool(attendanceMaps.miniRb, treasuryBreakdown.miniRb),
+    getSalaryMapForPool(attendanceMaps.prime, pools.prime),
+    getSalaryMapForPool(attendanceMaps.miniRb, pools.miniRb),
   ]);
   return {
     attendance: attendanceMaps.overall,
@@ -562,7 +581,11 @@ export async function getTreasuryBreakdown(scope: TreasuryScope = LIVE) {
   const prime = Math.round(primeGold * TREASURY_MAIN_SHARE) - payout.prime;
   const miniRb = miniRbGold - payout.miniRb;
   const guild = total - prime - miniRb;
-  return { total, main, guild, prime, miniRb };
+  // payout отдаём наружу, чтобы можно было получить ИСХОДНЫЙ фонд периода
+  // (prime + payout.prime). Остаток prime уменьшается с каждой выплатой, и
+  // считать от него доли нельзя: доля ещё не получившего игрока падала бы
+  // после каждой чужой выплаты — см. distributionPools ниже.
+  return { total, main, guild, prime, miniRb, payout };
 }
 
 export async function getTreasuryChartData() {
@@ -834,16 +857,6 @@ export async function getPayoutStatusMap(period: string): Promise<Set<string>> {
   return new Set(rows.map((r) => `${r.playerId}:${r.category}`));
 }
 
-/** Снимок зарплаты за период — кнопка «Зарплата». Пусто, если не фиксировали. */
-export async function getPayoutSnapshotMap(
-  period: string
-): Promise<Map<string, { salaryPrime: number; salaryMiniRb: number }>> {
-  const rows = await prisma.payoutSnapshot.findMany({
-    where: { period },
-    select: { playerId: true, salaryPrime: true, salaryMiniRb: true },
-  });
-  return new Map(rows.map((r) => [r.playerId, { salaryPrime: r.salaryPrime, salaryMiniRb: r.salaryMiniRb }]));
-}
 
 /** Сколько игроку выплачено (по обеим казнам) в рамках указанного периода — для «Состава». */
 export async function getPlayerPeriodPaidMap(periodId: string): Promise<Map<string, number>> {

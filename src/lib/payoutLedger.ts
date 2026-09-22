@@ -46,15 +46,9 @@ export async function resolvePayoutAmount(
     return category === "Мини-РБ" ? stat.salaryMiniRb : stat.salaryPrime;
   }
 
-  // Сумму берём из снимка за период, если зарплата зафиксирована кнопкой
-  // «Зарплата» — иначе она пересчитывалась бы от остатка казны при каждой
-  // следующей выплате, и уже показанные игрокам суммы «плыли» бы. Без
-  // снимка (кнопку ещё не нажимали) используем текущий живой расчёт.
-  const snapshot = await prisma.payoutSnapshot.findUnique({
-    where: { period_playerId: { period: target.key, playerId } },
-  });
-  if (snapshot) return category === "Мини-РБ" ? snapshot.salaryMiniRb : snapshot.salaryPrime;
-
+  // Живой расчёт. Фиксировать зарплату отдельной кнопкой больше не нужно:
+  // доли считаются от исходного фонда периода, а не от остатка казны, и от
+  // чужих выплат уже не зависят (см. distributionPools в queries.ts).
   const { getPlayerById } = await import("@/lib/queries");
   const player = await getPlayerById(playerId);
   if (!player) return null;

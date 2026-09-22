@@ -1,7 +1,6 @@
 import StatCard from "@/components/StatCard";
 import PayoutSummaryTable from "@/components/admin/PayoutSummaryTable";
 import PaymentsTable from "@/components/admin/PaymentsTable";
-import FreezeSalaryButton from "@/components/admin/FreezeSalaryButton";
 import PeriodPicker from "@/components/admin/PeriodPicker";
 import BlurValue from "@/components/BlurValue";
 import { getActivePeriod, daysUntilPeriodEnd } from "@/lib/period";
@@ -10,7 +9,6 @@ import {
   getAllPlayers,
   getArchiveOptions,
   getArchivePayout,
-  getPayoutSnapshotMap,
   getPayoutStatusMap,
   getTreasuryBreakdown,
 } from "@/lib/queries";
@@ -104,6 +102,8 @@ export default async function PaymentsPage({
           isRandom={isRandom}
           isAdmin={isAdmin}
           archiveId={archive.id}
+          title="Состав и суммы за период"
+          subtitle="Снимок на момент архивации: проценты и доли зафиксированы и не пересчитываются. Отметка «Выплата» списывает долю из казны этого же периода."
           paidStatus={archive.players.flatMap((p) =>
             p.id
               ? [...(p.paidPrime ? [`${p.id}:Прайм`] : []), ...(p.paidMiniRb ? [`${p.id}:Мини-РБ`] : [])]
@@ -116,28 +116,20 @@ export default async function PaymentsPage({
 
   /* ——— Текущий период ——— */
   const period = activePeriod.id;
-  const [payments, players, treasury, paidStatus, snapshot] = await Promise.all([
+  const [payments, players, treasury, paidStatus] = await Promise.all([
     getAllPayments(),
     getAllPlayers(),
     getTreasuryBreakdown(),
     getPayoutStatusMap(period),
-    getPayoutSnapshotMap(period),
   ]);
 
-  // Если зарплата зафиксирована кнопкой «Зарплата», берём суммы из снимка —
-  // иначе они пересчитывались бы от остатка казны при каждой следующей
-  // выплате, и уже показанные игрокам цифры «плыли» бы. Игроков, которых
-  // не было в момент фиксации (снимок их не покрывает), считаем как обычно.
-  const effective = players.map((p) => {
-    const frozen = snapshot.get(p.id);
-    const salaryPrime = frozen?.salaryPrime ?? p.salaryPrime;
-    const salaryMiniRb = frozen?.salaryMiniRb ?? p.salaryMiniRb;
-    return { ...p, salaryPrime, salaryMiniRb, salary: salaryPrime + salaryMiniRb };
-  });
+  // Фиксировать зарплату отдельной кнопкой больше не нужно: доли считаются от
+  // исходного фонда периода, а не от остатка казны, поэтому выплата одному
+  // игроку не меняет суммы у остальных (см. distributionPools в queries.ts).
+  const effective = players;
 
   const totalPayout = effective.reduce((sum, p) => sum + p.salary, 0);
   const recipients = effective.filter((p) => p.salary > 0).length;
-  const hasSnapshot = snapshot.size > 0;
 
   // Сколько уже фактически списано в этом периоде — нужно для сверки ниже:
   // после первой же выплаты остаток казны уменьшается, а totalPayout при
@@ -199,12 +191,6 @@ export default async function PaymentsPage({
               расчёта — сообщите разработчику.
             </>
           )}
-        </div>
-      )}
-
-      {isAdmin && (
-        <div className="flex flex-wrap items-center gap-2">
-          <FreezeSalaryButton alreadyFrozen={hasSnapshot} />
         </div>
       )}
 
