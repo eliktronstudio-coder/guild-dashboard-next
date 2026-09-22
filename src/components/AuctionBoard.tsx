@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import clsx from "clsx";
-import { Search, ImageOff, Gavel, Crown } from "lucide-react";
+import { Search, ImageOff, Gavel, Crown, Timer } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 
 type CatalogItem = { id: string; name: string; imageUrl: string | null };
@@ -18,11 +18,22 @@ type Auction = {
   currentBid: number;
   leaderPlayerId: string | null;
   leaderName: string | null;
+  hasTimer: boolean;
+  /** Остаток, посчитанный сервером. Null — торги без ограничения времени. */
+  remainingMs: number | null;
+  expired: boolean;
   history: HistoryEntry[];
 };
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const timeFmt = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+function formatRemaining(ms: number) {
+  const total = Math.ceil(ms / 1000);
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return `${m}:${String(sec).padStart(2, "0")}`;
+}
 
 /** Как часто подтягиваем состояние торгов с сервера. */
 const POLL_MS = 2000;
@@ -47,6 +58,23 @@ export default function AuctionBoard({
   const [itemSearch, setItemSearch] = useState("");
   const [startingBid, setStartingBid] = useState("100");
   const [step, setStep] = useState("50");
+  const [durationMin, setDurationMin] = useState("2");
+  const [useTimer, setUseTimer] = useState(true);
+
+  // Остаток тикаем локально между опросами, чтобы счётчик шёл плавно, но
+  // источник правды — сервер: каждые две секунды значение перезаписывается
+  // его ответом, поэтому часы участника на отсчёт не влияют.
+  const [remaining, setRemaining] = useState<number | null>(initialAuction?.remainingMs ?? null);
+
+  useEffect(() => {
+    setRemaining(auction?.remainingMs ?? null);
+  }, [auction?.remainingMs, auction?.id]);
+
+  useEffect(() => {
+    if (remaining === null) return;
+    const t = setInterval(() => setRemaining((r) => (r === null ? null : Math.max(0, r - 1000))), 1000);
+    return () => clearInterval(t);
+  }, [remaining === null]);
 
   // Пока участник жмёт кнопку, опрос не должен подменить цену под руками —
   // иначе ставка ушла бы с уже неактуальным expectedBid и отклонилась.
@@ -77,6 +105,9 @@ export default function AuctionBoard({
 
   const selectedItem = catalog.find((c) => c.id === itemId) ?? null;
   const iAmLeader = !!(auction && me && auction.leaderPlayerId === me.id);
+  // Считаем от локального тика, а не от ответа сервера, чтобы кнопки гасли
+  // ровно в ноль, не дожидаясь следующего опроса.
+  const timeIsUp = !!auction?.hasTimer && remaining !== null && remaining <= 0;
 
   async function send(url: string, init: RequestInit) {
     setBusy(true);
@@ -98,7 +129,12 @@ export default function AuctionBoard({
   const start = () =>
     send("/api/auction", {
       method: "POST",
-      body: JSON.stringify({ catalogItemId: itemId, startingBid: Number(startingBid), step: Number(step) }),
+      body: JSON.stringify({
+        catalogItemId: itemId,
+        startingBid: Number(startingBid),
+        step: Number(step),
+        durationSec: useTimer ? Math.round(Number(durationMin) * 60) : null,
+      }),
     });
 
   const finish = () => {
@@ -110,6 +146,10 @@ export default function AuctionBoard({
     auction && send("/api/auction/bid", { method: "POST", body: JSON.stringify({ expectedBid: auction.currentBid }) });
 
   const skip = () => send("/api/auction/bid", { method: "POST", body: JSON.stringify({ action: "skip" }) });
+
+  const shiftTime = (deltaSec: number) =>
+    send("/api/auction", { method: "PATCH", body: JSON.stringify({ deltaSec }) });
+  const dropTimer = () => send("/api/auction", { method: "PATCH", body: JSON.stringify({ durationSec: null }) });
 
   return (
     <div className="space-y-4">
@@ -219,6 +259,22 @@ export default function AuctionBoard({
                       className="mt-1 block w-32 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm text-foreground"
                     />
                   </label>
+                  <label className="text-xs text-muted">
+                    Время торгов, мин
+                    <input
+                      type="number"
+                      min={0.1}
+                      step={0.5}
+                      value={durationMin}
+                      disabled={!useTimer}
+                      onChange={(e) => setDurationMin(e.target.value)}
+                      className="mt-1 block w-32 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm text-foreground disabled:opacity-50"
+                    />
+                  </label>
+                  <label className="flex items-center gap-1.5 pb-2 text-xs text-muted">
+                    <input type="checkbox" checked={!useTimer} onChange={(e) => setUseTimer(!e.target.checked)} />
+                    без таймера
+                  </label>
                   <button
                     type="button"
                     onClick={start}
@@ -258,11 +314,48 @@ export default function AuctionBoard({
               </div>
             </div>
 
+            {auction?.hasTimer && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface-2 px-3 py-2">
+                <span
+                  className={clsx(
+                    "inline-flex items-center gap-2 font-mono text-2xl font-bold tabular-nums",
+                    remaining !== null && remaining <= 10000 ? "text-danger" : "text-foreground"
+                  )}
+                >
+                  <Timer size={18} className="text-muted" />
+                  {remaining !== null && remaining > 0 ? formatRemaining(remaining) : "время вышло"}
+                </span>
+                {isAdmin && (
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {[-30, 30, 60].map((d) => (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => shiftTime(d)}
+                        disabled={busy}
+                        className="rounded-md border border-border px-2 py-1 text-xs hover:bg-surface disabled:opacity-60"
+                      >
+                        {d > 0 ? `+${d}` : d} с
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={dropTimer}
+                      disabled={busy}
+                      className="rounded-md border border-border px-2 py-1 text-xs hover:bg-surface disabled:opacity-60"
+                    >
+                      снять таймер
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="mt-4 grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={bid}
-                disabled={!auction || !me || busy || iAmLeader}
+                disabled={!auction || !me || busy || iAmLeader || timeIsUp}
                 className="rounded-lg bg-success px-4 py-4 text-base font-semibold text-white transition-opacity disabled:opacity-40"
               >
                 <span className="inline-flex items-center gap-2">
@@ -273,7 +366,7 @@ export default function AuctionBoard({
               <button
                 type="button"
                 onClick={skip}
-                disabled={!auction || !me || busy}
+                disabled={!auction || !me || busy || timeIsUp}
                 className="rounded-lg bg-danger px-4 py-4 text-base font-semibold text-white transition-opacity disabled:opacity-40"
               >
                 Skip
@@ -285,7 +378,13 @@ export default function AuctionBoard({
                 Ваша учётная запись не привязана к игроку в составе — ставить нельзя, торги видно только для просмотра.
               </p>
             )}
-            {iAmLeader && <p className="mt-3 text-xs text-success">Ваша ставка сейчас лучшая — ждите ответа других.</p>}
+            {timeIsUp && (
+              <p className="mt-3 text-xs text-danger">
+                Время вышло — ставки больше не принимаются.
+                {isAdmin ? " Добавьте время или завершите торги." : " Ждите решения ГМ."}
+              </p>
+            )}
+            {!timeIsUp && iAmLeader && <p className="mt-3 text-xs text-success">Ваша ставка сейчас лучшая — ждите ответа других.</p>}
           </div>
         </div>
 

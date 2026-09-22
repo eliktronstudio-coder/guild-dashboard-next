@@ -8,6 +8,7 @@ const ERRORS: Record<Exclude<BidOutcome & { ok: false }, { ok: true }>["reason"]
   finished: { message: "Торги уже завершены.", status: 409 },
   stale: { message: "Кто-то успел поставить раньше — цена изменилась.", status: 409 },
   "already-leading": { message: "Вы и так лидируете.", status: 409 },
+  expired: { message: "Время торгов вышло — ставки больше не принимаются.", status: 409 },
 };
 
 /**

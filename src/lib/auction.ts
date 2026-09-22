@@ -10,18 +10,31 @@ import { prisma } from "@/lib/prisma";
 
 export const BID_HISTORY_LIMIT = 7;
 
+/** Границы таймера: меньше пяти секунд бессмысленно, сутки — потолок. */
+export const MIN_DURATION_SEC = 5;
+export const MAX_DURATION_SEC = 24 * 60 * 60;
+
 export type BidOutcome =
   | { ok: true; amount: number }
-  | { ok: false; reason: "no-auction" | "finished" | "stale" | "already-leading" };
+  | { ok: false; reason: "no-auction" | "finished" | "stale" | "already-leading" | "expired" };
+
+function clampDuration(sec: number) {
+  return Math.min(MAX_DURATION_SEC, Math.max(MIN_DURATION_SEC, Math.round(sec)));
+}
 
 /** Текущие торги со списком последних ставок. Null — активных торгов нет. */
-export async function getActiveAuction() {
+export async function getActiveAuction(now = new Date()) {
   const auction = await prisma.auction.findFirst({
     where: { status: "active" },
     orderBy: { createdAt: "desc" },
     include: { bids: { orderBy: { createdAt: "desc" }, take: BID_HISTORY_LIMIT } },
   });
   if (!auction) return null;
+
+  // Остаток считаем на сервере и отдаём числом: у участников часы выставлены
+  // по-разному, и если бы каждый вычитал endsAt из своего времени, таймеры
+  // разъехались бы. Клиент просто тикает от полученного значения.
+  const remainingMs = auction.endsAt ? Math.max(0, auction.endsAt.getTime() - now.getTime()) : null;
 
   return {
     id: auction.id,
@@ -33,6 +46,9 @@ export async function getActiveAuction() {
     leaderPlayerId: auction.leaderPlayerId,
     leaderName: auction.leaderName,
     createdAt: auction.createdAt,
+    hasTimer: auction.endsAt !== null,
+    remainingMs,
+    expired: remainingMs !== null && remainingMs <= 0,
     history: auction.bids.map((b) => ({
       id: b.id,
       name: b.name,
@@ -49,6 +65,8 @@ export type ActiveAuction = NonNullable<Awaited<ReturnType<typeof getActiveAucti
  * Открывает торги. Прежние активные закрываются: одновременно идущих
  * аукционов не бывает — иначе участники ставили бы в разные лоты, не понимая,
  * какой из них сейчас на экране у ведущего.
+ *
+ * durationSec = null — торги без таймера, до ручного завершения.
  */
 export async function startAuction(input: {
   itemName: string;
@@ -56,15 +74,22 @@ export async function startAuction(input: {
   catalogItemId?: string | null;
   startingBid: number;
   step: number;
+  durationSec?: number | null;
   createdBy?: string | null;
+  now?: Date;
 }) {
+  const now = input.now ?? new Date();
   const startingBid = Math.max(0, Math.round(input.startingBid));
   const step = Math.max(1, Math.round(input.step));
+  const endsAt =
+    input.durationSec === null || input.durationSec === undefined
+      ? null
+      : new Date(now.getTime() + clampDuration(input.durationSec) * 1000);
 
   return prisma.$transaction(async (tx) => {
     await tx.auction.updateMany({
       where: { status: "active" },
-      data: { status: "finished", finishedAt: new Date() },
+      data: { status: "finished", finishedAt: now },
     });
     return tx.auction.create({
       data: {
@@ -74,10 +99,44 @@ export async function startAuction(input: {
         startingBid,
         step,
         currentBid: startingBid,
+        endsAt,
         createdBy: input.createdBy ?? null,
       },
     });
   });
+}
+
+/**
+ * Правит таймер уже идущих торгов.
+ *
+ * `deltaSec` — добавить или снять время (отсчёт от текущего конца).
+ * `durationSec` — задать остаток заново, считая от сейчас.
+ * `durationSec: null` — снять ограничение времени совсем.
+ *
+ * Время, ушедшее в минус, подтягивается к «сейчас»: торги с отрицательным
+ * остатком показывали бы растущий счётчик наоборот.
+ */
+export async function adjustTimer(
+  input: { deltaSec?: number; durationSec?: number | null },
+  now = new Date()
+) {
+  const auction = await prisma.auction.findFirst({ where: { status: "active" } });
+  if (!auction) return null;
+
+  let endsAt: Date | null;
+  if (input.durationSec !== undefined) {
+    endsAt = input.durationSec === null ? null : new Date(now.getTime() + clampDuration(input.durationSec) * 1000);
+  } else if (input.deltaSec !== undefined) {
+    // Если таймера не было, отсчитываем прибавку от сейчас — иначе прибавлять
+    // не к чему и «+30 секунд» молча ничего бы не сделали.
+    const base = auction.endsAt ?? now;
+    const shifted = base.getTime() + Math.round(input.deltaSec) * 1000;
+    endsAt = new Date(Math.max(now.getTime(), shifted));
+  } else {
+    return auction;
+  }
+
+  return prisma.auction.update({ where: { id: auction.id }, data: { endsAt } });
 }
 
 /**
@@ -92,10 +151,12 @@ export async function placeBid(input: {
   playerId: string;
   name: string;
   expectedBid: number;
+  now?: Date;
 }): Promise<BidOutcome> {
+  const now = input.now ?? new Date();
   const auction = await prisma.auction.findFirst({ where: { status: "active" } });
   if (!auction) return { ok: false, reason: "no-auction" };
-  if (auction.status !== "active") return { ok: false, reason: "finished" };
+  if (auction.endsAt && auction.endsAt.getTime() <= now.getTime()) return { ok: false, reason: "expired" };
   if (auction.leaderPlayerId === input.playerId) return { ok: false, reason: "already-leading" };
   if (auction.currentBid !== input.expectedBid) return { ok: false, reason: "stale" };
 
@@ -117,9 +178,15 @@ export async function placeBid(input: {
 }
 
 /** Пропуск хода: цену не меняет, только попадает в журнал. */
-export async function skipTurn(input: { playerId: string; name: string }): Promise<BidOutcome> {
+export async function skipTurn(input: {
+  playerId: string;
+  name: string;
+  now?: Date;
+}): Promise<BidOutcome> {
+  const now = input.now ?? new Date();
   const auction = await prisma.auction.findFirst({ where: { status: "active" } });
   if (!auction) return { ok: false, reason: "no-auction" };
+  if (auction.endsAt && auction.endsAt.getTime() <= now.getTime()) return { ok: false, reason: "expired" };
 
   await prisma.auctionBid.create({
     data: {
@@ -134,13 +201,13 @@ export async function skipTurn(input: { playerId: string; name: string }): Promi
 }
 
 /** Завершает торги. Лидер на этот момент и есть победитель. */
-export async function finishAuction() {
+export async function finishAuction(now = new Date()) {
   const auction = await prisma.auction.findFirst({ where: { status: "active" } });
   if (!auction) return null;
 
   await prisma.auction.update({
     where: { id: auction.id },
-    data: { status: "finished", finishedAt: new Date() },
+    data: { status: "finished", finishedAt: now },
   });
   return auction;
 }

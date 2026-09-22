@@ -223,3 +223,126 @@ test("удаление игрока не стирает его ставки из
   assert.equal(state.history.length, 1, "запись в журнале остаётся");
   assert.equal(state.history[0].name, "А", "имя сохраняется");
 });
+
+/* ——— Таймер торгов ——— */
+
+const T0 = new Date("2026-09-22T12:00:00Z");
+const at = (sec: number) => new Date(T0.getTime() + sec * 1000);
+
+test("торги без таймера идут до ручного завершения", async () => {
+  await reset();
+  const [a] = await players("А");
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, now: T0 });
+
+  const state = (await auction.getActiveAuction(at(99999)))!;
+  assert.equal(state.hasTimer, false);
+  assert.equal(state.remainingMs, null);
+  assert.equal(state.expired, false);
+
+  const res = await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 100, now: at(99999) });
+  assert.equal(res.ok, true, "без таймера ставят сколько угодно долго");
+});
+
+test("остаток считается сервером и доходит до нуля", async () => {
+  await reset();
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 120, now: T0 });
+
+  assert.equal((await auction.getActiveAuction(T0))!.remainingMs, 120_000);
+  assert.equal((await auction.getActiveAuction(at(90)))!.remainingMs, 30_000);
+
+  const over = (await auction.getActiveAuction(at(200)))!;
+  assert.equal(over.remainingMs, 0, "в минус остаток не уходит");
+  assert.equal(over.expired, true);
+});
+
+test("после истечения времени ставка и пропуск отклоняются", async () => {
+  await reset();
+  const [a] = await players("А");
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 60, now: T0 });
+
+  const inTime = await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 100, now: at(30) });
+  assert.equal(inTime.ok, true, "до конца времени ставка проходит");
+
+  const late = await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 150, now: at(61) });
+  assert.equal(late.ok, false);
+  assert.equal(late.ok === false && late.reason, "expired");
+
+  const lateSkip = await auction.skipTurn({ playerId: a.id, name: "А", now: at(61) });
+  assert.equal(lateSkip.ok, false);
+  assert.equal(lateSkip.ok === false && lateSkip.reason, "expired");
+
+  assert.equal((await auction.getActiveAuction(at(61)))!.currentBid, 150, "цена осталась прежней");
+});
+
+test("ГМ добавляет время, и торги продолжаются", async () => {
+  await reset();
+  const [a] = await players("А");
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 60, now: T0 });
+
+  // Время вышло — ставить нельзя.
+  assert.equal((await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 100, now: at(70) })).ok, false);
+
+  await auction.adjustTimer({ deltaSec: 60 }, at(70));
+
+  const state = (await auction.getActiveAuction(at(70)))!;
+  assert.ok(state.remainingMs !== null && state.remainingMs > 0, "время снова идёт");
+  assert.equal(state.expired, false);
+
+  const res = await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 100, now: at(75) });
+  assert.equal(res.ok, true, "после добавления времени ставка проходит");
+});
+
+test("снятое время подтягивается к «сейчас», счётчик не уходит в минус", async () => {
+  await reset();
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 60, now: T0 });
+
+  // Снимаем больше, чем осталось.
+  await auction.adjustTimer({ deltaSec: -600 }, at(10));
+
+  const state = (await auction.getActiveAuction(at(10)))!;
+  assert.equal(state.remainingMs, 0, "остаток ноль, а не отрицательный");
+  assert.equal(state.expired, true);
+});
+
+test("ГМ задаёт остаток заново и может снять таймер совсем", async () => {
+  await reset();
+  const [a] = await players("А");
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 60, now: T0 });
+
+  await auction.adjustTimer({ durationSec: 300 }, at(30));
+  assert.equal((await auction.getActiveAuction(at(30)))!.remainingMs, 300_000, "отсчёт с текущего момента");
+
+  await auction.adjustTimer({ durationSec: null }, at(30));
+  const state = (await auction.getActiveAuction(at(99999)))!;
+  assert.equal(state.hasTimer, false, "ограничения времени больше нет");
+  assert.equal((await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 100, now: at(99999) })).ok, true);
+});
+
+test("прибавка времени к торгам без таймера отсчитывается от сейчас", async () => {
+  await reset();
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, now: T0 });
+
+  // Прибавлять не к чему — иначе «+60 секунд» молча ничего бы не сделали.
+  await auction.adjustTimer({ deltaSec: 60 }, at(500));
+
+  const state = (await auction.getActiveAuction(at(500)))!;
+  assert.equal(state.hasTimer, true);
+  assert.equal(state.remainingMs, 60_000);
+});
+
+test("слишком короткая и слишком длинная длительность подтягиваются к границам", async () => {
+  await reset();
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 1, now: T0 });
+  assert.equal(
+    (await auction.getActiveAuction(T0))!.remainingMs,
+    auction.MIN_DURATION_SEC * 1000,
+    "меньше минимума не ставим"
+  );
+
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 999_999, now: T0 });
+  assert.equal(
+    (await auction.getActiveAuction(T0))!.remainingMs,
+    auction.MAX_DURATION_SEC * 1000,
+    "больше суток не ставим"
+  );
+});

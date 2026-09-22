@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireAdmin } from "@/lib/auth";
-import { finishAuction, getActiveAuction, startAuction } from "@/lib/auction";
+import { adjustTimer, finishAuction, getActiveAuction, startAuction } from "@/lib/auction";
 
 /**
  * Состояние текущих торгов. Клиент опрашивает его раз в пару секунд, поэтому
@@ -26,6 +26,12 @@ export async function POST(request: NextRequest) {
   const catalogItemId = typeof body?.catalogItemId === "string" ? body.catalogItemId : "";
   const startingBid = Number(body?.startingBid);
   const step = Number(body?.step);
+  // durationSec отсутствует или null — торги без таймера, до ручного завершения.
+  const rawDuration = body?.durationSec;
+  const durationSec = rawDuration === null || rawDuration === undefined ? null : Number(rawDuration);
+  if (durationSec !== null && (!Number.isFinite(durationSec) || durationSec <= 0)) {
+    return NextResponse.json({ error: "Некорректная длительность торгов." }, { status: 400 });
+  }
 
   if (!catalogItemId) return NextResponse.json({ error: "Выберите предмет." }, { status: 400 });
   if (!Number.isFinite(startingBid) || startingBid < 0) {
@@ -44,10 +50,36 @@ export async function POST(request: NextRequest) {
     catalogItemId: item.id,
     startingBid,
     step,
+    durationSec,
     createdBy: admin.username,
   });
 
   return NextResponse.json({ ok: true, auctionId: auction.id });
+}
+
+/**
+ * Правка таймера идущих торгов — только ГМ и админ.
+ *
+ * deltaSec — добавить/снять время, durationSec — задать остаток заново,
+ * durationSec: null — убрать ограничение времени.
+ */
+export async function PATCH(request: NextRequest) {
+  const admin = await requireAdmin();
+  if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+
+  const body = await request.json().catch(() => null);
+  const hasDelta = typeof body?.deltaSec === "number" && Number.isFinite(body.deltaSec);
+  const hasDuration = body?.durationSec === null || (typeof body?.durationSec === "number" && Number.isFinite(body.durationSec));
+  if (!hasDelta && !hasDuration) {
+    return NextResponse.json({ error: "Укажите, как изменить время." }, { status: 400 });
+  }
+
+  const updated = await adjustTimer(
+    hasDuration ? { durationSec: body.durationSec } : { deltaSec: body.deltaSec }
+  );
+  if (!updated) return NextResponse.json({ error: "Активных торгов нет." }, { status: 404 });
+
+  return NextResponse.json({ ok: true });
 }
 
 /** Завершить торги — только ГМ и админ. Лидер становится победителем. */
