@@ -52,6 +52,7 @@ export default function AuctionBoard({
 }) {
   const [auction, setAuction] = useState<Auction | null>(initialAuction);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const [itemId, setItemId] = useState("");
@@ -112,6 +113,7 @@ export default function AuctionBoard({
   async function send(url: string, init: RequestInit) {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
       const data = await res.json().catch(() => ({}));
@@ -120,6 +122,28 @@ export default function AuctionBoard({
     } catch {
       setError("Нет связи с сервером.");
       return false;
+    } finally {
+      setBusy(false);
+      await refresh();
+    }
+  }
+
+  /** То же, что send, но возвращает тело ответа — нужно для итога торгов. */
+  async function sendJson(url: string, init: RequestInit) {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...init });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Не удалось выполнить действие.");
+        return null;
+      }
+      return data as { winner: string | null; soldFor: number };
+    } catch {
+      setError("Нет связи с сервером.");
+      return null;
     } finally {
       setBusy(false);
       await refresh();
@@ -137,9 +161,21 @@ export default function AuctionBoard({
       }),
     });
 
-  const finish = () => {
-    if (!confirm("Завершить торги? Текущий лидер станет победителем.")) return;
-    return send("/api/auction", { method: "DELETE" });
+  const finish = async () => {
+    if (
+      !confirm(
+        "Завершить торги? Лидер станет победителем, а его ставка уйдёт в казну как продажа Прайма и распределится между участниками."
+      )
+    ) {
+      return;
+    }
+    const res = await sendJson("/api/auction", { method: "DELETE" });
+    if (!res) return;
+    setNotice(
+      res.soldFor > 0
+        ? `Торги завершены. Победитель — ${res.winner}. В казну Прайма добавлено ${numberFmt.format(res.soldFor)} золота.`
+        : "Торги завершены. Ставок не было — в казну ничего не добавлено."
+    );
   };
 
   const bid = () =>
@@ -164,6 +200,9 @@ export default function AuctionBoard({
 
       {error && (
         <div className="rounded-lg border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{error}</div>
+      )}
+      {notice && (
+        <div className="rounded-lg border border-success/40 bg-success/10 px-4 py-3 text-sm text-success">{notice}</div>
       )}
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getActivePeriodId } from "@/lib/period";
 
 /**
  * Живые торги. Состояние держится в базе, а не в браузере ведущего, поэтому
@@ -86,23 +87,22 @@ export async function startAuction(input: {
       ? null
       : new Date(now.getTime() + clampDuration(input.durationSec) * 1000);
 
-  return prisma.$transaction(async (tx) => {
-    await tx.auction.updateMany({
-      where: { status: "active" },
-      data: { status: "finished", finishedAt: now },
-    });
-    return tx.auction.create({
-      data: {
-        itemName: input.itemName,
-        itemImageUrl: input.itemImageUrl ?? null,
-        catalogItemId: input.catalogItemId ?? null,
-        startingBid,
-        step,
-        currentBid: startingBid,
-        endsAt,
-        createdBy: input.createdBy ?? null,
-      },
-    });
+  // Прежние торги закрываем штатно, а не просто помечаем завершёнными: у них
+  // мог быть лидер, и его ставка обязана уйти в казну так же, как при обычном
+  // завершении. Иначе новые торги поверх старых молча съедали бы золото.
+  await finishAuction(now);
+
+  return prisma.auction.create({
+    data: {
+      itemName: input.itemName,
+      itemImageUrl: input.itemImageUrl ?? null,
+      catalogItemId: input.catalogItemId ?? null,
+      startingBid,
+      step,
+      currentBid: startingBid,
+      endsAt,
+      createdBy: input.createdBy ?? null,
+    },
   });
 }
 
@@ -200,14 +200,44 @@ export async function skipTurn(input: {
   return { ok: true, amount: auction.currentBid };
 }
 
-/** Завершает торги. Лидер на этот момент и есть победитель. */
+/**
+ * Завершает торги. Лидер на этот момент и есть победитель, а его ставка
+ * заводится в казну продажей категории «Прайм» — оттуда 70% уходят в фонд
+ * зарплаты и делятся между игроками по посещаемости, 30% остаются резервом
+ * гильдии (см. getTreasuryBreakdown).
+ *
+ * Обе записи делаются одной транзакцией: торги, помеченные завершёнными без
+ * операции в казне, означали бы, что предмет ушёл, а золото не пришло, и
+ * заметить это было бы нечем — повторное завершение уже ничего не создаст.
+ *
+ * Если ставок не было, лидера нет и продавать нечего — операция не создаётся.
+ */
 export async function finishAuction(now = new Date()) {
   const auction = await prisma.auction.findFirst({ where: { status: "active" } });
   if (!auction) return null;
 
-  await prisma.auction.update({
-    where: { id: auction.id },
-    data: { status: "finished", finishedAt: now },
+  const hasWinner = auction.leaderPlayerId !== null && auction.currentBid > 0;
+  // Период берём до транзакции: getActivePeriodId сам может создать или
+  // починить период, и внутри чужой транзакции это лишняя запись.
+  const periodId = hasWinner ? await getActivePeriodId() : null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.auction.update({
+      where: { id: auction.id },
+      data: { status: "finished", finishedAt: now },
+    });
+    if (hasWinner) {
+      await tx.treasuryTransaction.create({
+        data: {
+          description: `Аукцион: ${auction.itemName} — ${auction.leaderName}`,
+          amount: auction.currentBid,
+          category: "Прайм",
+          periodId,
+          date: now,
+        },
+      });
+    }
   });
-  return auction;
+
+  return { ...auction, soldFor: hasWinner ? auction.currentBid : 0 };
 }

@@ -93,6 +93,7 @@ export async function DELETE() {
   return NextResponse.json({
     ok: true,
     winner: finished.leaderName,
-    amount: finished.leaderName ? finished.currentBid : 0,
+    // Сколько ушло в казну Прайма: 0, если ставок не было и продавать нечего.
+    soldFor: finished.soldFor,
   });
 }

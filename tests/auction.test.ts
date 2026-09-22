@@ -43,6 +43,9 @@ after(() => {
 async function reset() {
   await prisma.auctionBid.deleteMany({});
   await prisma.auction.deleteMany({});
+  await prisma.treasuryTransaction.deleteMany({});
+  await prisma.activityParticipant.deleteMany({});
+  await prisma.activity.deleteMany({});
   await prisma.player.deleteMany({});
 }
 
@@ -345,4 +348,92 @@ test("слишком короткая и слишком длинная длит�
     auction.MAX_DURATION_SEC * 1000,
     "больше суток не ставим"
   );
+});
+
+/* ——— Выручка с торгов уходит в казну ——— */
+
+test("завершение торгов заводит ставку победителя в казну как продажу Прайма", async () => {
+  await reset();
+  const [a] = await players("А");
+  await start(1000, 250);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 1000 });
+
+  const finished = await auction.finishAuction();
+  assert.equal(finished!.soldFor, 1250, "в казну уходит финальная ставка");
+
+  const tx = await prisma.treasuryTransaction.findMany();
+  assert.equal(tx.length, 1, "ровно одна операция");
+  assert.equal(tx[0].amount, 1250);
+  assert.equal(tx[0].category, "Прайм");
+  assert.match(tx[0].description, /Меч Бездны/, "в описании виден лот");
+  assert.match(tx[0].description, /А$/, "и победитель");
+  assert.equal(tx[0].kind, null, "это доход, а не выплата");
+});
+
+test("выручка с торгов распределяется между игроками по посещаемости", async () => {
+  await reset();
+  const queries = await import("../src/lib/queries");
+  const { getActivePeriodId } = await import("../src/lib/period");
+  const [a, b] = await players("А", "Б");
+  await prisma.activity.create({
+    data: {
+      name: "Кракен",
+      category: "Прайм",
+      periodId: await getActivePeriodId(),
+      participants: { create: [{ playerId: a.id }, { playerId: b.id }] },
+    },
+  });
+
+  await start(1000, 250);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 1000 });
+  await auction.finishAuction();
+
+  const treasury = await queries.getTreasuryBreakdown();
+  assert.equal(treasury.total, 1250, "вся ставка в казне");
+  assert.equal(treasury.prime, 875, "70% — фонд зарплаты");
+  assert.equal(treasury.guild, 375, "30% — резерв гильдии");
+  assert.equal(treasury.miniRb, 0, "Мини-РБ торги не трогают");
+
+  // Ровно то, ради чего это делалось: золото дошло до участников.
+  const roster = await queries.getAllPlayers();
+  const byName = new Map(roster.map((p) => [p.name, p]));
+  assert.equal(byName.get("А")!.salaryPrime + byName.get("Б")!.salaryPrime, 875, "фонд разошёлся целиком");
+  assert.ok(byName.get("Б")!.salaryPrime > 0, "не ставивший тоже получает долю за посещаемость");
+});
+
+test("торги без единой ставки не создают операцию в казне", async () => {
+  await reset();
+  await start(1000, 250);
+
+  const finished = await auction.finishAuction();
+  assert.equal(finished!.soldFor, 0);
+  assert.equal(await prisma.treasuryTransaction.count(), 0, "продавать нечего — записи нет");
+});
+
+test("повторное завершение не заводит второй продажи", async () => {
+  await reset();
+  const [a] = await players("А");
+  await start(1000, 250);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 1000 });
+
+  await auction.finishAuction();
+  const again = await auction.finishAuction();
+
+  assert.equal(again, null, "активных торгов уже нет");
+  assert.equal(await prisma.treasuryTransaction.count(), 1, "золото не задваивается");
+});
+
+test("новые торги поверх идущих заводят выручку прежних, а не теряют её", async () => {
+  await reset();
+  const [a] = await players("А");
+  await start(1000, 250);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 1000 });
+
+  // ГМ выставил следующий лот, не нажав «Завершить торги».
+  await start(500, 100);
+
+  const tx = await prisma.treasuryTransaction.findMany();
+  assert.equal(tx.length, 1, "ставка по прежнему лоту всё равно попала в казну");
+  assert.equal(tx[0].amount, 1250);
+  assert.equal((await auction.getActiveAuction())!.currentBid, 500, "новые торги идут");
 });
