@@ -37,6 +37,7 @@ model Player {
   payments      Payment[]
   drops         DropItem[]
   archiveStats  ArchivePlayerStat[]
+  auctionBids   AuctionBid[]
 }
 
 model Activity {
@@ -219,6 +220,7 @@ model DropCatalogItem {
   price     Int
   createdAt DateTime   @default(now())
   drops     DropItem[]
+  auctions  Auction[]
 }
 
 model DropItem {
@@ -346,4 +348,48 @@ model ActivityBanner {
   imgWidth  Int?
   imgHeight Int?
   createdAt DateTime @default(now())
+}
+
+/// Живые торги: состояние лежит в базе, а не в браузере ведущего, поэтому
+/// участники ставят со своих устройств и все видят одно и то же. Активный
+/// аукцион в каждый момент ровно один (status="active").
+model Auction {
+  id             String           @id @default(cuid())
+  /// "active" — торги идут, "finished" — завершены, лидер стал победителем.
+  status         String           @default("active")
+  itemName       String
+  itemImageUrl   String?
+  catalogItemId  String?
+  catalogItem    DropCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  startingBid    Int
+  step           Int
+  /// Текущая цена. Служит и признаком гонки: ставка принимается только если
+  /// клиент прислал то же значение, которое видел — иначе двое, нажавших
+  /// одновременно, получили бы одну и ту же сумму.
+  currentBid     Int
+  leaderPlayerId String?
+  leaderName     String?
+  createdBy      String?
+  createdAt      DateTime         @default(now())
+  finishedAt     DateTime?
+  bids           AuctionBid[]
+
+  @@index([status])
+}
+
+/// Одна строка журнала торгов: ставка или пропуск.
+model AuctionBid {
+  id        String   @id @default(cuid())
+  auctionId String
+  auction   Auction  @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  /// Ссылка на игрока снимается при его удалении, имя в журнале остаётся.
+  playerId  String?
+  player    Player?  @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  name      String
+  amount    Int
+  /// "bid" — ставка, "skip" — пропуск хода.
+  kind      String   @default("bid")
+  createdAt DateTime @default(now())
+
+  @@index([auctionId, createdAt])
 }
