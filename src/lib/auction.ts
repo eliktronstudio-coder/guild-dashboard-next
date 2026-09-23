@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { getActivePeriodId } from "@/lib/period";
+import { clampDuration } from "@/lib/auctionTime";
+
+// Ре-экспорт, чтобы у вызывающих был один вход в механику торгов.
+export { MIN_DURATION_SEC, MAX_DURATION_SEC, formatRemaining } from "@/lib/auctionTime";
 
 /**
  * Живые торги. Состояние держится в базе, а не в браузере ведущего, поэтому
@@ -11,17 +15,10 @@ import { getActivePeriodId } from "@/lib/period";
 
 export const BID_HISTORY_LIMIT = 7;
 
-/** Границы таймера: меньше пяти секунд бессмысленно, сутки — потолок. */
-export const MIN_DURATION_SEC = 5;
-export const MAX_DURATION_SEC = 24 * 60 * 60;
-
 export type BidOutcome =
   | { ok: true; amount: number }
   | { ok: false; reason: "no-auction" | "finished" | "stale" | "already-leading" | "expired" };
 
-function clampDuration(sec: number) {
-  return Math.min(MAX_DURATION_SEC, Math.max(MIN_DURATION_SEC, Math.round(sec)));
-}
 
 /** Текущие торги со списком последних ставок. Null — активных торгов нет. */
 export async function getActiveAuction(now = new Date()) {

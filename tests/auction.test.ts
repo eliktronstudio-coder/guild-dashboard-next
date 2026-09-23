@@ -342,11 +342,11 @@ test("слишком короткая и слишком длинная длит�
     "меньше минимума не ставим"
   );
 
-  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 999_999, now: T0 });
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 999 * 86400, now: T0 });
   assert.equal(
     (await auction.getActiveAuction(T0))!.remainingMs,
     auction.MAX_DURATION_SEC * 1000,
-    "больше суток не ставим"
+    "больше потолка не ставим"
   );
 });
 
@@ -436,4 +436,49 @@ test("новые торги поверх идущих заводят выруч�
   assert.equal(tx.length, 1, "ставка по прежнему лоту всё равно попала в казну");
   assert.equal(tx[0].amount, 1250);
   assert.equal((await auction.getActiveAuction())!.currentBid, 500, "новые торги идут");
+});
+
+/* ——— Длительность в днях, часах и минутах ——— */
+
+test("остаток показывается с днями и часами только когда они есть", async () => {
+  const f = auction.formatRemaining;
+
+  assert.equal(f(113_000), "1:53", "короткие торги — мм:сс");
+  assert.equal(f(5_000), "0:05");
+  assert.equal(f(0), "0:00");
+
+  // Час и больше — добавляется поле часов, иначе было бы «90:00».
+  assert.equal(f(90 * 60 * 1000), "1:30:00");
+  assert.equal(f(5 * 3600 * 1000 + 14 * 60 * 1000 + 3000), "5:14:03");
+
+  // Сутки и больше — иначе трёхдневные торги показывали бы «4320:00».
+  assert.equal(f(2 * 86400_000 + 5 * 3600_000 + 14 * 60_000 + 3000), "2 д 05:14:03");
+  assert.equal(f(30 * 86400_000), "30 д 00:00:00");
+
+  assert.equal(f(-5000), "0:00", "в минус не уходим");
+});
+
+test("торги можно открыть на несколько суток", async () => {
+  await reset();
+  const threeDays = 3 * 24 * 60 * 60;
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: threeDays, now: T0 });
+
+  const state = (await auction.getActiveAuction(T0))!;
+  assert.equal(state.remainingMs, threeDays * 1000, "трое суток не обрезаются");
+  assert.equal(auction.formatRemaining(state.remainingMs!), "3 д 00:00:00");
+
+  // На вторые сутки торги всё ещё идут.
+  const [a] = await players("А");
+  const res = await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 100, now: at(2 * 86400) });
+  assert.equal(res.ok, true);
+});
+
+test("потолок длительности — 30 суток", async () => {
+  await reset();
+  await auction.startAuction({ itemName: "Лот", startingBid: 100, step: 50, durationSec: 99 * 86400, now: T0 });
+  assert.equal(
+    (await auction.getActiveAuction(T0))!.remainingMs,
+    30 * 86400 * 1000,
+    "больше 30 суток не ставим"
+  );
 });

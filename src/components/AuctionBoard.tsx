@@ -5,6 +5,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import { Search, ImageOff, Gavel, Crown, Timer } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { formatRemaining } from "@/lib/auctionTime";
 
 type CatalogItem = { id: string; name: string; imageUrl: string | null };
 type HistoryEntry = { id: string; name: string; amount: number; kind: string; at: string | Date };
@@ -27,13 +28,6 @@ type Auction = {
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const timeFmt = new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-
-function formatRemaining(ms: number) {
-  const total = Math.ceil(ms / 1000);
-  const m = Math.floor(total / 60);
-  const sec = total % 60;
-  return `${m}:${String(sec).padStart(2, "0")}`;
-}
 
 /** Как часто подтягиваем состояние торгов с сервера. */
 const POLL_MS = 2000;
@@ -59,7 +53,9 @@ export default function AuctionBoard({
   const [itemSearch, setItemSearch] = useState("");
   const [startingBid, setStartingBid] = useState("100");
   const [step, setStep] = useState("50");
-  const [durationMin, setDurationMin] = useState("2");
+  const [durDays, setDurDays] = useState("0");
+  const [durHours, setDurHours] = useState("0");
+  const [durMinutes, setDurMinutes] = useState("2");
   const [useTimer, setUseTimer] = useState(true);
 
   // Остаток тикаем локально между опросами, чтобы счётчик шёл плавно, но
@@ -103,6 +99,11 @@ export default function AuctionBoard({
     const q = itemSearch.trim().toLowerCase();
     return q ? catalog.filter((c) => c.name.toLowerCase().includes(q)) : catalog;
   }, [catalog, itemSearch]);
+
+  // Дни/часы/минуты складываем в секунды. Пустое поле — ноль, чтобы
+  // «0 д 0 ч 30 м» не превращалось в NaN из-за незаполненных дней.
+  const durationSec =
+    (Number(durDays) || 0) * 86400 + (Number(durHours) || 0) * 3600 + (Number(durMinutes) || 0) * 60;
 
   const selectedItem = catalog.find((c) => c.id === itemId) ?? null;
   const iAmLeader = !!(auction && me && auction.leaderPlayerId === me.id);
@@ -157,7 +158,7 @@ export default function AuctionBoard({
         catalogItemId: itemId,
         startingBid: Number(startingBid),
         step: Number(step),
-        durationSec: useTimer ? Math.round(Number(durationMin) * 60) : null,
+        durationSec: useTimer ? durationSec : null,
       }),
     });
 
@@ -298,18 +299,30 @@ export default function AuctionBoard({
                       className="mt-1 block w-32 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm text-foreground"
                     />
                   </label>
-                  <label className="text-xs text-muted">
-                    Время торгов, мин
-                    <input
-                      type="number"
-                      min={0.1}
-                      step={0.5}
-                      value={durationMin}
-                      disabled={!useTimer}
-                      onChange={(e) => setDurationMin(e.target.value)}
-                      className="mt-1 block w-32 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm text-foreground disabled:opacity-50"
-                    />
-                  </label>
+                  <div className="text-xs text-muted">
+                    Время торгов
+                    <div className="mt-1 flex items-end gap-2">
+                      {(
+                        [
+                          ["дни", durDays, setDurDays],
+                          ["часы", durHours, setDurHours],
+                          ["мин", durMinutes, setDurMinutes],
+                        ] as const
+                      ).map(([label, value, setValue]) => (
+                        <label key={label} className="flex flex-col gap-0.5">
+                          <input
+                            type="number"
+                            min={0}
+                            value={value}
+                            disabled={!useTimer}
+                            onChange={(e) => setValue(e.target.value)}
+                            className="w-20 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm text-foreground disabled:opacity-50"
+                          />
+                          <span className="text-center text-[11px]">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                   <label className="flex items-center gap-1.5 pb-2 text-xs text-muted">
                     <input type="checkbox" checked={!useTimer} onChange={(e) => setUseTimer(!e.target.checked)} />
                     без таймера
@@ -317,7 +330,7 @@ export default function AuctionBoard({
                   <button
                     type="button"
                     onClick={start}
-                    disabled={!selectedItem || busy}
+                    disabled={!selectedItem || busy || (useTimer && durationSec <= 0)}
                     className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
                   >
                     Начать торги
@@ -366,15 +379,25 @@ export default function AuctionBoard({
                 </span>
                 {isAdmin && (
                   <span className="flex flex-wrap items-center gap-1.5">
-                    {[-30, 30, 60].map((d) => (
+                    {/* Шаг правки от секунд до часа: торги бывают и на две
+                        минуты, и на несколько суток. */}
+                    {(
+                      [
+                        ["−10 м", -600],
+                        ["−30 с", -30],
+                        ["+30 с", 30],
+                        ["+10 м", 600],
+                        ["+1 ч", 3600],
+                      ] as const
+                    ).map(([label, delta]) => (
                       <button
-                        key={d}
+                        key={label}
                         type="button"
-                        onClick={() => shiftTime(d)}
+                        onClick={() => shiftTime(delta)}
                         disabled={busy}
                         className="rounded-md border border-border px-2 py-1 text-xs hover:bg-surface disabled:opacity-60"
                       >
-                        {d > 0 ? `+${d}` : d} с
+                        {label}
                       </button>
                     ))}
                     <button
