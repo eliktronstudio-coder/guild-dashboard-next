@@ -4,22 +4,29 @@ import { createRequire } from "node:module";
 
 // Бот — CommonJS, поэтому подключаем через require.
 const require_ = createRequire(import.meta.url);
-const { parseRename, parseRenames, MAX_NICK } = require_("../discord-bot/rename.js") as {
+const { parseRename, parseRenames, looksLikeRenameAttempt, MAX_NICK } = require_("../discord-bot/rename.js") as {
   parseRename: (line: string) => { from: string; to: string } | null;
   parseRenames: (content: string) => { from: string; to: string }[];
+  looksLikeRenameAttempt: (content: string) => boolean;
   MAX_NICK: number;
 };
 
 test("ник с пробелом разбирается", () => {
   // Ровно то сообщение, на которое бот молчал: игрок «Крячка инактив»
-  // существует в составе, но прежний разбор требовал одно слово с каждой
-  // стороны и такую строку не видел вовсе.
+  // существовал в составе, но разбор требовал одно слово с каждой стороны и
+  // такую строку не видел вовсе — переименование пришлось делать руками.
   assert.deepEqual(parseRename("Крячка инактив- Abandonment"), {
     from: "Крячка инактив",
     to: "Abandonment",
   });
   assert.deepEqual(parseRename("Старый Ник - Новый Ник"), { from: "Старый Ник", to: "Новый Ник" });
   assert.deepEqual(parseRename("Один - Два Три"), { from: "Один", to: "Два Три" });
+});
+
+test("дефис без пробелов по-прежнему работает", () => {
+  // Эта форма работала до правки, ломать её нельзя.
+  assert.deepEqual(parseRename("Кенвуд-Хренозавр"), { from: "Кенвуд", to: "Хренозавр" });
+  assert.deepEqual(parseRename("А-Б"), { from: "А", to: "Б" });
 });
 
 test("прежние рабочие формы продолжают работать", () => {
@@ -31,7 +38,8 @@ test("прежние рабочие формы продолжают работа
 });
 
 test("обычная фраза не принимается за переименование", () => {
-  // Дефис без пробелов — часть слова, а не разделитель.
+  // Дефис внутри слова — часть слова, а не разделитель. От «Кенвуд-Хренозавр»
+  // отличается тем, что в строке есть пробелы.
   assert.equal(parseRename("кто-нибудь тут?"), null);
   assert.equal(parseRename("что-то не так"), null);
   assert.equal(parseRename("привет"), null);
@@ -39,10 +47,14 @@ test("обычная фраза не принимается за переиме�
   assert.equal(parseRename("   "), null);
 });
 
-test("пустая половина отбрасывается", () => {
+test("половина из одних знаков не считается ником", () => {
+  // Без этой проверки «Старый ->» разбиралось в переименование на ник «>»:
+  // остаток стрелки попадал во вторую половину как обычный текст.
+  assert.equal(parseRename("Старый ->"), null);
   assert.equal(parseRename("- Новый"), null, "старого ника нет");
   assert.equal(parseRename("Старый -"), null, "нового ника нет");
   assert.equal(parseRename("->"), null);
+  assert.equal(parseRename("? - !"), null);
 });
 
 test("слишком длинные ники отбрасываются", () => {
@@ -55,7 +67,7 @@ test("слишком длинные ники отбрасываются", () => 
 });
 
 test("несколько переименований в одном сообщении", () => {
-  const pairs = parseRenames("Крячка инактив - Abandonment\nКенвуд- Хренозавр\nпросто болтовня\nА -> Б");
+  const pairs = parseRenames("Крячка инактив - Abandonment\nКенвуд-Хренозавр\nпросто болтовня\nА -> Б");
   assert.deepEqual(pairs, [
     { from: "Крячка инактив", to: "Abandonment" },
     { from: "Кенвуд", to: "Хренозавр" },
@@ -64,25 +76,23 @@ test("несколько переименований в одном сообще
 });
 
 test("сообщение без единого переименования даёт пустой список", () => {
-  // Бот подскажет формат, только если в строке был разделитель (см. ниже).
   assert.deepEqual(parseRenames("всем привет\nкак дела?"), []);
   assert.deepEqual(parseRenames(""), []);
 });
 
 /* ——— Когда подсказывать формат ——— */
 
-const { looksLikeRenameAttempt } = require_("../discord-bot/rename.js") as {
-  looksLikeRenameAttempt: (content: string) => boolean;
-};
-
 test("подсказка даётся только там, где человек явно пытался переименовать", () => {
-  // Разделитель есть, но разбор не удался — тут подсказка уместна.
-  assert.equal(looksLikeRenameAttempt("А-Б"), true, "дефис без пробелов");
+  // Разделитель на месте, но разбор не удался — подсказка уместна.
   assert.equal(looksLikeRenameAttempt("Старый ->"), true, "пустая половина");
   assert.equal(looksLikeRenameAttempt("- Новый"), true);
+  assert.equal(looksLikeRenameAttempt("Старый -"), true);
+  assert.equal(looksLikeRenameAttempt(`${"я".repeat(MAX_NICK + 1)} - Б`), true, "слишком длинный ник");
 
-  // Обычная болтовня в канале — бот молчит, а не сыплет подсказками.
+  // Обычная речь — бот молчит, а не сыплет подсказками. Дефис внутри слова
+  // попыткой переименования не считается.
+  assert.equal(looksLikeRenameAttempt("кто-нибудь тут?"), false);
+  assert.equal(looksLikeRenameAttempt("что-то не так"), false);
   assert.equal(looksLikeRenameAttempt("всем привет"), false);
-  assert.equal(looksLikeRenameAttempt("когда рейд?"), false);
   assert.equal(looksLikeRenameAttempt(""), false);
 });
