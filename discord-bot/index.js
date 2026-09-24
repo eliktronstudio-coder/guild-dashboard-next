@@ -36,9 +36,9 @@ for (const [key, value] of Object.entries({
 
 const MAX_IMAGE_BYTES = 800_000; // должно совпадать с лимитом на /api/bot/activities
 const MAX_IMAGES = 12; // по 6 на раздел, столько принимает /api/bot/activities
-const MAX_NICK = 40; // должно совпадать с /api/bot/players/rename
 
 const { startNotifier } = require("./notifier");
+const { parseRenames, looksLikeRenameAttempt } = require("./rename");
 
 /** Ручка напоминаний — заполняется после подключения бота. */
 let notifier = null;
@@ -224,38 +224,25 @@ client.on(Events.MessageCreate, async (message) => {
   }
 });
 
-const ARROW_RE = /^(.+?)\s*(?:->|=>|→|–|—)\s*(.+)$/;
-const HYPHEN_RE = /^(\S+)\s*-\s*(\S+)$/;
-
-/**
- * Разбирает «СтарыйНик - НовыйНик». Стрелку можно окружать чем угодно, а
- * простой дефис считается разделителем только когда с обеих сторон одно слово —
- * иначе обычная фраза вроде «кто-нибудь тут?» была бы принята за переименование.
- */
-function parseRename(content) {
-  const text = content.trim();
-  const match = text.match(ARROW_RE) || text.match(HYPHEN_RE);
-  if (!match) return null;
-  const from = match[1].trim();
-  const to = match[2].trim();
-  if (!from || !to || from.length > MAX_NICK || to.length > MAX_NICK) return null;
-  return { from, to };
-}
-
-/** Одно сообщение может содержать несколько переименований — по одному на строку. */
-function parseRenames(content) {
-  return content
-    .split("\n")
-    .map((line) => parseRename(line))
-    .filter(Boolean);
-}
-
 /**
  * «СтарыйНик - НовыйНик» в канале ренеймов переименовывает игрока на сайте.
  */
 async function handleRename(message) {
   const pairs = parseRenames(message.content);
-  if (pairs.length === 0) return;
+  if (pairs.length === 0) {
+    // Молчать нельзя: именно из-за этого «ренейм не работает» выглядело как
+    // поломка бота, хотя он просто не понимал формат сообщения. Но и отвечать
+    // на всё подряд не стоит — подсказку даём только там, где человек явно
+    // пытался написать переименование, а не просто поздоровался в канале.
+    if (looksLikeRenameAttempt(message.content)) {
+      await message.react("❓");
+      await message.reply(
+        "Не понял формат. Напишите «СтарыйНик - НовыйНик» или «СтарыйНик -> НовыйНик». " +
+          "Ники с пробелами можно, но вокруг дефиса нужен пробел хотя бы с одной стороны."
+      );
+    }
+    return;
+  }
 
   const results = [];
   for (const { from, to } of pairs) {
