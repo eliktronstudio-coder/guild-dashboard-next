@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { isFullAdminRole } from "@/lib/accountRoles";
 import { getDropCatalog } from "@/lib/queries";
-import { getActiveAuction } from "@/lib/auction";
+import { getActiveAuction, getAuctionWinners } from "@/lib/auction";
 import { prisma } from "@/lib/prisma";
 import EmptyState from "@/components/EmptyState";
 import AuctionBoard from "@/components/AuctionBoard";
@@ -51,8 +51,9 @@ export default async function AuctionPage() {
   // Ставить может только тот, чья учётная запись привязана к игроку состава:
   // имя ставки берётся отсюда, а не из формы, иначе можно было бы поставить
   // за другого.
-  const [auction, player, catalog] = await Promise.all([
+  const [auction, winners, player, catalog] = await Promise.all([
     getActiveAuction(),
+    getAuctionWinners(),
     prisma.player.findUnique({ where: { userId: user.sub }, select: { id: true, name: true } }),
     isAdmin ? getDropCatalog() : Promise.resolve([]),
   ]);
@@ -60,6 +61,7 @@ export default async function AuctionPage() {
   return (
     <AuctionBoard
       initialAuction={auction}
+      initialWinners={winners}
       isAdmin={isAdmin}
       me={player}
       catalog={catalog.map((c) => ({ id: c.id, name: c.name, imageUrl: c.imageUrl }))}

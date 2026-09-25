@@ -5,6 +5,7 @@ import Image from "next/image";
 import clsx from "clsx";
 import { Search, ImageOff, Gavel, Crown, Timer } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import AuctionWinners, { type Winner } from "@/components/AuctionWinners";
 import { formatRemaining } from "@/lib/auctionTime";
 
 type CatalogItem = { id: string; name: string; imageUrl: string | null };
@@ -34,17 +35,20 @@ const POLL_MS = 2000;
 
 export default function AuctionBoard({
   initialAuction,
+  initialWinners,
   isAdmin,
   me,
   catalog,
 }: {
   initialAuction: Auction | null;
+  initialWinners: Winner[];
   isAdmin: boolean;
   /** Игрок, привязанный к учётной записи. Null — ставить нельзя. */
   me: { id: string; name: string } | null;
   catalog: CatalogItem[];
 }) {
   const [auction, setAuction] = useState<Auction | null>(initialAuction);
+  const [winners, setWinners] = useState<Winner[]>(initialWinners);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -85,6 +89,7 @@ export default function AuctionBoard({
       if (!res.ok) return;
       const data = await res.json();
       setAuction(data.auction ?? null);
+      if (Array.isArray(data.winners)) setWinners(data.winners);
     } catch {
       // Сеть моргнула — просто ждём следующего опроса, состояние не трогаем.
     }
@@ -473,6 +478,8 @@ export default function AuctionBoard({
           )}
         </div>
       </div>
+
+      <AuctionWinners winners={winners} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireAdmin } from "@/lib/auth";
-import { adjustTimer, finishAuction, getActiveAuction, startAuction } from "@/lib/auction";
+import { adjustTimer, finishAuction, getActiveAuction, getAuctionWinners, startAuction } from "@/lib/auction";
 
 /**
  * Состояние текущих торгов. Клиент опрашивает его раз в пару секунд, поэтому
@@ -13,8 +13,10 @@ export async function GET() {
     return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
   }
 
-  const auction = await getActiveAuction();
-  return NextResponse.json({ auction }, { headers: { "Cache-Control": "no-store" } });
+  // Победителей отдаём тем же ответом: когда ГМ завершает торги, лента
+  // обновляется у всех на следующем опросе, без перезагрузки страницы.
+  const [auction, winners] = await Promise.all([getActiveAuction(), getAuctionWinners()]);
+  return NextResponse.json({ auction, winners }, { headers: { "Cache-Control": "no-store" } });
 }
 
 /** Открыть торги — только ГМ и админ. */

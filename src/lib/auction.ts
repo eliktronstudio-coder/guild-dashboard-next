@@ -238,3 +238,40 @@ export async function finishAuction(now = new Date()) {
 
   return { ...auction, soldFor: hasWinner ? auction.currentBid : 0 };
 }
+
+/** Сколько плиток победителей показываем на странице. */
+export const WINNERS_LIMIT = 12;
+
+/**
+ * Завершённые торги, у которых есть победитель, — лента «кто что забрал».
+ *
+ * Берём только со ставками: торги, закрытые без единой ставки, лотом ни к
+ * кому не ушли и в списке победителей им делать нечего.
+ */
+export async function getAuctionWinners(limit = WINNERS_LIMIT) {
+  const rows = await prisma.auction.findMany({
+    where: { status: "finished", leaderPlayerId: { not: null } },
+    orderBy: { finishedAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      itemName: true,
+      itemImageUrl: true,
+      currentBid: true,
+      leaderName: true,
+      finishedAt: true,
+      createdAt: true,
+    },
+  });
+
+  return rows.map((r) => ({
+    id: r.id,
+    itemName: r.itemName,
+    itemImageUrl: r.itemImageUrl,
+    amount: r.currentBid,
+    winner: r.leaderName ?? "—",
+    // finishedAt проставляется при завершении; у старых записей его могло не
+    // быть, поэтому подстраховываемся датой создания.
+    at: r.finishedAt ?? r.createdAt,
+  }));
+}

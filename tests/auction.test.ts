@@ -482,3 +482,65 @@ test("потолок длительности — 30 суток", async () => {
     "больше 30 суток не ставим"
   );
 });
+
+/* ——— Лента победителей ——— */
+
+test("в победители попадают только разыгранные лоты", async () => {
+  await reset();
+  const [a] = await players("А");
+
+  // Торги со ставкой — победитель есть.
+  await auction.startAuction({ itemName: "Меч", startingBid: 1000, step: 250 });
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 1000 });
+  await auction.finishAuction();
+
+  // Торги без единой ставки — лот ни к кому не ушёл.
+  await auction.startAuction({ itemName: "Щит", startingBid: 500, step: 100 });
+  await auction.finishAuction();
+
+  const winners = await auction.getAuctionWinners();
+  assert.equal(winners.length, 1, "непроданный лот в ленте не показываем");
+  assert.equal(winners[0].itemName, "Меч");
+  assert.equal(winners[0].winner, "А");
+  assert.equal(winners[0].amount, 1250, "цена, за которую забрали");
+  assert.ok(winners[0].at instanceof Date);
+});
+
+test("идущие торги в ленту победителей не попадают", async () => {
+  await reset();
+  const [a] = await players("А");
+  await auction.startAuction({ itemName: "Меч", startingBid: 1000, step: 250 });
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 1000 });
+
+  assert.deepEqual(await auction.getAuctionWinners(), [], "лот ещё разыгрывается");
+});
+
+test("лента идёт от свежих к старым и ограничена по длине", async () => {
+  await reset();
+  const [a, b] = await players("А", "Б");
+
+  for (let i = 1; i <= auction.WINNERS_LIMIT + 3; i++) {
+    await auction.startAuction({ itemName: `Лот ${i}`, startingBid: 100, step: 50 });
+    const who = i % 2 === 0 ? { id: a.id, name: "А" } : { id: b.id, name: "Б" };
+    await auction.placeBid({ playerId: who.id, name: who.name, expectedBid: 100 });
+    await auction.finishAuction();
+  }
+
+  const winners = await auction.getAuctionWinners();
+  assert.equal(winners.length, auction.WINNERS_LIMIT, "показываем не больше лимита");
+  assert.equal(winners[0].itemName, `Лот ${auction.WINNERS_LIMIT + 3}`, "первым идёт последний разыгранный");
+});
+
+test("удаление игрока не стирает его из ленты победителей", async () => {
+  await reset();
+  const [a] = await players("Ушедший");
+  await auction.startAuction({ itemName: "Меч", startingBid: 1000, step: 250 });
+  await auction.placeBid({ playerId: a.id, name: "Ушедший", expectedBid: 1000 });
+  await auction.finishAuction();
+
+  await prisma.player.delete({ where: { id: a.id } });
+
+  const winners = await auction.getAuctionWinners();
+  assert.equal(winners.length, 1, "запись остаётся");
+  assert.equal(winners[0].winner, "Ушедший", "имя победителя сохраняется");
+});
