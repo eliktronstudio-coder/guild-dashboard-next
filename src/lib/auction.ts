@@ -219,21 +219,24 @@ export async function finishAuction(now = new Date()) {
   const periodId = hasWinner ? await getActivePeriodId() : null;
 
   await prisma.$transaction(async (tx) => {
+    // Операцию создаём первой, чтобы сразу записать её id в торги: по нему
+    // удаление лота уберёт и заведённое золото.
+    const sale = hasWinner
+      ? await tx.treasuryTransaction.create({
+          data: {
+            description: `Аукцион: ${auction.itemName} — ${auction.leaderName}`,
+            amount: auction.currentBid,
+            category: "Прайм",
+            periodId,
+            date: now,
+          },
+        })
+      : null;
+
     await tx.auction.update({
       where: { id: auction.id },
-      data: { status: "finished", finishedAt: now },
+      data: { status: "finished", finishedAt: now, saleTransactionId: sale?.id ?? null },
     });
-    if (hasWinner) {
-      await tx.treasuryTransaction.create({
-        data: {
-          description: `Аукцион: ${auction.itemName} — ${auction.leaderName}`,
-          amount: auction.currentBid,
-          category: "Прайм",
-          periodId,
-          date: now,
-        },
-      });
-    }
   });
 
   return { ...auction, soldFor: hasWinner ? auction.currentBid : 0 };
@@ -274,4 +277,32 @@ export async function getAuctionWinners(limit = WINNERS_LIMIT) {
     // быть, поэтому подстраховываемся датой создания.
     at: r.finishedAt ?? r.createdAt,
   }));
+}
+
+/**
+ * Удаляет запись торгов вместе с заведённым в казну золотом.
+ *
+ * Убирать лот, но оставлять выручку нельзя: в казне повисло бы золото за
+ * продажу, которой в истории больше нет, и сверка на странице выплат
+ * разошлась бы. Обе записи удаляются одной транзакцией.
+ *
+ * Ставки уходят каскадом (AuctionBid.onDelete: Cascade).
+ */
+export async function deleteAuction(id: string) {
+  const auction = await prisma.auction.findUnique({ where: { id } });
+  if (!auction) return null;
+
+  const removed = await prisma.$transaction(async (tx) => {
+    let goldRemoved = 0;
+    if (auction.saleTransactionId) {
+      // deleteMany, а не delete: операцию могли убрать вручную со страницы
+      // казны, и тогда её уже нет — это не повод падать.
+      const { count } = await tx.treasuryTransaction.deleteMany({ where: { id: auction.saleTransactionId } });
+      if (count > 0) goldRemoved = auction.currentBid;
+    }
+    await tx.auction.delete({ where: { id } });
+    return goldRemoved;
+  });
+
+  return { itemName: auction.itemName, winner: auction.leaderName, goldRemoved: removed };
 }

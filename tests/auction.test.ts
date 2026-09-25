@@ -544,3 +544,103 @@ test("удаление игрока не стирает его из ленты �
   assert.equal(winners.length, 1, "запись остаётся");
   assert.equal(winners[0].winner, "Ушедший", "имя победителя сохраняется");
 });
+
+/* ——— Удаление лота из ленты ——— */
+
+test("удаление лота убирает и заведённое им золото", async () => {
+  await reset();
+  const queries = await import("../src/lib/queries");
+  const [a] = await players("А");
+
+  await start(10_000, 5_000);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 10_000 });
+  await auction.finishAuction();
+
+  const before = await queries.getTreasuryBreakdown();
+  assert.equal(before.total, 15_000, "выручка в казне");
+
+  const [w] = await auction.getAuctionWinners();
+  const removed = await auction.deleteAuction(w.id);
+
+  assert.equal(removed!.goldRemoved, 15_000, "сообщаем, сколько убрали");
+  assert.deepEqual(await auction.getAuctionWinners(), [], "лот пропал из ленты");
+
+  // Ровно то, ради чего удаление делает обе записи разом: иначе в казне
+  // осталось бы золото за продажу, которой в истории больше нет.
+  const after = await queries.getTreasuryBreakdown();
+  assert.equal(after.total, 0, "золото ушло вместе с лотом");
+  assert.equal(await prisma.treasuryTransaction.count(), 0);
+});
+
+test("удаление лота уносит и его ставки", async () => {
+  await reset();
+  const [a, b] = await players("А", "Б");
+  await start(100, 50);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 100 });
+  await auction.placeBid({ playerId: b.id, name: "Б", expectedBid: 150 });
+  await auction.finishAuction();
+  assert.equal(await prisma.auctionBid.count(), 2);
+
+  const [w] = await auction.getAuctionWinners();
+  await auction.deleteAuction(w.id);
+
+  assert.equal(await prisma.auctionBid.count(), 0, "журнал ставок уходит каскадом");
+  assert.equal(await prisma.auction.count(), 0);
+});
+
+test("удаление не трогает чужие операции казны", async () => {
+  await reset();
+  const [a] = await players("А");
+
+  await prisma.treasuryTransaction.create({
+    data: { description: "Продажа дропа", amount: 40_000, category: "Прайм" },
+  });
+
+  await start(10_000, 5_000);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 10_000 });
+  await auction.finishAuction();
+
+  const [w] = await auction.getAuctionWinners();
+  await auction.deleteAuction(w.id);
+
+  const left = await prisma.treasuryTransaction.findMany();
+  assert.equal(left.length, 1, "посторонняя продажа остаётся");
+  assert.equal(left[0].description, "Продажа дропа");
+  assert.equal(left[0].amount, 40_000);
+});
+
+test("если операцию казны убрали вручную, удаление лота всё равно проходит", async () => {
+  await reset();
+  const [a] = await players("А");
+  await start(10_000, 5_000);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 10_000 });
+  await auction.finishAuction();
+
+  // Админ удалил операцию со страницы казны раньше, чем лот из ленты.
+  await prisma.treasuryTransaction.deleteMany({});
+
+  const [w] = await auction.getAuctionWinners();
+  const removed = await auction.deleteAuction(w.id);
+
+  assert.ok(removed, "падать тут не на чем");
+  assert.equal(removed!.goldRemoved, 0, "убирать было уже нечего");
+  assert.equal(await prisma.auction.count(), 0);
+});
+
+test("удаление несуществующей записи возвращает null, а не падает", async () => {
+  await reset();
+  assert.equal(await auction.deleteAuction("нет-такого"), null);
+});
+
+test("удалить можно и идущие торги — вместе с ними снимается лот", async () => {
+  await reset();
+  const [a] = await players("А");
+  await start(100, 50);
+  await auction.placeBid({ playerId: a.id, name: "А", expectedBid: 100 });
+
+  const live = (await auction.getActiveAuction())!;
+  await auction.deleteAuction(live.id);
+
+  assert.equal(await auction.getActiveAuction(), null, "торги сняты");
+  assert.equal(await prisma.treasuryTransaction.count(), 0, "золота они ещё не заводили");
+});

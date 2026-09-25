@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Crown, ImageOff } from "lucide-react";
+import { Crown, ImageOff, X } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 
 export type Winner = {
@@ -22,7 +22,17 @@ const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short
  * при любой длине названия — иначе ряд разъезжался бы по высоте из-за одного
  * длинного имени.
  */
-export default function AuctionWinners({ winners }: { winners: Winner[] }) {
+export default function AuctionWinners({
+  winners,
+  isAdmin = false,
+  onDelete,
+  busy = false,
+}: {
+  winners: Winner[];
+  isAdmin?: boolean;
+  onDelete?: (w: Winner) => void;
+  busy?: boolean;
+}) {
   return (
     <div>
       <h2 className="mb-2 text-sm font-semibold">Победители и лут</h2>
@@ -71,9 +81,22 @@ export default function AuctionWinners({ winners }: { winners: Winner[] }) {
                 </p>
               </div>
 
-              <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white/80">
+              <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white/80">
                 {dateFmt.format(new Date(w.at))}
               </span>
+
+              {isAdmin && onDelete && (
+                <button
+                  type="button"
+                  onClick={() => onDelete(w)}
+                  disabled={busy}
+                  title="Удалить лот"
+                  aria-label={`Удалить лот «${w.itemName}»`}
+                  className="absolute right-1.5 top-1.5 rounded bg-black/60 p-1 text-white/80 transition-colors hover:bg-danger hover:text-white disabled:opacity-50"
+                >
+                  <X size={12} />
+                </button>
+              )}
             </li>
           ))}
         </ul>

@@ -193,6 +193,18 @@ export default function AuctionBoard({
     send("/api/auction", { method: "PATCH", body: JSON.stringify({ deltaSec }) });
   const dropTimer = () => send("/api/auction", { method: "PATCH", body: JSON.stringify({ durationSec: null }) });
 
+  const removeWinner = async (w: Winner) => {
+    const gold = numberFmt.format(w.amount);
+    if (
+      !confirm(
+        `Удалить «${w.itemName}» (${w.winner}) из списка? Из казны Прайма уберётся ${gold} золота, заведённые этой продажей.`
+      )
+    ) {
+      return;
+    }
+    await send(`/api/auction/${w.id}`, { method: "DELETE" });
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -479,7 +491,7 @@ export default function AuctionBoard({
         </div>
       </div>
 
-      <AuctionWinners winners={winners} />
+      <AuctionWinners winners={winners} isAdmin={isAdmin} onDelete={removeWinner} busy={busy} />
     </div>
   );
 }
