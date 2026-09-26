@@ -366,6 +366,8 @@ export async function getActivityById(id: string) {
       screenshots: { orderBy: { createdAt: "asc" } },
       guests: { orderBy: { createdAt: "asc" } },
       addedBy: { select: { username: true } },
+      organizer: { select: { id: true, name: true } },
+      raidLeader: { select: { id: true, name: true } },
     },
   });
   if (!activity) return null;
@@ -391,7 +393,19 @@ export async function getActivityById(id: string) {
     dateIso: activity.date.toISOString().slice(0, 10),
     dropTotal,
     roleCounts,
-    roster: activity.participants.map((p) => p.player),
+    roster: activity.participants.map((p) => ({ ...p.player, fullParticipation: p.fullParticipation })),
+    // Достижения: факты, подтверждаемые вручную, — участие сам по себе ни
+    // убийством, ни победой, ни полным присутствием не является.
+    bossKey: activity.bossKey,
+    bossKillConfirmed: activity.bossKillConfirmed,
+    killCount: activity.killCount,
+    pvpResult: activity.pvpResult,
+    pvpGuildRaid: activity.pvpGuildRaid,
+    guildDefense: activity.guildDefense,
+    organizerPlayerId: activity.organizerPlayerId,
+    organizerName: activity.organizer?.name ?? null,
+    raidLeaderPlayerId: activity.raidLeaderPlayerId,
+    raidLeaderName: activity.raidLeader?.name ?? null,
     drops: activity.drops.map((d) => ({
       id: d.id,
       item: d.item,

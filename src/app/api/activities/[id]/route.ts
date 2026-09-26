@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActivitiesManager } from "@/lib/auth";
+import { BOSS_ALIASES } from "@/lib/achievements/catalog";
+import { applyFullParticipation, applyRosterDiff } from "@/lib/activityRoster";
 
 const STATUSES = ["К выплате", "Выплачено", "Отменено"];
 const CATEGORIES = ["Мини-РБ", "Прайм"];
 const MODES = ["PvE", "PvP"];
 const DIFFICULTIES = ["Обычная", "Героическая"];
+const PVP_RESULTS = ["Победа", "Поражение"];
+const BOSS_KEYS = Object.keys(BOSS_ALIASES);
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const admin = await requireActivitiesManager();
@@ -64,17 +68,64 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     data.weight = value;
   }
 
+  /*
+   * Поля для достижений. Каждое — явное подтверждение конкретного факта, а
+   * не вывод из посещения: участие в рейде не значит, что босс убит, а
+   * присутствие на PvP не значит победу. Пустая строка/undefined снимает
+   * отметку, а не игнорируется — иначе поле нельзя было бы очистить.
+   */
+  if (body?.bossKey !== undefined) {
+    const value = body.bossKey === null || body.bossKey === "" ? null : String(body.bossKey);
+    if (value !== null && !BOSS_KEYS.includes(value)) {
+      return NextResponse.json({ error: "Неизвестный ключ босса." }, { status: 400 });
+    }
+    data.bossKey = value;
+  }
+  if (body?.bossKillConfirmed !== undefined) {
+    data.bossKillConfirmed = Boolean(body.bossKillConfirmed);
+  }
+  if (body?.killCount !== undefined) {
+    const value = Math.round(Number(body.killCount));
+    if (!Number.isFinite(value) || value < 1 || value > 50) {
+      return NextResponse.json({ error: "Число убийств должно быть от 1 до 50." }, { status: 400 });
+    }
+    data.killCount = value;
+  }
+  if (body?.pvpResult !== undefined) {
+    const value = body.pvpResult === null || body.pvpResult === "" ? null : String(body.pvpResult);
+    if (value !== null && !PVP_RESULTS.includes(value)) {
+      return NextResponse.json({ error: "Результат PvP: «Победа», «Поражение» или не указан." }, { status: 400 });
+    }
+    data.pvpResult = value;
+  }
+  if (body?.pvpGuildRaid !== undefined) data.pvpGuildRaid = Boolean(body.pvpGuildRaid);
+  if (body?.guildDefense !== undefined) data.guildDefense = Boolean(body.guildDefense);
+  if (body?.organizerPlayerId !== undefined) {
+    data.organizerPlayerId = body.organizerPlayerId === null || body.organizerPlayerId === "" ? null : String(body.organizerPlayerId);
+  }
+  if (body?.raidLeaderPlayerId !== undefined) {
+    data.raidLeaderPlayerId =
+      body.raidLeaderPlayerId === null || body.raidLeaderPlayerId === "" ? null : String(body.raidLeaderPlayerId);
+  }
+
   const participantIds: string[] | null = Array.isArray(body?.participantIds)
     ? body.participantIds.filter((pid: unknown): pid is string => typeof pid === "string")
     : null;
 
+  // Полное участие отмечается по конкретным игрокам из текущего состава —
+  // список тех, кому проставляем true; остальные из состава получают false.
+  const fullParticipantIds: string[] | null = Array.isArray(body?.fullParticipantIds)
+    ? body.fullParticipantIds.filter((pid: unknown): pid is string => typeof pid === "string")
+    : null;
+
   const activity = await prisma.$transaction(async (tx) => {
-    if (participantIds !== null) {
-      await tx.activityParticipant.deleteMany({ where: { activityId: id } });
-      await tx.activityParticipant.createMany({
-        data: participantIds.map((playerId: string) => ({ activityId: id, playerId })),
-      });
-    }
+    // Диф вместо "удалить всё и создать заново": состав активности часто
+    // правят уже после того, как кому-то отметили полное участие или
+    // убийство босса — полное удаление строк стирало бы fullParticipation у
+    // всех, кто остался в составе, при каждой правке ростера.
+    if (participantIds !== null) await applyRosterDiff(tx, id, participantIds);
+    if (fullParticipantIds !== null) await applyFullParticipation(tx, id, fullParticipantIds);
+
     return tx.activity.update({ where: { id }, data });
   });
 

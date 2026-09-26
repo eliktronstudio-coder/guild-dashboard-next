@@ -13,31 +13,33 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String   @unique
-  passwordHash String
-  role         String   @default("random")
-  createdAt    DateTime @default(now())
-  player       Player?
+  id              String     @id @default(cuid())
+  username        String     @unique
+  passwordHash    String
+  role            String     @default("random")
+  createdAt       DateTime   @default(now())
+  player          Player?
   addedActivities Activity[]
 }
 
 model Player {
-  id            String                @id @default(cuid())
-  name          String
-  role          String
-  level         Int                   @default(1)
-  xp            Int                   @default(0)
-  attendancePct Int                   @default(0)
-  salaryCoefficient Float             @default(1)
-  createdAt     DateTime              @default(now())
-  activities    ActivityParticipant[]
-  userId        String?               @unique
-  user          User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
-  payments      Payment[]
-  drops         DropItem[]
-  archiveStats  ArchivePlayerStat[]
-  auctionBids   AuctionBid[]
+  id                  String                @id @default(cuid())
+  name                String
+  role                String
+  level               Int                   @default(1)
+  xp                  Int                   @default(0)
+  attendancePct       Int                   @default(0)
+  salaryCoefficient   Float                 @default(1)
+  createdAt           DateTime              @default(now())
+  activities          ActivityParticipant[]
+  userId              String?               @unique
+  user                User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  payments            Payment[]
+  drops               DropItem[]
+  archiveStats        ArchivePlayerStat[]
+  auctionBids         AuctionBid[]
+  organizedActivities Activity[]            @relation("ActivityOrganizer")
+  ledActivities       Activity[]            @relation("ActivityRaidLeader")
 }
 
 model Activity {
@@ -62,7 +64,7 @@ model Activity {
   /// Архивные активности не показываются на /activities и не считаются в
   /// живой посещаемости — но данные не удаляются, только помечаются.
   archiveId          String?
-  archive             Archive?             @relation(fields: [archiveId], references: [id], onDelete: SetNull)
+  archive            Archive?              @relation(fields: [archiveId], references: [id], onDelete: SetNull)
   date               DateTime              @default(now())
   createdAt          DateTime              @default(now())
   participants       ActivityParticipant[]
@@ -70,9 +72,33 @@ model Activity {
   screenshots        ActivityScreenshot[]
   guests             ActivityGuest[]
 
-  @@index([archiveId])
+  /// Ключ босса из BOSS_ALIASES (src/lib/achievements/catalog.ts), null — не
+  /// боссовая активность. Хранится ключом, а не именем: имена дублируются
+  /// («Левиафан» / «Разъярённый Левиафан»), а ключ один на группу алиасов.
+  bossKey            String?
+  /// Подтверждает ГМ/РЛ вручную: факт участия в рейде не значит, что босс
+  /// убит — это ровно то смешение, которое запрещено достижениями.
+  bossKillConfirmed  Boolean @default(false)
+  /// Сколько убийств засчитывается этой записью. Один рейд — одно посещение,
+  /// но может дать несколько убийств (актуально для мини-РБ).
+  killCount          Int     @default(1)
+  /// Победа | Поражение | null — не указан. Участие само по себе победой
+  /// не является.
+  pvpResult          String?
+  /// Отмечает гильдейский PvP-рейд отдельно от обычного PvP.
+  pvpGuildRaid       Boolean @default(false)
+  /// Отмечает событие защиты гильдии.
+  guildDefense       Boolean @default(false)
+  organizerPlayerId  String?
+  organizer          Player? @relation("ActivityOrganizer", fields: [organizerPlayerId], references: [id], onDelete: SetNull)
+  raidLeaderPlayerId String?
+  raidLeader         Player? @relation("ActivityRaidLeader", fields: [raidLeaderPlayerId], references: [id], onDelete: SetNull)
 
+  @@index([archiveId])
   @@index([periodId])
+  @@index([bossKey])
+  @@index([organizerPlayerId])
+  @@index([raidLeaderPlayerId])
 }
 
 model ActivityGuest {
@@ -99,11 +125,15 @@ model ActivityParticipant {
   activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
   player     Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
+  /// Отмечается вручную, отдельно от факта посещения: досидел до конца
+  /// рейда, а не просто зашёл и вышел.
+  fullParticipation Boolean @default(false)
+
   @@unique([activityId, playerId])
 }
 
 model TreasuryTransaction {
-  id          String   @id @default(cuid())
+  id          String            @id @default(cuid())
   description String
   amount      Int
   /// Категория операции, когда к ней не привязан дроп («Мини-РБ»).
@@ -125,9 +155,9 @@ model TreasuryTransaction {
   /// участвуют в живом балансе казны (getTreasuryBreakdown и т.д.), только
   /// хранятся для просмотра в разделе «Архив».
   archiveId   String?
-  archive     Archive? @relation(fields: [archiveId], references: [id], onDelete: SetNull)
-  date        DateTime @default(now())
-  createdAt   DateTime @default(now())
+  archive     Archive?          @relation(fields: [archiveId], references: [id], onDelete: SetNull)
+  date        DateTime          @default(now())
+  createdAt   DateTime          @default(now())
 
   @@index([periodId])
   @@index([archiveId])
@@ -189,22 +219,21 @@ model ArchivePlayerStat {
   @@index([playerId])
 }
 
-
 /// Расчётный период гильдии: с 15-го числа одного месяца по 15-е следующего.
 /// Ровно один период имеет status="active" в любой момент времени —
 /// getActivePeriod() из src/lib/period.ts автоматически закрывает истёкший
 /// период и открывает следующий по факту даты, без ручного действия и без
 /// архивной задолженности — посещаемость просто начинает считаться заново.
 model AccountingPeriod {
-  id          String    @id @default(cuid())
-  startDate   DateTime
-  endDate     DateTime
+  id        String    @id @default(cuid())
+  startDate DateTime
+  endDate   DateTime
   /// "15.09.2026 — 15.10.2026" — человекочитаемая метка, показывается в UI.
-  label       String
-  status      String    @default("active")
-  closedAt    DateTime?
-  closedBy    String?
-  createdAt   DateTime  @default(now())
+  label     String
+  status    String    @default("active")
+  closedAt  DateTime?
+  closedBy  String?
+  createdAt DateTime  @default(now())
 
   transactions TreasuryTransaction[]
   activities   Activity[]
@@ -243,13 +272,13 @@ model DropItem {
 }
 
 model Payment {
-  id           String   @id @default(cuid())
+  id           String            @id @default(cuid())
   playerId     String
-  player       Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player       Player            @relation(fields: [playerId], references: [id], onDelete: Cascade)
   amount       Int
-  status       String   @default("Ожидает")
-  date         DateTime @default(now())
-  source       String   @default("manual")
+  status       String            @default("Ожидает")
+  date         DateTime          @default(now())
+  source       String            @default("manual")
   archiveMonth String?
   /// "Прайм" | "Мини-РБ" — заполняется у выплат с /api/payments/payout
   /// (кнопки статуса в строке «Расчёт распределения»). У ручных и архивных
@@ -258,11 +287,10 @@ model Payment {
   /// Расчётный период (15→15), в который произведена выплата.
   periodId     String?
   period       AccountingPeriod? @relation(fields: [periodId], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
+  createdAt    DateTime          @default(now())
 
   @@index([periodId])
 }
-
 
 /// Оформление одной страницы. pageKey берётся из реестра (src/lib/design/registry.ts);
 /// служебный ключ "__shared__" хранит общие элементы и тему.
@@ -270,20 +298,20 @@ model Payment {
 /// Разделение на две колонки даёт изоляцию: публикация одной страницы не трогает
 /// черновики остальных, потому что у каждой страницы своя строка.
 model PageDesign {
-  id            String    @id @default(cuid())
-  pageKey       String    @unique
-  draftJson     String    @default("{}")
-  publishedJson String    @default("{}")
+  id             String          @id @default(cuid())
+  pageKey        String          @unique
+  draftJson      String          @default("{}")
+  publishedJson  String          @default("{}")
   /// Версия формата конфига — чтобы мигрировать сохранённое при смене схемы.
-  schemaVersion Int       @default(1)
+  schemaVersion  Int             @default(1)
   /// Растёт при каждой публикации. Клиент присылает известное ему значение,
   /// и публикация отклоняется, если другой админ успел опубликовать раньше.
-  revision      Int       @default(0)
-  draftUpdatedAt DateTime @default(now()) @updatedAt
+  revision       Int             @default(0)
+  draftUpdatedAt DateTime        @default(now()) @updatedAt
   draftUpdatedBy String?
-  publishedAt   DateTime?
-  publishedBy   String?
-  versions      DesignVersion[]
+  publishedAt    DateTime?
+  publishedBy    String?
+  versions       DesignVersion[]
 }
 
 /// Медиатека редактора оформления. Файл лежит в БД как data:-URL — так же,
@@ -307,12 +335,12 @@ model DesignMedia {
 /// оформлением. При вставке идентификаторы пересоздаются, поэтому одну
 /// заготовку можно положить на несколько страниц независимо.
 model DesignSnippet {
-  id         String   @id @default(cuid())
-  name       String
+  id        String   @id @default(cuid())
+  name      String
   /// JSON: { block: DesignBlock, styles: Record<elementId, ElementValues> }
-  payload    String
-  createdAt  DateTime @default(now())
-  createdBy  String?
+  payload   String
+  createdAt DateTime @default(now())
+  createdBy String?
 
   @@index([createdAt])
 }
@@ -354,35 +382,35 @@ model ActivityBanner {
 /// участники ставят со своих устройств и все видят одно и то же. Активный
 /// аукцион в каждый момент ровно один (status="active").
 model Auction {
-  id             String           @id @default(cuid())
+  id                String           @id @default(cuid())
   /// "active" — торги идут, "finished" — завершены, лидер стал победителем.
-  status         String           @default("active")
-  itemName       String
-  itemImageUrl   String?
-  catalogItemId  String?
-  catalogItem    DropCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
-  startingBid    Int
-  step           Int
+  status            String           @default("active")
+  itemName          String
+  itemImageUrl      String?
+  catalogItemId     String?
+  catalogItem       DropCatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  startingBid       Int
+  step              Int
   /// Текущая цена. Служит и признаком гонки: ставка принимается только если
   /// клиент прислал то же значение, которое видел — иначе двое, нажавших
   /// одновременно, получили бы одну и ту же сумму.
-  currentBid     Int
+  currentBid        Int
   /// Момент окончания торгов. Null — без ограничения времени, торги идут,
   /// пока ГМ не завершит их вручную. Храним именно момент, а не остаток:
   /// остаток пришлось бы пересчитывать при каждом чтении, и у участников с
   /// разными часами он разъезжался бы.
-  endsAt         DateTime?
-  leaderPlayerId String?
-  leaderName     String?
-  createdBy      String?
-  createdAt      DateTime         @default(now())
-  finishedAt     DateTime?
+  endsAt            DateTime?
+  leaderPlayerId    String?
+  leaderName        String?
+  createdBy         String?
+  createdAt         DateTime         @default(now())
+  finishedAt        DateTime?
   /// Операция казны, которой завели выручку с этих торгов. Нужна, чтобы при
   /// удалении записи убрать и золото: без ссылки пришлось бы искать операцию
   /// по тексту описания, а это разъехалось бы при первом же переименовании.
   /// Null — торги без ставок (продавать было нечего) или запись старше этого поля.
   saleTransactionId String?
-  bids           AuctionBid[]
+  bids              AuctionBid[]
 
   @@index([status])
 }

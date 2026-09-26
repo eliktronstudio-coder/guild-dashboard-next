@@ -15,6 +15,7 @@ import {
   roleColor,
 } from "@/lib/activityOptions";
 import ScreenshotBanner from "./ScreenshotBanner";
+import ActivityAchievementFields from "./ActivityAchievementFields";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
@@ -28,6 +29,7 @@ type Drop = {
 };
 
 type Player = { id: string; name: string; role: string };
+type RosterPlayer = Player & { fullParticipation: boolean };
 type CatalogItem = { id: string; name: string; price: number; imageUrl: string | null };
 
 type Activity = {
@@ -45,11 +47,22 @@ type Activity = {
   dateIso: string;
   dropTotal: number;
   roleCounts: Record<string, number>;
-  roster: Player[];
+  roster: RosterPlayer[];
   drops: Drop[];
   rosterScreenshots: { id: string; imageUrl: string }[];
   dropScreenshots: { id: string; imageUrl: string }[];
   guests: { id: string; name: string }[];
+  /** Достижения: факты, подтверждаемые вручную (см. src/lib/achievements). */
+  bossKey: string | null;
+  bossKillConfirmed: boolean;
+  killCount: number;
+  pvpResult: string | null;
+  pvpGuildRaid: boolean;
+  guildDefense: boolean;
+  organizerPlayerId: string | null;
+  organizerName: string | null;
+  raidLeaderPlayerId: string | null;
+  raidLeaderName: string | null;
 };
 
 export default function ActivityDetailPanel({
@@ -982,6 +995,26 @@ export default function ActivityDetailPanel({
             <Row label="Добавил" value={activity.addedByUsername ?? "—"} />
           </dl>
         </div>
+
+        <ActivityAchievementFields
+          activityId={activity.id}
+          mode={activity.mode}
+          category={activity.category}
+          roster={activity.roster}
+          isAdmin={isAdmin}
+          fields={{
+            bossKey: activity.bossKey,
+            bossKillConfirmed: activity.bossKillConfirmed,
+            killCount: activity.killCount,
+            pvpResult: activity.pvpResult,
+            pvpGuildRaid: activity.pvpGuildRaid,
+            guildDefense: activity.guildDefense,
+            organizerPlayerId: activity.organizerPlayerId,
+            organizerName: activity.organizerName,
+            raidLeaderPlayerId: activity.raidLeaderPlayerId,
+            raidLeaderName: activity.raidLeaderName,
+          }}
+        />
 
         <div className="rounded-lg border border-border bg-surface p-4">
           <h3 className="mb-3 text-sm font-semibold">Состав</h3>

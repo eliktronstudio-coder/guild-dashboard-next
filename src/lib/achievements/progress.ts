@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ACHIEVEMENTS, type AchievementDef } from "@/lib/achievements/catalog";
+import { ACHIEVEMENTS, BOSS_ALIASES, type AchievementDef } from "@/lib/achievements/catalog";
 import { chainProgress, type ChainProgress } from "@/lib/achievements/tiers";
 import { daysBetween, getAchievementsStartedAt, tenureStart } from "@/lib/achievements/start";
 
@@ -21,20 +21,89 @@ function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
-type Participation = { playerId: string; date: Date; category: string; mode: string };
+/** Ключ босса по названию активности — через список синонимов из каталога. */
+function bossKeyFromAliases(name: string): string | null {
+  for (const [key, names] of Object.entries(BOSS_ALIASES)) {
+    if (names.includes(name)) return key;
+  }
+  return null;
+}
+
+type Participation = {
+  playerId: string;
+  date: Date;
+  category: string;
+  mode: string;
+  activityName: string;
+  bossKey: string | null;
+  bossKillConfirmed: boolean;
+  killCount: number;
+  pvpResult: string | null;
+  pvpGuildRaid: boolean;
+  guildDefense: boolean;
+  fullParticipation: boolean;
+};
 
 /** Участия всех игроков в активностях, случившихся после запуска системы. */
 async function loadParticipations(startedAt: Date): Promise<Participation[]> {
   const rows = await prisma.activityParticipant.findMany({
     where: { activity: { date: { gte: startedAt } } },
-    select: { playerId: true, activity: { select: { date: true, category: true, mode: true } } },
+    select: {
+      playerId: true,
+      fullParticipation: true,
+      activity: {
+        select: {
+          name: true,
+          date: true,
+          category: true,
+          mode: true,
+          bossKey: true,
+          bossKillConfirmed: true,
+          killCount: true,
+          pvpResult: true,
+          pvpGuildRaid: true,
+          guildDefense: true,
+        },
+      },
+    },
   });
   return rows.map((r) => ({
     playerId: r.playerId,
     date: r.activity.date,
     category: r.activity.category,
     mode: r.activity.mode,
+    activityName: r.activity.name,
+    // Ключ, проставленный вручную, приоритетнее — распознавание по названию
+    // это подстраховка для записей, где его ещё не заполнили.
+    bossKey: r.activity.bossKey ?? bossKeyFromAliases(r.activity.name),
+    bossKillConfirmed: r.activity.bossKillConfirmed,
+    killCount: Math.max(1, r.activity.killCount),
+    pvpResult: r.activity.pvpResult,
+    pvpGuildRaid: r.activity.pvpGuildRaid,
+    guildDefense: r.activity.guildDefense,
+    fullParticipation: r.fullParticipation,
   }));
+}
+
+/** Мероприятия после запуска, где игрок отмечен организатором или рейд-лидером. */
+async function loadLeadershipCounts(startedAt: Date): Promise<{
+  organizer: Map<string, number>;
+  raidLeader: Map<string, number>;
+}> {
+  const rows = await prisma.activity.findMany({
+    where: {
+      date: { gte: startedAt },
+      OR: [{ organizerPlayerId: { not: null } }, { raidLeaderPlayerId: { not: null } }],
+    },
+    select: { organizerPlayerId: true, raidLeaderPlayerId: true },
+  });
+  const organizer = new Map<string, number>();
+  const raidLeader = new Map<string, number>();
+  for (const r of rows) {
+    if (r.organizerPlayerId) organizer.set(r.organizerPlayerId, (organizer.get(r.organizerPlayerId) ?? 0) + 1);
+    if (r.raidLeaderPlayerId) raidLeader.set(r.raidLeaderPlayerId, (raidLeader.get(r.raidLeaderPlayerId) ?? 0) + 1);
+  }
+  return { organizer, raidLeader };
 }
 
 /**
@@ -52,14 +121,45 @@ async function loadGold(): Promise<GoldRow[]> {
 }
 
 const PAID = "Выплачено";
+const VICTORY = "Победа";
+
+function emptyMetrics(): MetricValues {
+  return {
+    "pvp.battles": 0,
+    "pvp.victories": 0,
+    "pvp.guildRaids": 0,
+    "pvp.defense": 0,
+    "boss.kraken": 0,
+    "boss.leviathan": 0,
+    "boss.calidis": 0,
+    "boss.xanatos": 0,
+    "boss.worldAny": 0,
+    "boss.miniKills": 0,
+    "act.prime": 0,
+    "act.mini": 0,
+    "act.unique": 0,
+    "act.days": 0,
+    "act.full": 0,
+    "help.organizer": 0,
+    "help.raidLeader": 0,
+    "gold.earned": 0,
+    "gold.prime": 0,
+    "gold.mini": 0,
+    "gold.paid": 0,
+    "tenure.days": 0,
+    "tenure.primeDays": 0,
+    "tenure.miniDays": 0,
+  };
+}
 
 /** Считает значения всех обеспеченных данными метрик для каждого игрока. */
 export async function getMetricsForAllPlayers(now = new Date()): Promise<Map<string, MetricValues>> {
   const startedAt = await getAchievementsStartedAt(now);
 
-  const [players, parts, gold] = await Promise.all([
+  const [players, parts, leadership, gold] = await Promise.all([
     prisma.player.findMany({ select: { id: true, createdAt: true } }),
     loadParticipations(startedAt),
+    loadLeadershipCounts(startedAt),
     loadGold(),
   ]);
 
@@ -67,21 +167,12 @@ export async function getMetricsForAllPlayers(now = new Date()): Promise<Map<str
   const dayBuckets = new Map<string, { all: Set<string>; prime: Set<string>; mini: Set<string> }>();
 
   for (const p of players) {
-    byPlayer.set(p.id, {
-      "pvp.battles": 0,
-      "act.prime": 0,
-      "act.mini": 0,
-      "act.unique": 0,
-      "act.days": 0,
-      "gold.earned": 0,
-      "gold.prime": 0,
-      "gold.mini": 0,
-      "gold.paid": 0,
-      // Стаж: от более поздней из дат — запуск системы или вступление игрока.
-      "tenure.days": daysBetween(tenureStart(p.createdAt, startedAt), now),
-      "tenure.primeDays": 0,
-      "tenure.miniDays": 0,
-    });
+    const m = emptyMetrics();
+    // Стаж: от более поздней из дат — запуск системы или вступление игрока.
+    m["tenure.days"] = daysBetween(tenureStart(p.createdAt, startedAt), now);
+    m["help.organizer"] = leadership.organizer.get(p.id) ?? 0;
+    m["help.raidLeader"] = leadership.raidLeader.get(p.id) ?? 0;
+    byPlayer.set(p.id, m);
     dayBuckets.set(p.id, { all: new Set(), prime: new Set(), mini: new Set() });
   }
 
@@ -95,14 +186,30 @@ export async function getMetricsForAllPlayers(now = new Date()): Promise<Map<str
     m["act.unique"] += 1;
     days.all.add(dayKey(part.date));
 
-    if (part.mode === "PvP") m["pvp.battles"] += 1;
+    if (part.fullParticipation) m["act.full"] += 1;
+
+    if (part.mode === "PvP") {
+      m["pvp.battles"] += 1;
+      if (part.pvpResult === VICTORY) m["pvp.victories"] += 1;
+      if (part.pvpGuildRaid) m["pvp.guildRaids"] += 1;
+      if (part.guildDefense) m["pvp.defense"] += 1;
+    }
 
     if (part.category === "Мини-РБ") {
       m["act.mini"] += 1;
       days.mini.add(dayKey(part.date));
+      // Подтверждённое убийство мини-РБ — отдельная метрика от посещения:
+      // один рейд может дать несколько убийств и остаётся одним визитом.
+      if (part.bossKillConfirmed) m["boss.miniKills"] += part.killCount;
     } else {
       m["act.prime"] += 1;
       days.prime.add(dayKey(part.date));
+    }
+
+    if (part.bossKillConfirmed && part.bossKey) {
+      m["boss.worldAny"] += part.killCount;
+      const chainKey = "boss." + part.bossKey;
+      if (chainKey in m) m[chainKey] += part.killCount;
     }
   }
 

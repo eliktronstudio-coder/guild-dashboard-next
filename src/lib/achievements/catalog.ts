@@ -96,7 +96,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     note: "Победа отмечается вручную: участие победой не является.",
     unit: "события",
     icon: "victory-banner",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "pvp.guildRaids",
@@ -106,7 +106,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     note: "Требует отметки «гильдейский рейд» у PvP-события.",
     unit: "события",
     icon: "brotherhood",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "pvp.defense",
@@ -116,7 +116,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     note: "Требует типа события «защита гильдии».",
     unit: "события",
     icon: "tower-shield",
-    source: "pending",
+    source: "ready",
   },
 
   /* ——— Рейдовые боссы ——— */
@@ -128,7 +128,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     note: "Считается только отмеченное убийство босса, не сам выход в рейд.",
     unit: "убийства",
     icon: "kraken",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "boss.leviathan",
@@ -137,7 +137,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Подтверждённые убийства Левиафана с участием игрока",
     unit: "убийства",
     icon: "leviathan",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "boss.calidis",
@@ -146,7 +146,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Подтверждённые убийства Калидиса с участием игрока",
     unit: "убийства",
     icon: "calidis",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "boss.xanatos",
@@ -155,7 +155,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Подтверждённые убийства Ксанатоса с участием игрока",
     unit: "убийства",
     icon: "xanatos",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "boss.worldAny",
@@ -164,7 +164,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Убийства любых мировых рейдовых боссов с участием игрока",
     unit: "убийства",
     icon: "titan-skull",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "boss.miniKills",
@@ -174,7 +174,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     note: "Именно убийства: один рейд может дать несколько убийств, но остаётся одним посещением.",
     unit: "убийства",
     icon: "mini-boss",
-    source: "pending",
+    source: "ready",
   },
 
   /* ——— Активность ——— */
@@ -222,7 +222,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     note: "Полное участие отмечается вручную: факт посещения им не является.",
     unit: "события",
     icon: "hourglass-full",
-    source: "pending",
+    source: "ready",
   },
 
   /* ——— Помощь гильдии ——— */
@@ -233,7 +233,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Мероприятия, где игрок указан организатором",
     unit: "события",
     icon: "war-horn",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "help.galleon",
@@ -251,7 +251,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Мероприятия, где игрок указан рейд-лидером",
     unit: "события",
     icon: "commander",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "help.mentor",

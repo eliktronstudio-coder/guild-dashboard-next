@@ -63,15 +63,38 @@ async function makePlayer(name: string, createdAt = START) {
 
 async function attend(
   playerId: string,
-  opts: { date: Date; category?: string; mode?: string; archived?: boolean }
+  opts: {
+    date: Date;
+    category?: string;
+    mode?: string;
+    archived?: boolean;
+    bossKey?: string;
+    bossKillConfirmed?: boolean;
+    killCount?: number;
+    pvpResult?: string;
+    pvpGuildRaid?: boolean;
+    guildDefense?: boolean;
+    organizerPlayerId?: string;
+    raidLeaderPlayerId?: string;
+    fullParticipation?: boolean;
+    activityName?: string;
+  }
 ) {
   const activity = await prisma.activity.create({
     data: {
-      name: "Событие",
+      name: opts.activityName ?? "Событие",
       category: opts.category ?? "Прайм",
       mode: opts.mode ?? "PvE",
       date: opts.date,
-      participants: { create: [{ playerId }] },
+      bossKey: opts.bossKey,
+      bossKillConfirmed: opts.bossKillConfirmed ?? false,
+      killCount: opts.killCount ?? 1,
+      pvpResult: opts.pvpResult,
+      pvpGuildRaid: opts.pvpGuildRaid ?? false,
+      guildDefense: opts.guildDefense ?? false,
+      organizerPlayerId: opts.organizerPlayerId,
+      raidLeaderPlayerId: opts.raidLeaderPlayerId,
+      participants: { create: [{ playerId, fullParticipation: opts.fullParticipation ?? false }] },
     },
   });
   if (opts.archived) {
@@ -297,4 +320,134 @@ test("метрики считаются сразу для всех игроко�
   assert.equal(all.get(a.id)!["act.prime"], 1);
   assert.equal(all.get(a.id)!["act.mini"], 0);
   assert.equal(all.get(b.id)!["act.mini"], 1);
+});
+
+/* ——— PvP: победа, гильдейский рейд, защита ——— */
+
+test("победа в PvP засчитывается только по отметке, не по факту участия", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await attend(p.id, { date: AFTER, mode: "PvP", pvpResult: "Победа" });
+  await attend(p.id, { date: AFTER, mode: "PvP", pvpResult: "Поражение" });
+  await attend(p.id, { date: AFTER, mode: "PvP" }); // результат не указан
+
+  const m = await metricsFor(p.id);
+  assert.equal(m["pvp.battles"], 3, "участий три");
+  assert.equal(m["pvp.victories"], 1, "победа одна");
+});
+
+test("гильдейский PvP-рейд и защита гильдии считаются по отдельной отметке", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await attend(p.id, { date: AFTER, mode: "PvP", pvpGuildRaid: true });
+  await attend(p.id, { date: AFTER, mode: "PvP", guildDefense: true });
+  await attend(p.id, { date: AFTER, mode: "PvP" });
+
+  const m = await metricsFor(p.id);
+  assert.equal(m["pvp.guildRaids"], 1);
+  assert.equal(m["pvp.defense"], 1);
+});
+
+/* ——— Рейдовые боссы ——— */
+
+test("убийство босса засчитывается только при подтверждении", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await attend(p.id, { date: AFTER, activityName: "Кракен", bossKey: "kraken", bossKillConfirmed: false });
+  await attend(p.id, { date: AFTER, activityName: "Кракен", bossKey: "kraken", bossKillConfirmed: true });
+
+  const m = await metricsFor(p.id);
+  assert.equal(m["boss.kraken"], 1, "только подтверждённое убийство");
+  assert.equal(m["boss.worldAny"], 1);
+});
+
+test("боссы различаются по ключу, а не по совпадению текста названия", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  // Название не входит в BOSS_ALIASES дословно, но ключ проставлен вручную.
+  await attend(p.id, { date: AFTER, activityName: "Особый ивент", bossKey: "leviathan", bossKillConfirmed: true });
+
+  const m = await metricsFor(p.id);
+  assert.equal(m["boss.leviathan"], 1, "ключ важнее текста названия");
+});
+
+test("распознавание босса по синониму названия работает как подстраховка", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  // bossKey не проставлен явно — берём по алиасу названия.
+  await attend(p.id, { date: AFTER, activityName: "Разъярённый Левиафан", bossKillConfirmed: true });
+
+  assert.equal((await metricsFor(p.id))["boss.leviathan"], 1);
+});
+
+test("один рейд может дать несколько убийств мини-РБ, оставаясь одним посещением", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await attend(p.id, {
+    date: AFTER,
+    category: "Мини-РБ",
+    activityName: "АГЛ",
+    bossKillConfirmed: true,
+    killCount: 3,
+  });
+
+  const m = await metricsFor(p.id);
+  assert.equal(m["boss.miniKills"], 3, "три убийства");
+  assert.equal(m["act.mini"], 1, "но одно посещение");
+});
+
+test("«Бич титанов» суммирует убийства всех мировых боссов", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await attend(p.id, { date: AFTER, activityName: "Кракен", bossKey: "kraken", bossKillConfirmed: true });
+  await attend(p.id, { date: AFTER, activityName: "Ксанатос", bossKey: "xanatos", bossKillConfirmed: true });
+
+  assert.equal((await metricsFor(p.id))["boss.worldAny"], 2);
+});
+
+/* ——— Помощь гильдии: организатор, рейд-лидер, полное участие ——— */
+
+test("организатор и рейд-лидер считаются по мероприятию, не по участию", async () => {
+  await reset();
+  const [organizer, leader] = await Promise.all([makePlayer("Орг"), makePlayer("Лид")]);
+  await attend(organizer.id, {
+    date: AFTER,
+    organizerPlayerId: organizer.id,
+    raidLeaderPlayerId: leader.id,
+  });
+
+  assert.equal((await metricsFor(organizer.id))["help.organizer"], 1);
+  assert.equal((await metricsFor(leader.id))["help.raidLeader"], 1, "лидер не обязан быть участником");
+  assert.equal((await metricsFor(leader.id))["help.organizer"], 0);
+});
+
+test("полное участие отмечается вручную, посещение само по себе его не даёт", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await attend(p.id, { date: AFTER, fullParticipation: false });
+  await attend(p.id, { date: AFTER, fullParticipation: true });
+
+  const m = await metricsFor(p.id);
+  assert.equal(m["act.prime"], 2, "посещений два");
+  assert.equal(m["act.full"], 1, "полное участие только у одного");
+});
+
+/* ——— Каталог: 12 достижений действительно переведены в ready ——— */
+
+test("12 достижений на Activity/ActivityParticipant больше не 'pending'", async () => {
+  const { ACHIEVEMENTS } = await import("../src/lib/achievements/catalog");
+  const nowReady = [
+    "pvp.victories", "pvp.guildRaids", "pvp.defense",
+    "boss.kraken", "boss.leviathan", "boss.calidis", "boss.xanatos", "boss.worldAny", "boss.miniKills",
+    "help.organizer", "help.raidLeader", "act.full",
+  ];
+  for (const key of nowReady) {
+    const def = ACHIEVEMENTS.find((a) => a.key === key)!;
+    assert.equal(def.source, "ready", `${key} должно считаться данными`);
+  }
+  const stillPending = ["pvp.kills", "pvp.honor", "help.galleon", "help.mentor", "help.requests", "gold.donations"];
+  for (const key of stillPending) {
+    const def = ACHIEVEMENTS.find((a) => a.key === key)!;
+    assert.equal(def.source, "pending", `${key} пока не обеспечено данными`);
+  }
 });
