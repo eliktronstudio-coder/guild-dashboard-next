@@ -403,3 +403,14 @@ model AuctionBid {
 
   @@index([auctionId, createdAt])
 }
+
+/// Общие настройки приложения в виде ключ-значение.
+/// Нужна ровно одна гарантия: значение, записанное однажды, не меняется при
+/// повторном запуске или миграции. Поэтому запись создаётся только если её
+/// ещё нет (см. src/lib/settings.ts).
+model AppSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
