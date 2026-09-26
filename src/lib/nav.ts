@@ -15,6 +15,7 @@ import {
   House,
   Palette,
   Archive,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 
@@ -39,6 +40,7 @@ export const navSections: NavSection[] = [
       { href: "/activities", label: "Активность", icon: Swords },
       { href: "/players", label: "Состав", icon: Users },
       { href: "/profile", label: "Мой профиль", icon: UserCircle },
+      { href: "/achievements", label: "Достижения", icon: Trophy },
     ],
   },
   {
