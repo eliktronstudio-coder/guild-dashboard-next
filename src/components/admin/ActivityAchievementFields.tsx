@@ -224,6 +224,12 @@ export default function ActivityAchievementFields({
                   Убийство подтверждено
                 </label>
                 {isMiniBoss && (
+                  <span className="text-[11px] text-muted">
+                    Для мини-РБ и известных мировых боссов подтверждается автоматически при создании — снимите
+                    галочку, только если это был вайп.
+                  </span>
+                )}
+                {isMiniBoss && (
                   <label className="flex items-center gap-1.5 text-xs">
                     Убийств за рейд:
                     <input

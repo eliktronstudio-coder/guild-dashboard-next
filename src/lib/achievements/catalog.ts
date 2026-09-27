@@ -57,6 +57,14 @@ export const BOSS_ALIASES: Record<string, string[]> = {
   xanatos: ["Ксанатос"],
 };
 
+/** Ключ мирового босса по названию активности — через список синонимов выше. */
+export function bossKeyFromAliases(name: string): string | null {
+  for (const [key, names] of Object.entries(BOSS_ALIASES)) {
+    if (names.includes(name)) return key;
+  }
+  return null;
+}
+
 export const ACHIEVEMENTS: readonly AchievementDef[] = [
   /* ——— PvP ——— */
   {

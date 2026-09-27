@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireActivitiesManager } from "@/lib/auth";
 import { getActivePeriodId } from "@/lib/period";
 import { activityAttendanceWeight } from "@/lib/activityWeights";
+import { bossKeyFromAliases } from "@/lib/achievements/catalog";
 
 const CATEGORIES = ["Мини-РБ", "Прайм"];
 const MODES = ["PvE", "PvP"];
@@ -101,6 +102,14 @@ export async function POST(request: NextRequest) {
   // с Мини-РБ активности — сразу на склад ХД, с Прайм — в Общий инвентарь.
   const dropWarehouse = category === "Мини-РБ" ? "ХД" : "Общий";
 
+  // Активность заводят уже по факту прошедшего боя, а не заранее — раз она
+  // есть в системе, значит, босс убит. Отдельно подтверждать это вручную не
+  // нужно; поле остаётся редактируемым на случай вайпа, который всё же
+  // решили залогировать.
+  const matchedBossKey = bossKeyFromAliases(name);
+  const isMiniBoss = category === "Мини-РБ";
+  const bossKillConfirmed = isMiniBoss || matchedBossKey !== null;
+
   const periodId = await getActivePeriodId();
   const activity = await prisma.activity.create({
     data: {
@@ -114,6 +123,8 @@ export async function POST(request: NextRequest) {
       weight,
       addedByUserId: admin.sub,
       periodId,
+      bossKey: matchedBossKey,
+      bossKillConfirmed,
       participants: { create: participantIds.map((playerId: string) => ({ playerId })) },
       drops: {
         create: dropEntries

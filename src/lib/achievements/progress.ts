@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ACHIEVEMENTS, BOSS_ALIASES, type AchievementDef } from "@/lib/achievements/catalog";
+import { ACHIEVEMENTS, bossKeyFromAliases, type AchievementDef } from "@/lib/achievements/catalog";
 import { chainProgress, DEFAULT_TIERS, type ChainProgress, type TierDef } from "@/lib/achievements/tiers";
 import { daysBetween, getAchievementsStartedAt, tenureStart } from "@/lib/achievements/start";
 
@@ -19,14 +19,6 @@ export type MetricValues = Record<string, number>;
 
 function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
-}
-
-/** Ключ босса по названию активности — через список синонимов из каталога. */
-function bossKeyFromAliases(name: string): string | null {
-  for (const [key, names] of Object.entries(BOSS_ALIASES)) {
-    if (names.includes(name)) return key;
-  }
-  return null;
 }
 
 type Participation = {
