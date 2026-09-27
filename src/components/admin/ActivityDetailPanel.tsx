@@ -29,7 +29,7 @@ type Drop = {
 };
 
 type Player = { id: string; name: string; role: string };
-type RosterPlayer = Player & { fullParticipation: boolean };
+type RosterPlayer = Player & { fullParticipation: boolean; pvpKills: number; honorPoints: number };
 type CatalogItem = { id: string; name: string; price: number; imageUrl: string | null };
 
 type Activity = {
@@ -63,6 +63,9 @@ type Activity = {
   organizerName: string | null;
   raidLeaderPlayerId: string | null;
   raidLeaderName: string | null;
+  galleonCalledByPlayerId: string | null;
+  galleonCalledByName: string | null;
+  galleonConfirmed: boolean;
 };
 
 export default function ActivityDetailPanel({
@@ -1013,6 +1016,9 @@ export default function ActivityDetailPanel({
             organizerName: activity.organizerName,
             raidLeaderPlayerId: activity.raidLeaderPlayerId,
             raidLeaderName: activity.raidLeaderName,
+            galleonCalledByPlayerId: activity.galleonCalledByPlayerId,
+            galleonCalledByName: activity.galleonCalledByName,
+            galleonConfirmed: activity.galleonConfirmed,
           }}
         />
 

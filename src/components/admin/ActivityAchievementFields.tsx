@@ -12,7 +12,7 @@ const BOSS_LABELS: Record<string, string> = {
   xanatos: "Ксанатос",
 };
 
-type RosterPlayer = { id: string; name: string; fullParticipation: boolean };
+type RosterPlayer = { id: string; name: string; fullParticipation: boolean; pvpKills: number; honorPoints: number };
 
 type Fields = {
   bossKey: string | null;
@@ -25,6 +25,9 @@ type Fields = {
   organizerName: string | null;
   raidLeaderPlayerId: string | null;
   raidLeaderName: string | null;
+  galleonCalledByPlayerId: string | null;
+  galleonCalledByName: string | null;
+  galleonConfirmed: boolean;
 };
 
 /**
@@ -65,7 +68,12 @@ export default function ActivityAchievementFields({
   const [guildDefense, setGuildDefense] = useState(fields.guildDefense);
   const [organizerPlayerId, setOrganizerPlayerId] = useState(fields.organizerPlayerId ?? "");
   const [raidLeaderPlayerId, setRaidLeaderPlayerId] = useState(fields.raidLeaderPlayerId ?? "");
+  const [galleonCalledByPlayerId, setGalleonCalledByPlayerId] = useState(fields.galleonCalledByPlayerId ?? "");
+  const [galleonConfirmed, setGalleonConfirmed] = useState(fields.galleonConfirmed);
   const [fullIds, setFullIds] = useState<Set<string>>(new Set(roster.filter((p) => p.fullParticipation).map((p) => p.id)));
+  const [pvpStats, setPvpStats] = useState<Map<string, { kills: string; honor: string }>>(
+    new Map(roster.map((p) => [p.id, { kills: String(p.pvpKills || 0), honor: String(p.honorPoints || 0) }]))
+  );
 
   const isMiniBoss = category === "Мини-РБ";
   const isPvP = mode === "PvP";
@@ -81,7 +89,19 @@ export default function ActivityAchievementFields({
     setGuildDefense(fields.guildDefense);
     setOrganizerPlayerId(fields.organizerPlayerId ?? "");
     setRaidLeaderPlayerId(fields.raidLeaderPlayerId ?? "");
+    setGalleonCalledByPlayerId(fields.galleonCalledByPlayerId ?? "");
+    setGalleonConfirmed(fields.galleonConfirmed);
     setFullIds(new Set(roster.filter((p) => p.fullParticipation).map((p) => p.id)));
+    setPvpStats(new Map(roster.map((p) => [p.id, { kills: String(p.pvpKills || 0), honor: String(p.honorPoints || 0) }])));
+  }
+
+  function setStat(id: string, field: "kills" | "honor", value: string) {
+    setPvpStats((prev) => {
+      const next = new Map(prev);
+      const current = next.get(id) ?? { kills: "0", honor: "0" };
+      next.set(id, { ...current, [field]: value });
+      return next;
+    });
   }
 
   function toggleFull(id: string) {
@@ -109,7 +129,15 @@ export default function ActivityAchievementFields({
           guildDefense,
           organizerPlayerId: organizerPlayerId || null,
           raidLeaderPlayerId: raidLeaderPlayerId || null,
+          galleonCalledByPlayerId: galleonCalledByPlayerId || null,
+          galleonConfirmed,
           fullParticipantIds: [...fullIds],
+          pvpStats: isPvP
+            ? roster.map((p) => {
+                const s = pvpStats.get(p.id) ?? { kills: "0", honor: "0" };
+                return { playerId: p.id, pvpKills: Number(s.kills) || 0, honorPoints: Number(s.honor) || 0 };
+              })
+            : undefined,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -135,6 +163,7 @@ export default function ActivityAchievementFields({
     if (fields.pvpResult) notes.push(`Результат: ${fields.pvpResult}`);
     if (fields.organizerName) notes.push(`Организатор: ${fields.organizerName}`);
     if (fields.raidLeaderName) notes.push(`Рейд-лидер: ${fields.raidLeaderName}`);
+    if (fields.galleonConfirmed && fields.galleonCalledByName) notes.push(`Галеон призвал: ${fields.galleonCalledByName}`);
     if (notes.length === 0) return null;
     return (
       <div className="rounded-lg border border-border bg-surface p-4">
@@ -236,6 +265,44 @@ export default function ActivityAchievementFields({
                   Защита гильдии
                 </label>
               </div>
+
+              {roster.length > 0 && (
+                <div>
+                  <p className="mb-1 text-[11px] text-muted">
+                    Убийства и честь — по каждому участнику: в одном бою они не поровну.
+                  </p>
+                  <div className="space-y-1.5">
+                    {roster.map((p) => {
+                      const s = pvpStats.get(p.id) ?? { kills: "0", honor: "0" };
+                      return (
+                        <div key={p.id} className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="w-28 flex-shrink-0 truncate">{p.name}</span>
+                          <label className="flex items-center gap-1">
+                            Убийств:
+                            <input
+                              type="number"
+                              min={0}
+                              value={s.kills}
+                              onChange={(e) => setStat(p.id, "kills", e.target.value)}
+                              className="w-16 rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs"
+                            />
+                          </label>
+                          <label className="flex items-center gap-1">
+                            Честь:
+                            <input
+                              type="number"
+                              min={0}
+                              value={s.honor}
+                              onChange={(e) => setStat(p.id, "honor", e.target.value)}
+                              className="w-20 rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs"
+                            />
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </fieldset>
           )}
 
@@ -271,6 +338,31 @@ export default function ActivityAchievementFields({
                     </option>
                   ))}
                 </select>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset className="space-y-2 rounded-md border border-border p-2.5">
+            <legend className="px-1 text-xs font-medium text-muted">Боевой галеон</legend>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs">
+                Призвал:
+                <select
+                  value={galleonCalledByPlayerId}
+                  onChange={(e) => setGalleonCalledByPlayerId(e.target.value)}
+                  className="rounded-md border border-border bg-surface-2 px-2 py-1.5 text-xs"
+                >
+                  <option value="">Не призывался</option>
+                  {roster.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-xs">
+                <input type="checkbox" checked={galleonConfirmed} onChange={(e) => setGalleonConfirmed(e.target.checked)} />
+                Подтверждено
               </label>
             </div>
           </fieldset>

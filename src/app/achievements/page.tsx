@@ -6,6 +6,7 @@ import AchievementsView, { type RatingRow } from "@/components/achievements/Achi
 import { getAchievementsStartedAt } from "@/lib/achievements/start";
 import { buildAchievements, getMetricsForAllPlayers } from "@/lib/achievements/progress";
 import { MAX_POINTS_PER_CHAIN } from "@/lib/achievements/tiers";
+import { getActiveTiers } from "@/lib/achievements/thresholds";
 import { ACHIEVEMENTS } from "@/lib/achievements/catalog";
 
 export default async function AchievementsPage() {
@@ -30,18 +31,19 @@ export default async function AchievementsPage() {
     );
   }
 
-  const [startedAt, metrics, players, me] = await Promise.all([
+  const [startedAt, metrics, players, me, tiers] = await Promise.all([
     getAchievementsStartedAt(),
     getMetricsForAllPlayers(),
     prisma.player.findMany({ select: { id: true, name: true, role: true } }),
     prisma.player.findUnique({ where: { userId: user.sub }, select: { id: true } }),
+    getActiveTiers(),
   ]);
 
   const byId = new Map(players.map((p) => [p.id, p]));
 
   const rating: RatingRow[] = [...metrics.entries()]
     .map(([playerId, m]) => {
-      const built = buildAchievements(m, MAX_POINTS_PER_CHAIN);
+      const built = buildAchievements(m, MAX_POINTS_PER_CHAIN, tiers);
       const p = byId.get(playerId);
       return {
         playerId,
@@ -53,11 +55,11 @@ export default async function AchievementsPage() {
     })
     .sort((a, b) => b.points - a.points || b.tiers - a.tiers || a.name.localeCompare(b.name, "ru"));
 
-  const mineBuilt = me ? buildAchievements(metrics.get(me.id) ?? {}, MAX_POINTS_PER_CHAIN) : null;
+  const mineBuilt = me ? buildAchievements(metrics.get(me.id) ?? {}, MAX_POINTS_PER_CHAIN, tiers) : null;
 
   // «Все достижения» показываем каталогом без чужого прогресса: это справочник
   // условий, а не чей-то список.
-  const catalogOnly = buildAchievements({}, MAX_POINTS_PER_CHAIN);
+  const catalogOnly = buildAchievements({}, MAX_POINTS_PER_CHAIN, tiers);
 
   return (
     <AchievementsView
@@ -73,6 +75,7 @@ export default async function AchievementsPage() {
       isAdmin={isFullAdminRole(user.role)}
       meId={me?.id ?? null}
       readyCount={ACHIEVEMENTS.filter((a) => a.source === "ready").length}
+      thresholds={tiers.map((t) => t.threshold)}
     />
   );
 }

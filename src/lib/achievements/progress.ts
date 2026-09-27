@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ACHIEVEMENTS, BOSS_ALIASES, type AchievementDef } from "@/lib/achievements/catalog";
-import { chainProgress, type ChainProgress } from "@/lib/achievements/tiers";
+import { chainProgress, DEFAULT_TIERS, type ChainProgress, type TierDef } from "@/lib/achievements/tiers";
 import { daysBetween, getAchievementsStartedAt, tenureStart } from "@/lib/achievements/start";
 
 /**
@@ -42,6 +42,8 @@ type Participation = {
   pvpGuildRaid: boolean;
   guildDefense: boolean;
   fullParticipation: boolean;
+  pvpKills: number;
+  honorPoints: number;
 };
 
 /** Участия всех игроков в активностях, случившихся после запуска системы. */
@@ -51,6 +53,8 @@ async function loadParticipations(startedAt: Date): Promise<Participation[]> {
     select: {
       playerId: true,
       fullParticipation: true,
+      pvpKills: true,
+      honorPoints: true,
       activity: {
         select: {
           name: true,
@@ -82,6 +86,8 @@ async function loadParticipations(startedAt: Date): Promise<Participation[]> {
     pvpGuildRaid: r.activity.pvpGuildRaid,
     guildDefense: r.activity.guildDefense,
     fullParticipation: r.fullParticipation,
+    pvpKills: r.pvpKills,
+    honorPoints: r.honorPoints,
   }));
 }
 
@@ -104,6 +110,53 @@ async function loadLeadershipCounts(startedAt: Date): Promise<{
     if (r.raidLeaderPlayerId) raidLeader.set(r.raidLeaderPlayerId, (raidLeader.get(r.raidLeaderPlayerId) ?? 0) + 1);
   }
   return { organizer, raidLeader };
+}
+
+/** Мероприятия после запуска с подтверждённым призывом галеона, по игроку. */
+async function loadGalleonCounts(startedAt: Date): Promise<Map<string, number>> {
+  const rows = await prisma.activity.findMany({
+    where: { date: { gte: startedAt }, galleonConfirmed: true, galleonCalledByPlayerId: { not: null } },
+    select: { galleonCalledByPlayerId: true },
+  });
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const id = r.galleonCalledByPlayerId!;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Подтверждённые завершённые занятия наставничества после запуска, по наставнику. */
+async function loadMentorCounts(startedAt: Date): Promise<Map<string, number>> {
+  const rows = await prisma.mentorSession.findMany({
+    where: { date: { gte: startedAt }, confirmed: true },
+    select: { mentorPlayerId: true },
+  });
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.mentorPlayerId, (counts.get(r.mentorPlayerId) ?? 0) + 1);
+  return counts;
+}
+
+/** Выполненные заявки на помощь после запуска, по игроку. */
+async function loadHelpRequestCounts(startedAt: Date): Promise<Map<string, number>> {
+  const rows = await prisma.helpRequest.findMany({
+    where: { date: { gte: startedAt }, status: "Выполнено" },
+    select: { playerId: true },
+  });
+  const counts = new Map<string, number>();
+  for (const r of rows) counts.set(r.playerId, (counts.get(r.playerId) ?? 0) + 1);
+  return counts;
+}
+
+/**
+ * Подтверждённые пожертвования — за всё время, без отсечки по дате запуска,
+ * тем же решением, что и остальное золото.
+ */
+async function loadDonationTotals(): Promise<Map<string, number>> {
+  const rows = await prisma.donation.findMany({ where: { confirmed: true }, select: { playerId: true, amount: true } });
+  const totals = new Map<string, number>();
+  for (const r of rows) totals.set(r.playerId, (totals.get(r.playerId) ?? 0) + r.amount);
+  return totals;
 }
 
 /**
@@ -129,6 +182,8 @@ function emptyMetrics(): MetricValues {
     "pvp.victories": 0,
     "pvp.guildRaids": 0,
     "pvp.defense": 0,
+    "pvp.kills": 0,
+    "pvp.honor": 0,
     "boss.kraken": 0,
     "boss.leviathan": 0,
     "boss.calidis": 0,
@@ -142,9 +197,13 @@ function emptyMetrics(): MetricValues {
     "act.full": 0,
     "help.organizer": 0,
     "help.raidLeader": 0,
+    "help.galleon": 0,
+    "help.mentor": 0,
+    "help.requests": 0,
     "gold.earned": 0,
     "gold.prime": 0,
     "gold.mini": 0,
+    "gold.donations": 0,
     "gold.paid": 0,
     "tenure.days": 0,
     "tenure.primeDays": 0,
@@ -156,10 +215,14 @@ function emptyMetrics(): MetricValues {
 export async function getMetricsForAllPlayers(now = new Date()): Promise<Map<string, MetricValues>> {
   const startedAt = await getAchievementsStartedAt(now);
 
-  const [players, parts, leadership, gold] = await Promise.all([
+  const [players, parts, leadership, galleon, mentor, helpRequests, donations, gold] = await Promise.all([
     prisma.player.findMany({ select: { id: true, createdAt: true } }),
     loadParticipations(startedAt),
     loadLeadershipCounts(startedAt),
+    loadGalleonCounts(startedAt),
+    loadMentorCounts(startedAt),
+    loadHelpRequestCounts(startedAt),
+    loadDonationTotals(),
     loadGold(),
   ]);
 
@@ -172,6 +235,10 @@ export async function getMetricsForAllPlayers(now = new Date()): Promise<Map<str
     m["tenure.days"] = daysBetween(tenureStart(p.createdAt, startedAt), now);
     m["help.organizer"] = leadership.organizer.get(p.id) ?? 0;
     m["help.raidLeader"] = leadership.raidLeader.get(p.id) ?? 0;
+    m["help.galleon"] = galleon.get(p.id) ?? 0;
+    m["help.mentor"] = mentor.get(p.id) ?? 0;
+    m["help.requests"] = helpRequests.get(p.id) ?? 0;
+    m["gold.donations"] = donations.get(p.id) ?? 0;
     byPlayer.set(p.id, m);
     dayBuckets.set(p.id, { all: new Set(), prime: new Set(), mini: new Set() });
   }
@@ -193,6 +260,8 @@ export async function getMetricsForAllPlayers(now = new Date()): Promise<Map<str
       if (part.pvpResult === VICTORY) m["pvp.victories"] += 1;
       if (part.pvpGuildRaid) m["pvp.guildRaids"] += 1;
       if (part.guildDefense) m["pvp.defense"] += 1;
+      m["pvp.kills"] += part.pvpKills;
+      m["pvp.honor"] += part.honorPoints;
     }
 
     if (part.category === "Мини-РБ") {
@@ -252,12 +321,16 @@ export type PlayerAchievements = {
 };
 
 /** Превращает значения метрик в состояние всех 30 цепочек. */
-export function buildAchievements(metrics: MetricValues, maxPerChain: number): PlayerAchievements {
+export function buildAchievements(
+  metrics: MetricValues,
+  maxPerChain: number,
+  tiers: readonly TierDef[] = DEFAULT_TIERS
+): PlayerAchievements {
   const items = ACHIEVEMENTS.map<AchievementState>((def) => ({
     ...def,
     // У цепочек без источника прогресса нет вовсе — ноль тут был бы враньём
     // не меньшим, чем выдуманное число.
-    progress: def.source === "ready" ? chainProgress(metrics[def.key] ?? 0) : null,
+    progress: def.source === "ready" ? chainProgress(metrics[def.key] ?? 0, tiers) : null,
   }));
 
   return {

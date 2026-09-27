@@ -37,6 +37,28 @@ export async function applyRosterDiff(
   return { added: toAdd, removed: toRemove, kept: [...existingIds].filter((pid) => nextIds.has(pid)) };
 }
 
+/**
+ * Записывает убийства и очки чести по каждому участнику PvP-события.
+ *
+ * Задаётся по одному игроку за раз, а не суммой на активность: в одном бою
+ * участники убивают и получают честь по-разному, и одна общая цифра на
+ * активность размазала бы её поровну или ушла бы только одному.
+ */
+export async function applyPvpStats(
+  tx: Prisma.TransactionClient,
+  activityId: string,
+  stats: { playerId: string; pvpKills: number; honorPoints: number }[]
+) {
+  await Promise.all(
+    stats.map((s) =>
+      tx.activityParticipant.updateMany({
+        where: { activityId, playerId: s.playerId },
+        data: { pvpKills: Math.max(0, Math.round(s.pvpKills)), honorPoints: Math.max(0, Math.round(s.honorPoints)) },
+      })
+    )
+  );
+}
+
 /** Отмечает полное участие ровно тем, кто в списке; остальным из состава снимает. */
 export async function applyFullParticipation(
   tx: Prisma.TransactionClient,

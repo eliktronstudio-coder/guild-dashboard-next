@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Crown } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import AchievementsBrowser from "./AchievementsBrowser";
+import AchievementManagement from "./AchievementManagement";
 import type { AchievementState } from "@/lib/achievements/progress";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
@@ -28,6 +29,7 @@ export default function AchievementsView({
   isAdmin,
   meId,
   readyCount,
+  thresholds,
 }: {
   /** Прогресс вошедшего игрока; null — учётка не привязана к составу. */
   mine: AchievementState[] | null;
@@ -38,6 +40,7 @@ export default function AchievementsView({
   isAdmin: boolean;
   meId: string | null;
   readyCount: number;
+  thresholds: number[];
 }) {
   const tabs = ["Мои достижения", "Все достижения", "Рейтинг", ...(isAdmin ? ["Управление"] : [])];
   const [tab, setTab] = useState(tabs[0]);
@@ -102,17 +105,15 @@ export default function AchievementsView({
             Она записывается один раз и не меняется при перезапуске или миграции — иначе гильдия разом получила бы
             прогресс за старые заслуги.
           </div>
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-500">
-            Настройка порогов и редактирование названий пока не подключены. Сейчас действуют значения из задания:
-            10 / 20 / 50 / 100 / 500 / 1000.
-          </div>
           <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm">
             <p className="font-medium">Источники данных</p>
             <p className="mt-1 text-muted">
-              Считается {readyCount} цепочек из {all.length}. Остальным нужны новые поля в формах — до этого они
-              показывают «Источник данных не настроен» и очков не дают.
+              {readyCount === all.length
+                ? `Считаются все ${all.length} цепочек — источник настроен для каждой.`
+                : `Считается ${readyCount} цепочек из ${all.length}. Остальным нужны новые поля в формах — до этого они показывают «Источник данных не настроен» и очков не дают.`}
             </p>
           </div>
+          <AchievementManagement initialThresholds={thresholds} />
         </div>
       )}
     </div>

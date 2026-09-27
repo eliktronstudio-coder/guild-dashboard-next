@@ -288,16 +288,20 @@ test("отмена выплаты уменьшает начисленное, а 
 
 /* ——— Сборка состояния цепочек ——— */
 
-test("цепочки без источника не получают ни очков, ни нулевого прогресса", async () => {
+test("все 30 цепочек теперь обеспечены источником и считаются", async () => {
   const built = progress.buildAchievements({ "act.prime": 1000 }, 410);
 
   const ready = built.items.find((i) => i.key === "act.prime")!;
   assert.equal(ready.progress?.level, 6, "обеспеченная данными цепочка считается");
   assert.equal(ready.progress?.points, 410);
 
-  const pending = built.items.find((i) => i.key === "pvp.honor")!;
-  assert.equal(pending.progress, null, "источника нет — прогресса нет, а не ноль");
-  assert.equal(pending.source, "pending");
+  // Раньше здесь проверялась цепочка без источника (progress === null, а не
+  // ноль — иначе выдуманное число было бы не лучше отсутствующего источника).
+  // Сейчас источник настроен для всех 30, но сама ветка buildAchievements
+  // (source !== "ready" → progress: null) остаётся в коде на случай, если
+  // появится новое достижение без источника.
+  assert.ok(built.items.every((i) => i.source === "ready"), "все достижения обеспечены источником");
+  assert.ok(built.items.every((i) => i.progress !== null), "у всех есть прогресс, а не заглушка");
 });
 
 test("итоги игрока складываются только из обеспеченных цепочек", async () => {
@@ -434,20 +438,84 @@ test("полное участие отмечается вручную, посе�
 
 /* ——— Каталог: 12 достижений действительно переведены в ready ——— */
 
-test("12 достижений на Activity/ActivityParticipant больше не 'pending'", async () => {
+test("все 30 достижений на реальных моделях считаются 'ready'", async () => {
   const { ACHIEVEMENTS } = await import("../src/lib/achievements/catalog");
   const nowReady = [
     "pvp.victories", "pvp.guildRaids", "pvp.defense",
     "boss.kraken", "boss.leviathan", "boss.calidis", "boss.xanatos", "boss.worldAny", "boss.miniKills",
     "help.organizer", "help.raidLeader", "act.full",
+    // Вторая волна: PvP-убийства и честь по каждому участнику, галеон на
+    // активности, наставничество/заявки/пожертвования — отдельными моделями.
+    "pvp.kills", "pvp.honor", "help.galleon", "help.mentor", "help.requests", "gold.donations",
   ];
   for (const key of nowReady) {
     const def = ACHIEVEMENTS.find((a) => a.key === key)!;
     assert.equal(def.source, "ready", `${key} должно считаться данными`);
   }
-  const stillPending = ["pvp.kills", "pvp.honor", "help.galleon", "help.mentor", "help.requests", "gold.donations"];
-  for (const key of stillPending) {
-    const def = ACHIEVEMENTS.find((a) => a.key === key)!;
-    assert.equal(def.source, "pending", `${key} пока не обеспечено данными`);
-  }
+  assert.equal(ACHIEVEMENTS.filter((a) => a.source === "pending").length, 0, "источника не хватает нигде");
+});
+
+/* ——— Вторая волна источников: PvP-убийства/честь, галеон, наставник, заявки, донаты ——— */
+
+test("убийства и честь в PvP считаются по каждому участнику отдельно", async () => {
+  await reset();
+  const [a, b] = await Promise.all([makePlayer("А"), makePlayer("Б")]);
+  const activity = await prisma.activity.create({
+    data: { name: "Осада", category: "Прайм", mode: "PvP", date: AFTER },
+  });
+  await prisma.activityParticipant.createMany({
+    data: [
+      { activityId: activity.id, playerId: a.id, pvpKills: 5, honorPoints: 120 },
+      { activityId: activity.id, playerId: b.id, pvpKills: 1, honorPoints: 30 },
+    ],
+  });
+
+  const mA = await metricsFor(a.id);
+  const mB = await metricsFor(b.id);
+  assert.equal(mA["pvp.kills"], 5);
+  assert.equal(mA["pvp.honor"], 120);
+  assert.equal(mB["pvp.kills"], 1, "у второго участника свои цифры, не сумма боя");
+  assert.equal(mB["pvp.honor"], 30);
+});
+
+test("призыв галеона засчитывается только при подтверждении", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await prisma.activity.create({
+    data: { name: "Рейд", category: "Прайм", date: AFTER, galleonCalledByPlayerId: p.id, galleonConfirmed: false },
+  });
+  await prisma.activity.create({
+    data: { name: "Рейд 2", category: "Прайм", date: AFTER, galleonCalledByPlayerId: p.id, galleonConfirmed: true },
+  });
+
+  assert.equal((await metricsFor(p.id))["help.galleon"], 1, "только подтверждённый призыв");
+});
+
+test("наставничество считает только подтверждённые завершённые занятия", async () => {
+  await reset();
+  const mentor = await makePlayer("Наставник");
+  await prisma.mentorSession.create({ data: { mentorPlayerId: mentor.id, date: AFTER, confirmed: false } });
+  await prisma.mentorSession.create({ data: { mentorPlayerId: mentor.id, date: AFTER, confirmed: true } });
+  await prisma.mentorSession.create({ data: { mentorPlayerId: mentor.id, date: BEFORE, confirmed: true } });
+
+  assert.equal((await metricsFor(mentor.id))["help.mentor"], 1, "неподтверждённое и старое не считаются");
+});
+
+test("заявка на помощь считается только со статусом «Выполнено»", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await prisma.helpRequest.create({ data: { playerId: p.id, description: "Помочь с крафтом", status: "Ожидает", date: AFTER } });
+  await prisma.helpRequest.create({ data: { playerId: p.id, description: "Помочь с рейдом", status: "Выполнено", date: AFTER } });
+  await prisma.helpRequest.create({ data: { playerId: p.id, description: "Отказано", status: "Отклонено", date: AFTER } });
+
+  assert.equal((await metricsFor(p.id))["help.requests"], 1);
+});
+
+test("пожертвования считаются подтверждёнными и за всё время, как остальное золото", async () => {
+  await reset();
+  const p = await makePlayer("А");
+  await prisma.donation.create({ data: { playerId: p.id, amount: 1000, confirmed: true, date: BEFORE } });
+  await prisma.donation.create({ data: { playerId: p.id, amount: 500, confirmed: false, date: AFTER } });
+
+  assert.equal((await metricsFor(p.id))["gold.donations"], 1000, "неподтверждённое не считается, старое — считается");
 });

@@ -368,6 +368,7 @@ export async function getActivityById(id: string) {
       addedBy: { select: { username: true } },
       organizer: { select: { id: true, name: true } },
       raidLeader: { select: { id: true, name: true } },
+      galleonCalledBy: { select: { id: true, name: true } },
     },
   });
   if (!activity) return null;
@@ -393,7 +394,12 @@ export async function getActivityById(id: string) {
     dateIso: activity.date.toISOString().slice(0, 10),
     dropTotal,
     roleCounts,
-    roster: activity.participants.map((p) => ({ ...p.player, fullParticipation: p.fullParticipation })),
+    roster: activity.participants.map((p) => ({
+      ...p.player,
+      fullParticipation: p.fullParticipation,
+      pvpKills: p.pvpKills,
+      honorPoints: p.honorPoints,
+    })),
     // Достижения: факты, подтверждаемые вручную, — участие сам по себе ни
     // убийством, ни победой, ни полным присутствием не является.
     bossKey: activity.bossKey,
@@ -406,6 +412,9 @@ export async function getActivityById(id: string) {
     organizerName: activity.organizer?.name ?? null,
     raidLeaderPlayerId: activity.raidLeaderPlayerId,
     raidLeaderName: activity.raidLeader?.name ?? null,
+    galleonCalledByPlayerId: activity.galleonCalledByPlayerId,
+    galleonCalledByName: activity.galleonCalledBy?.name ?? null,
+    galleonConfirmed: activity.galleonConfirmed,
     drops: activity.drops.map((d) => ({
       id: d.id,
       item: d.item,

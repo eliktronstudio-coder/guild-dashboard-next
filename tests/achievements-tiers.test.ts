@@ -147,25 +147,23 @@ test("все стартовые достижения открытые, не се
   assert.equal(ACHIEVEMENTS.filter((a) => a.secret).length, 0);
 });
 
-test("цепочки без источника честно помечены", () => {
+test("все 30 цепочек теперь обеспечены источником данных", () => {
   // Подставлять похожие данные нельзя: посещение рейда не равно убийству
-  // босса. Такие карточки показывают «Источник данных не настроен».
-  // pvp.kills и pvp.honor остаются pending: нужны отдельные поля учёта
-  // убийств и очков чести именно в PvP, их пока нет.
-  const pending = ACHIEVEMENTS.filter((a) => a.source === "pending").map((a) => a.key);
-  assert.ok(pending.includes("pvp.kills"), "убийств в PvP в данных нет");
-  assert.ok(pending.includes("pvp.honor"), "очков чести в данных нет");
-  assert.ok(pending.includes("help.galleon"), "призывы галеона не фиксируются");
-  assert.ok(pending.includes("help.mentor"), "занятия наставничества не фиксируются");
-  assert.ok(pending.includes("help.requests"), "заявки на помощь не фиксируются");
-  assert.ok(pending.includes("gold.donations"), "пожертвования не фиксируются");
+  // босса. Пока источника нет, карточка честно показывает «Источник данных
+  // не настроен» — это проверяется отдельно, в buildAchievements.
+  const pending = ACHIEVEMENTS.filter((a) => a.source === "pending");
+  assert.deepEqual(pending, [], "источник настроен для всех 30 достижений");
 
-  // Ставки, боссы, оргеры и полное участие теперь обеспечены полями Activity
-  // и ActivityParticipant (bossKey, bossKillConfirmed, pvpResult,
-  // organizerPlayerId, raidLeaderPlayerId, fullParticipation).
   const ready = ACHIEVEMENTS.filter((a) => a.source === "ready").map((a) => a.key);
+  assert.equal(ready.length, 30);
   assert.ok(ready.includes("act.prime"), "посещение праймов в данных есть");
   assert.ok(ready.includes("gold.paid"), "выплаты в данных есть");
+  assert.ok(ready.includes("pvp.kills"), "убийства в PvP теперь по каждому участнику");
+  assert.ok(ready.includes("pvp.honor"), "честь в PvP теперь по каждому участнику");
+  assert.ok(ready.includes("help.galleon"), "призыв галеона теперь фиксируется на активности");
+  assert.ok(ready.includes("help.mentor"), "занятия наставничества — отдельная модель");
+  assert.ok(ready.includes("help.requests"), "заявки на помощь — отдельная модель");
+  assert.ok(ready.includes("gold.donations"), "пожертвования — отдельная модель");
   assert.ok(ready.includes("boss.kraken"), "подтверждённое убийство босса теперь фиксируется");
   assert.ok(ready.includes("act.full"), "полное участие теперь отмечается вручную");
 });

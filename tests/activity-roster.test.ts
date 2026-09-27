@@ -120,3 +120,42 @@ test("applyFullParticipation отмечает ровно указанных, о�
   assert.equal(byPlayer.get(a.id), false, "снято, раз его больше нет в списке");
   assert.equal(byPlayer.get(b.id), true);
 });
+
+test("applyPvpStats записывает убийства и честь по каждому участнику отдельно", async () => {
+  await reset();
+  const [a, b] = await Promise.all([
+    prisma.player.create({ data: { name: "А", role: "ДД" } }),
+    prisma.player.create({ data: { name: "Б", role: "ДД" } }),
+  ]);
+  const activity = await prisma.activity.create({
+    data: { name: "Осада", category: "Прайм", mode: "PvP", participants: { create: [{ playerId: a.id }, { playerId: b.id }] } },
+  });
+
+  await prisma.$transaction((tx) =>
+    roster.applyPvpStats(tx, activity.id, [
+      { playerId: a.id, pvpKills: 5, honorPoints: 120 },
+      { playerId: b.id, pvpKills: 1, honorPoints: 30 },
+    ])
+  );
+
+  const parts = await prisma.activityParticipant.findMany({ where: { activityId: activity.id } });
+  const byPlayer = new Map(parts.map((p) => [p.playerId, p]));
+  assert.equal(byPlayer.get(a.id)!.pvpKills, 5);
+  assert.equal(byPlayer.get(a.id)!.honorPoints, 120);
+  assert.equal(byPlayer.get(b.id)!.pvpKills, 1, "у второго свои цифры, не сумма боя");
+  assert.equal(byPlayer.get(b.id)!.honorPoints, 30);
+});
+
+test("applyPvpStats не принимает отрицательные значения", async () => {
+  await reset();
+  const a = await prisma.player.create({ data: { name: "А", role: "ДД" } });
+  const activity = await prisma.activity.create({
+    data: { name: "Осада", category: "Прайм", mode: "PvP", participants: { create: [{ playerId: a.id }] } },
+  });
+
+  await prisma.$transaction((tx) => roster.applyPvpStats(tx, activity.id, [{ playerId: a.id, pvpKills: -3, honorPoints: -10 }]));
+
+  const part = await prisma.activityParticipant.findFirst({ where: { activityId: activity.id } });
+  assert.equal(part!.pvpKills, 0, "отрицательное убийство обнуляется, а не остаётся долгом");
+  assert.equal(part!.honorPoints, 0);
+});

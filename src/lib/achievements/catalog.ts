@@ -73,20 +73,20 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     category: "PvP",
     title: "Клинок войны",
     condition: "Убийства игроков в PvP",
-    note: "Требует учёта убийств в карточке PvP-события.",
+    note: "Указывается по каждому участнику отдельно: в одном бою убивают не все поровну.",
     unit: "убийства",
     icon: "blood-blade",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "pvp.honor",
     category: "PvP",
     title: "Честь в бою",
     condition: "Очки чести, полученные именно в PvP",
-    note: "Требует поля очков чести у PvP-события.",
+    note: "Указывается по каждому участнику отдельно, как и убийства.",
     unit: "очки чести",
     icon: "honor-medal",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "pvp.victories",
@@ -242,7 +242,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Подтверждённые призывы боевого галеона для мероприятий",
     unit: "события",
     icon: "galleon",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "help.raidLeader",
@@ -260,7 +260,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Подтверждённые завершённые занятия помощи новичкам",
     unit: "события",
     icon: "mentor",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "help.requests",
@@ -269,7 +269,7 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     condition: "Выполненные и подтверждённые заявки на помощь гильдии",
     unit: "события",
     icon: "helping-hand",
-    source: "pending",
+    source: "ready",
   },
 
   /* ——— Золото ——— */
@@ -306,9 +306,10 @@ export const ACHIEVEMENTS: readonly AchievementDef[] = [
     category: "Золото",
     title: "Вклад в общее дело",
     condition: "Подтверждённые добровольные пожертвования в казну",
+    note: "Учитывается отдельной записью для достижений и не подмешивается в баланс казны на других страницах.",
     unit: "золото",
     icon: "donation-chest",
-    source: "pending",
+    source: "ready",
   },
   {
     key: "gold.paid",

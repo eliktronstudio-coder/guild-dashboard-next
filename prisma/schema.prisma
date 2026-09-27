@@ -40,6 +40,17 @@ model Player {
   auctionBids         AuctionBid[]
   organizedActivities Activity[]            @relation("ActivityOrganizer")
   ledActivities       Activity[]            @relation("ActivityRaidLeader")
+  galleonCalls        Activity[]            @relation("ActivityGalleonCaller")
+  mentorSessions      MentorSession[]       @relation("MentorSessionMentor")
+  menteeSessions      MentorSession[]       @relation("MentorSessionMentee")
+  helpRequests        HelpRequest[]
+  donations           Donation[]
+  /// До трёх ключей достижений (src/lib/achievements/catalog.ts) в виде JSON-
+  /// массива строк, например ["gold.paid","act.prime"]. Выбирает сам игрок на
+  /// своей странице. Храним ключи, а не готовые карточки: если каталог
+  /// поменяется, закрепление не превратится в мусор — просто перестанет
+  /// находить достижение и тихо пропустится при отрисовке.
+  pinnedAchievements  String?
 }
 
 model Activity {
@@ -75,30 +86,38 @@ model Activity {
   /// Ключ босса из BOSS_ALIASES (src/lib/achievements/catalog.ts), null — не
   /// боссовая активность. Хранится ключом, а не именем: имена дублируются
   /// («Левиафан» / «Разъярённый Левиафан»), а ключ один на группу алиасов.
-  bossKey            String?
+  bossKey                 String?
   /// Подтверждает ГМ/РЛ вручную: факт участия в рейде не значит, что босс
   /// убит — это ровно то смешение, которое запрещено достижениями.
-  bossKillConfirmed  Boolean @default(false)
+  bossKillConfirmed       Boolean @default(false)
   /// Сколько убийств засчитывается этой записью. Один рейд — одно посещение,
   /// но может дать несколько убийств (актуально для мини-РБ).
-  killCount          Int     @default(1)
+  killCount               Int     @default(1)
   /// Победа | Поражение | null — не указан. Участие само по себе победой
   /// не является.
-  pvpResult          String?
+  pvpResult               String?
   /// Отмечает гильдейский PvP-рейд отдельно от обычного PvP.
-  pvpGuildRaid       Boolean @default(false)
+  pvpGuildRaid            Boolean @default(false)
   /// Отмечает событие защиты гильдии.
-  guildDefense       Boolean @default(false)
-  organizerPlayerId  String?
-  organizer          Player? @relation("ActivityOrganizer", fields: [organizerPlayerId], references: [id], onDelete: SetNull)
-  raidLeaderPlayerId String?
-  raidLeader         Player? @relation("ActivityRaidLeader", fields: [raidLeaderPlayerId], references: [id], onDelete: SetNull)
+  guildDefense            Boolean @default(false)
+  organizerPlayerId       String?
+  organizer               Player? @relation("ActivityOrganizer", fields: [organizerPlayerId], references: [id], onDelete: SetNull)
+  raidLeaderPlayerId      String?
+  raidLeader              Player? @relation("ActivityRaidLeader", fields: [raidLeaderPlayerId], references: [id], onDelete: SetNull)
+  /// Игрок, призвавший боевой галеон для этого мероприятия. Время призыва
+  /// отдельно не хранится — активность и так привязана к дате.
+  galleonCalledByPlayerId String?
+  galleonCalledBy         Player? @relation("ActivityGalleonCaller", fields: [galleonCalledByPlayerId], references: [id], onDelete: SetNull)
+  /// Подтверждает ГМ/РЛ: сам факт выбора игрока в поле выше ничего не значит,
+  /// пока не отмечено явно.
+  galleonConfirmed        Boolean @default(false)
 
   @@index([archiveId])
   @@index([periodId])
   @@index([bossKey])
   @@index([organizerPlayerId])
   @@index([raidLeaderPlayerId])
+  @@index([galleonCalledByPlayerId])
 }
 
 model ActivityGuest {
@@ -128,6 +147,11 @@ model ActivityParticipant {
   /// Отмечается вручную, отдельно от факта посещения: досидел до конца
   /// рейда, а не просто зашёл и вышел.
   fullParticipation Boolean @default(false)
+  /// Убийства игроков и очки чести, полученные ИМЕННО этим игроком в этом
+  /// PvP-событии. Хранится на строке участника, а не на активности целиком:
+  /// в одном бою разные участники убивают и получают честь по-разному.
+  pvpKills          Int     @default(0)
+  honorPoints       Int     @default(0)
 
   @@unique([activityId, playerId])
 }
@@ -441,4 +465,53 @@ model AppSetting {
   value     String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+/// Занятие наставничества: один игрок помогает другому освоиться. Не привязано
+/// к активности — это отдельная встреча, не рейд.
+model MentorSession {
+  id             String   @id @default(cuid())
+  mentorPlayerId String
+  mentor         Player   @relation("MentorSessionMentor", fields: [mentorPlayerId], references: [id], onDelete: Cascade)
+  menteePlayerId String?
+  mentee         Player?  @relation("MentorSessionMentee", fields: [menteePlayerId], references: [id], onDelete: SetNull)
+  /// Кого учили, если ученик не зарегистрирован на сайте.
+  menteeName     String?
+  date           DateTime @default(now())
+  /// Подтверждает ГМ/РЛ: занятие состоялось и доведено до конца.
+  confirmed      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([mentorPlayerId])
+}
+
+/// Заявка на помощь гильдии — не привязана к конкретному мероприятию.
+model HelpRequest {
+  id          String   @id @default(cuid())
+  playerId    String
+  player      Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  description String
+  /// "Ожидает" | "Выполнено" | "Отклонено".
+  status      String   @default("Ожидает")
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([playerId])
+}
+
+/// Добровольное пожертвование игрока в казну. Отдельная запись для
+/// достижений, не создаёт операцию в TreasuryTransaction автоматически:
+/// казна и так может принять произвольную ручную операцию, а привязывать её
+/// к игроку значило бы менять денежную модель ради одного достижения.
+model Donation {
+  id        String   @id @default(cuid())
+  playerId  String
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  amount    Int
+  /// Подтверждает ГМ/РЛ: пожертвование действительно поступило.
+  confirmed Boolean  @default(false)
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([playerId])
 }

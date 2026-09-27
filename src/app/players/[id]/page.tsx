@@ -22,6 +22,12 @@ export default async function PlayerDetailPage({
   const ach = buildAchievements(await getMetricsForPlayer(id), MAX_POINTS_PER_CHAIN);
   if (!player) notFound();
   const isRandom = user?.role === "random";
+  let pinnedKeys: string[] | null = null;
+  try {
+    pinnedKeys = player.pinnedAchievements ? (JSON.parse(player.pinnedAchievements) as string[]) : null;
+  } catch {
+    pinnedKeys = null;
+  }
 
   return (
     <div className="space-y-4">
@@ -36,10 +42,13 @@ export default async function PlayerDetailPage({
       />
       {!isRandom && (
         <ProfileAchievements
+          playerId={id}
           items={ach.items}
           totalPoints={ach.totalPoints}
           earnedTiers={ach.earnedTiers}
           maxPoints={ach.maxPoints}
+          pinnedKeys={pinnedKeys}
+          canEdit={!!user && player.userId === user.sub}
         />
       )}
     </div>

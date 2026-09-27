@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActivitiesManager } from "@/lib/auth";
 import { BOSS_ALIASES } from "@/lib/achievements/catalog";
-import { applyFullParticipation, applyRosterDiff } from "@/lib/activityRoster";
+import { applyFullParticipation, applyPvpStats, applyRosterDiff } from "@/lib/activityRoster";
 
 const STATUSES = ["К выплате", "Выплачено", "Отменено"];
 const CATEGORIES = ["Мини-РБ", "Прайм"];
@@ -107,6 +107,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     data.raidLeaderPlayerId =
       body.raidLeaderPlayerId === null || body.raidLeaderPlayerId === "" ? null : String(body.raidLeaderPlayerId);
   }
+  if (body?.galleonCalledByPlayerId !== undefined) {
+    data.galleonCalledByPlayerId =
+      body.galleonCalledByPlayerId === null || body.galleonCalledByPlayerId === "" ? null : String(body.galleonCalledByPlayerId);
+  }
+  if (body?.galleonConfirmed !== undefined) data.galleonConfirmed = Boolean(body.galleonConfirmed);
+
+  // Убийства и честь — по каждому участнику PvP-боя отдельно, не суммой на
+  // активность: в одном бою участники убивают и получают честь по-разному.
+  const pvpStats: { playerId: string; pvpKills: number; honorPoints: number }[] | null = Array.isArray(body?.pvpStats)
+    ? body.pvpStats
+        .filter((s: unknown): s is { playerId: unknown; pvpKills: unknown; honorPoints: unknown } => typeof s === "object" && s !== null)
+        .map((s: { playerId: unknown; pvpKills: unknown; honorPoints: unknown }) => ({
+          playerId: String(s.playerId),
+          pvpKills: Number(s.pvpKills) || 0,
+          honorPoints: Number(s.honorPoints) || 0,
+        }))
+    : null;
 
   const participantIds: string[] | null = Array.isArray(body?.participantIds)
     ? body.participantIds.filter((pid: unknown): pid is string => typeof pid === "string")
@@ -125,6 +142,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     // всех, кто остался в составе, при каждой правке ростера.
     if (participantIds !== null) await applyRosterDiff(tx, id, participantIds);
     if (fullParticipantIds !== null) await applyFullParticipation(tx, id, fullParticipantIds);
+    if (pvpStats !== null) await applyPvpStats(tx, id, pvpStats);
 
     return tx.activity.update({ where: { id }, data });
   });
