@@ -7,9 +7,12 @@ import {
   getActivityBannerNames,
 } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { findLabelMatch } from "@/lib/nameMatch";
+import { enrichBuildsWithSummary } from "@/lib/dollBuild";
 import PlayerProfileView from "@/components/players/PlayerProfileView";
 import ProfileAchievements from "@/components/achievements/ProfileAchievements";
+import SavedBuilds from "@/components/players/SavedBuilds";
 import { buildAchievements, getMetricsForPlayer } from "@/lib/achievements/progress";
 import { MAX_POINTS_PER_CHAIN } from "@/lib/achievements/tiers";
 
@@ -19,18 +22,20 @@ export default async function PlayerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [player, activities, payments, dailyAttendance, user, bannerNames] = await Promise.all([
+  const [player, activities, payments, dailyAttendance, user, bannerNames, rawBuilds] = await Promise.all([
     getPlayerById(id),
     getPlayerActivityHistory(id, 100),
     getPlayerPayments(id, 20),
     getPlayerDailyAttendance(id, 30),
     getCurrentUser(),
     getActivityBannerNames(),
+    prisma.savedBuild.findMany({ where: { playerId: id }, orderBy: { createdAt: "desc" } }),
   ]);
   const activitiesWithBanners = activities.map((a) => {
     const banner = findLabelMatch(a.name, bannerNames);
     return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
   });
+  const builds = await enrichBuildsWithSummary(rawBuilds.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() })));
   const ach = buildAchievements(await getMetricsForPlayer(id), MAX_POINTS_PER_CHAIN);
   if (!player) notFound();
   const isRandom = user?.role === "random";
@@ -62,6 +67,9 @@ export default async function PlayerDetailPage({
           pinnedKeys={pinnedKeys}
           canEdit={!!user && player.userId === user.sub}
         />
+      )}
+      {!isRandom && (
+        <SavedBuilds playerId={id} builds={builds} canEdit={!!user && player.userId === user.sub} />
       )}
     </div>
   );
