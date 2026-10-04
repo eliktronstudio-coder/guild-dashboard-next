@@ -9,6 +9,7 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { findLabelMatch } from "@/lib/nameMatch";
+import { enrichBuildsWithSummary } from "@/lib/dollBuild";
 import PlayerProfileView from "@/components/players/PlayerProfileView";
 import SavedBuilds from "@/components/players/SavedBuilds";
 import EmptyState from "@/components/EmptyState";
@@ -40,6 +41,9 @@ export default async function MyProfilePage() {
     const banner = findLabelMatch(a.name, bannerNames);
     return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
   });
+  const buildsWithSummary = await enrichBuildsWithSummary(
+    builds.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() }))
+  );
   const isRandom = user.role === "random";
 
   return (
@@ -52,11 +56,7 @@ export default async function MyProfilePage() {
         isRandom={isRandom}
       />
       {!isRandom && (
-        <SavedBuilds
-          playerId={player.id}
-          builds={builds.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() }))}
-          canEdit
-        />
+        <SavedBuilds playerId={player.id} builds={buildsWithSummary} canEdit />
       )}
     </div>
   );

@@ -2,11 +2,19 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Trash2 } from "lucide-react";
+import { ExternalLink, Trash2, Shirt } from "lucide-react";
+import type { BuildSummary } from "@/lib/dollBuild";
 
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
 
-export type SavedBuild = { id: string; label: string; url: string; createdAt: string };
+export type SavedBuild = {
+  id: string;
+  label: string;
+  url: string;
+  createdAt: string;
+  /** Короткая сводка с калькулятора (уровень, слоты) — null, если не удалось получить. */
+  summary?: BuildSummary | null;
+};
 
 /**
  * Сборки из внешнего калькулятора (aje-calc.h1n.ru), привязанные к игроку.
@@ -121,31 +129,64 @@ export default function SavedBuilds({
       {builds.length === 0 ? (
         <p className="mt-3 text-xs text-muted">Сборок пока нет.</p>
       ) : (
-        <ul className="mt-3 space-y-1.5">
-          {builds.map((b) => (
-            <li
-              key={b.id}
-              className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-2 px-3 py-2 text-xs"
-            >
-              <a
-                href={b.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-w-0 items-center gap-1.5 text-accent hover:underline"
-              >
-                <span className="truncate font-medium text-foreground">{b.label}</span>
-                <ExternalLink size={11} className="flex-shrink-0" />
-              </a>
-              <div className="flex flex-shrink-0 items-center gap-2 text-muted-2">
-                <span>{dateFmt.format(new Date(b.createdAt))}</span>
-                {canEdit && (
-                  <button type="button" onClick={() => remove(b.id)} aria-label="Удалить" className="hover:text-danger">
-                    <Trash2 size={13} />
-                  </button>
+        <ul className="mt-3 space-y-2">
+          {builds.map((b) => {
+            const s = b.summary;
+            const ratio = s && s.slotsTotal > 0 ? Math.min(1, s.slotsFilled / s.slotsTotal) : null;
+            return (
+              <li key={b.id} className="rounded-md border border-border bg-surface-2 px-3 py-2.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <a
+                    href={b.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex min-w-0 items-center gap-1.5 text-accent hover:underline"
+                  >
+                    <span className="truncate font-medium text-foreground">{b.label}</span>
+                    <ExternalLink size={11} className="flex-shrink-0" />
+                  </a>
+                  <div className="flex flex-shrink-0 items-center gap-2 text-muted-2">
+                    <span>{dateFmt.format(new Date(b.createdAt))}</span>
+                    {canEdit && (
+                      <button
+                        type="button"
+                        onClick={() => remove(b.id)}
+                        aria-label="Удалить"
+                        className="hover:text-danger"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {s && (s.level != null || ratio != null) && (
+                  <div className="mt-2 flex items-center gap-3">
+                    {s.level != null && (
+                      <span className="flex-shrink-0 rounded border border-border bg-surface px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-muted">
+                        Ур. {s.level}
+                        {s.heroicLevel ? ` · Г${s.heroicLevel}` : ""}
+                      </span>
+                    )}
+                    {ratio != null && (
+                      <div className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-2" title="Экипировано слотов">
+                        <Shirt size={12} className="flex-shrink-0" />
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface">
+                          <div
+                            className="h-full rounded-full bg-accent"
+                            style={{ width: `${Math.round(ratio * 100)}%` }}
+                          />
+                        </div>
+                        <span className="flex-shrink-0 font-mono text-[11px] tabular-nums">
+                          {s.slotsFilled}/{s.slotsTotal}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

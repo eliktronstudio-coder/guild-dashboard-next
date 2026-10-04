@@ -2,6 +2,7 @@ import { ExternalLink } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { getPlayerByUserId } from "@/lib/queries";
 import { prisma } from "@/lib/prisma";
+import { enrichBuildsWithSummary } from "@/lib/dollBuild";
 import SavedBuilds from "@/components/players/SavedBuilds";
 
 const CALC_URL = "https://aje-calc.h1n.ru";
@@ -9,9 +10,10 @@ const CALC_URL = "https://aje-calc.h1n.ru";
 export default async function DollCalculatorPage() {
   const user = await getCurrentUser();
   const player = user ? await getPlayerByUserId(user.sub) : null;
-  const builds = player
+  const rawBuilds = player
     ? await prisma.savedBuild.findMany({ where: { playerId: player.id }, orderBy: { createdAt: "desc" } })
     : [];
+  const builds = await enrichBuildsWithSummary(rawBuilds.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() })));
 
   return (
     <div className="flex h-[calc(100vh-7.5rem)] flex-col gap-3 lg:h-[calc(100vh-6rem)]">
@@ -46,11 +48,7 @@ export default async function DollCalculatorPage() {
 
         {player && (
           <div className="flex-shrink-0 overflow-y-auto lg:w-[280px]">
-            <SavedBuilds
-              playerId={player.id}
-              builds={builds.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() }))}
-              canEdit
-            />
+            <SavedBuilds playerId={player.id} builds={builds} canEdit />
           </div>
         )}
       </div>
