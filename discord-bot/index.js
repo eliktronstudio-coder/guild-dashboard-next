@@ -551,14 +551,40 @@ function suggestName(typed, names) {
 // Anthropic блокирует запросы с IP этого VPS, поэтому распознавание идёт через
 // отдельный прокси на Render (US), а не напрямую. Прокси заодно определяет,
 // что на скрине — состав или дроп.
+//
+// Render на бесплатном тарифе "засыпает" после простоя и поднимается по
+// первому запросу секунд 30-50 — за это время обычный fetch успевает упасть
+// с HeadersTimeoutError раньше, чем прокси проснётся. Поэтому первая попытка
+// короткая, а после неудачи даём прокси время "проснуться" и пробуем ещё раз
+// с запасом по таймауту, прежде чем сдаться.
 async function extractFromImage(base64, mediaType, knownNames = []) {
-  const res = await fetch(`${VISION_PROXY_URL}/extract`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${VISION_PROXY_SECRET}` },
-    body: JSON.stringify({ image: base64, mediaType, knownNames }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
+  const attempt = async (timeoutMs) => {
+    const res = await fetch(`${VISION_PROXY_URL}/extract`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${VISION_PROXY_SECRET}` },
+      body: JSON.stringify({ image: base64, mediaType, knownNames }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || `Прокси вернул ошибку (${res.status})`);
+    return data;
+  };
+
+  let data;
+  try {
+    data = await attempt(15000);
+  } catch (err) {
+    console.error("Распознавание не ответило с первой попытки, прокси мог спать:", err.message);
+    await new Promise((r) => setTimeout(r, 3000));
+    try {
+      data = await attempt(60000);
+    } catch (err2) {
+      throw new Error(
+        `Сервис распознавания скриншотов не отвечает (возможно, ещё просыпается после простоя) — попробуйте ещё раз через полминуты. Исходная ошибка: ${err2.message}`
+      );
+    }
+  }
+
   return {
     kind: data.kind === "roster" || data.kind === "drop" ? data.kind : "unknown",
     names: Array.isArray(data.names) ? data.names : [],
