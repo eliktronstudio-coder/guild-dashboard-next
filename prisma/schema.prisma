@@ -51,6 +51,22 @@ model Player {
   /// поменяется, закрепление не превратится в мусор — просто перестанет
   /// находить достижение и тихо пропустится при отрисовке.
   pinnedAchievements  String?
+  savedBuilds         SavedBuild[]
+}
+
+/// Ссылка на сборку персонажа, сохранённую на внешнем калькуляторе
+/// (aje-calc.h1n.ru). Сам калькулятор встроен во фрейм с другого домена —
+/// перехватить его "Сохранить сборку" нельзя, поэтому игрок вставляет
+/// готовую ссылку сюда сам.
+model SavedBuild {
+  id        String   @id @default(cuid())
+  playerId  String
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  label     String
+  url       String
+  createdAt DateTime @default(now())
+
+  @@index([playerId])
 }
 
 model Activity {

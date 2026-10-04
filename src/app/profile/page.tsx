@@ -6,7 +6,9 @@ import {
   getPlayerDailyAttendance,
 } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import PlayerProfileView from "@/components/players/PlayerProfileView";
+import SavedBuilds from "@/components/players/SavedBuilds";
 import EmptyState from "@/components/EmptyState";
 
 export default async function MyProfilePage() {
@@ -25,20 +27,30 @@ export default async function MyProfilePage() {
     );
   }
 
-  const [activities, payments, dailyAttendance] = await Promise.all([
+  const [activities, payments, dailyAttendance, builds] = await Promise.all([
     getPlayerActivityHistory(player.id, 20),
     getPlayerPayments(player.id, 20),
     getPlayerDailyAttendance(player.id, 30),
+    prisma.savedBuild.findMany({ where: { playerId: player.id }, orderBy: { createdAt: "desc" } }),
   ]);
   const isRandom = user.role === "random";
 
   return (
-    <PlayerProfileView
-      player={player}
-      activities={activities}
-      payments={payments}
-      dailyAttendance={dailyAttendance}
-      isRandom={isRandom}
-    />
+    <div className="space-y-4">
+      <PlayerProfileView
+        player={player}
+        activities={activities}
+        payments={payments}
+        dailyAttendance={dailyAttendance}
+        isRandom={isRandom}
+      />
+      {!isRandom && (
+        <SavedBuilds
+          playerId={player.id}
+          builds={builds.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() }))}
+          canEdit
+        />
+      )}
+    </div>
   );
 }
