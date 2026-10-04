@@ -135,7 +135,7 @@ export async function getPlayerByUserId(userId: string) {
 export async function getPlayerActivityHistory(playerId: string, limit = 8) {
   const rows = await prisma.activityParticipant.findMany({
     where: { playerId },
-    include: { activity: true },
+    include: { activity: { include: { _count: { select: { participants: true } } } } },
     orderBy: { activity: { date: "desc" } },
     take: limit,
   });
@@ -144,6 +144,7 @@ export async function getPlayerActivityHistory(playerId: string, limit = 8) {
     name: r.activity.name,
     date: dateFmt.format(r.activity.date),
     status: r.activity.status,
+    participants: r.activity._count.participants,
   }));
 }
 

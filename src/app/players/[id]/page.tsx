@@ -1,6 +1,13 @@
 import { notFound } from "next/navigation";
-import { getPlayerById, getPlayerActivityHistory, getPlayerPayments, getPlayerDailyAttendance } from "@/lib/queries";
+import {
+  getPlayerById,
+  getPlayerActivityHistory,
+  getPlayerPayments,
+  getPlayerDailyAttendance,
+  getActivityBannerNames,
+} from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
+import { findLabelMatch } from "@/lib/nameMatch";
 import PlayerProfileView from "@/components/players/PlayerProfileView";
 import ProfileAchievements from "@/components/achievements/ProfileAchievements";
 import { buildAchievements, getMetricsForPlayer } from "@/lib/achievements/progress";
@@ -12,13 +19,18 @@ export default async function PlayerDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [player, activities, payments, dailyAttendance, user] = await Promise.all([
+  const [player, activities, payments, dailyAttendance, user, bannerNames] = await Promise.all([
     getPlayerById(id),
-    getPlayerActivityHistory(id, 20),
+    getPlayerActivityHistory(id, 100),
     getPlayerPayments(id, 20),
     getPlayerDailyAttendance(id, 30),
     getCurrentUser(),
+    getActivityBannerNames(),
   ]);
+  const activitiesWithBanners = activities.map((a) => {
+    const banner = findLabelMatch(a.name, bannerNames);
+    return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
+  });
   const ach = buildAchievements(await getMetricsForPlayer(id), MAX_POINTS_PER_CHAIN);
   if (!player) notFound();
   const isRandom = user?.role === "random";
@@ -33,7 +45,7 @@ export default async function PlayerDetailPage({
     <div className="space-y-4">
       <PlayerProfileView
       player={player}
-      activities={activities}
+      activities={activitiesWithBanners}
       payments={payments}
       dailyAttendance={dailyAttendance}
       isRandom={isRandom}

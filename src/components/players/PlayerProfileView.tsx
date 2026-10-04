@@ -5,15 +5,10 @@ import EmptyState from "@/components/EmptyState";
 import BlurValue from "@/components/BlurValue";
 import AttendanceChart from "@/components/charts/AttendanceChart";
 import DailyAttendanceChart, { type DailyAttendancePoint } from "@/components/charts/DailyAttendanceChart";
+import ActivityRow from "@/components/dashboard/ActivityRow";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
 const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-const activityStatusTone: Record<string, "accent" | "success" | "danger"> = {
-  "К выплате": "accent",
-  Выплачено: "success",
-  Отменено: "danger",
-};
 
 const paymentStatusTone: Record<string, "accent" | "success" | "danger"> = {
   Ожидает: "accent",
@@ -36,7 +31,15 @@ export type PlayerProfileData = {
     xp: number;
     salaryCoefficient: number;
   };
-  activities: { id: string; name: string; date: string; status: string }[];
+  activities: {
+    id: string;
+    name: string;
+    date: string;
+    status: string;
+    participants: number;
+    bannerId?: string | null;
+    bannerIsVideo?: boolean;
+  }[];
   payments: { id: string; amount: number; status: string; date: string }[];
   /** Недельный график — не нужен, если задан dailyAttendance. */
   attendanceChart?: { date: string; count: number }[];
@@ -122,17 +125,23 @@ export default function PlayerProfileView({
           {activities.length === 0 ? (
             <EmptyState title="Нет данных за выбранный период" hint="Игрок ещё не участвовал в активностях." />
           ) : (
-            <ul className="divide-y divide-border">
+            // Видно ровно 3 строки (92px + 8px отступ каждая), остальное — в
+            // скролле: список может быть длинным, а карточка профиля не
+            // должна растягиваться на весь экран из-за одной истории.
+            <div className="scroll-slim max-h-[300px] space-y-2 overflow-y-auto pr-1">
               {activities.map((a) => (
-                <li key={a.id} className="flex items-center justify-between py-2.5 text-sm">
-                  <Link href={`/activities/${a.id}`} className="min-w-0 hover:text-accent">
-                    <p className="truncate font-medium">{a.name}</p>
-                    <p className="text-xs text-muted">{a.date}</p>
-                  </Link>
-                  <StatusBadge label={a.status} tone={activityStatusTone[a.status] ?? "muted"} />
-                </li>
+                <ActivityRow
+                  key={a.id}
+                  href={`/activities/${a.id}`}
+                  name={a.name}
+                  participants={a.participants}
+                  status={a.status}
+                  date={a.date}
+                  bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
+                  bannerIsVideo={a.bannerIsVideo}
+                />
               ))}
-            </ul>
+            </div>
           )}
         </div>
 

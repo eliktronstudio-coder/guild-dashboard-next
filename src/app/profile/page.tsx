@@ -4,9 +4,11 @@ import {
   getPlayerActivityHistory,
   getPlayerPayments,
   getPlayerDailyAttendance,
+  getActivityBannerNames,
 } from "@/lib/queries";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { findLabelMatch } from "@/lib/nameMatch";
 import PlayerProfileView from "@/components/players/PlayerProfileView";
 import SavedBuilds from "@/components/players/SavedBuilds";
 import EmptyState from "@/components/EmptyState";
@@ -27,19 +29,24 @@ export default async function MyProfilePage() {
     );
   }
 
-  const [activities, payments, dailyAttendance, builds] = await Promise.all([
-    getPlayerActivityHistory(player.id, 20),
+  const [activities, payments, dailyAttendance, builds, bannerNames] = await Promise.all([
+    getPlayerActivityHistory(player.id, 100),
     getPlayerPayments(player.id, 20),
     getPlayerDailyAttendance(player.id, 30),
     prisma.savedBuild.findMany({ where: { playerId: player.id }, orderBy: { createdAt: "desc" } }),
+    getActivityBannerNames(),
   ]);
+  const activitiesWithBanners = activities.map((a) => {
+    const banner = findLabelMatch(a.name, bannerNames);
+    return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
+  });
   const isRandom = user.role === "random";
 
   return (
     <div className="space-y-4">
       <PlayerProfileView
         player={player}
-        activities={activities}
+        activities={activitiesWithBanners}
         payments={payments}
         dailyAttendance={dailyAttendance}
         isRandom={isRandom}
