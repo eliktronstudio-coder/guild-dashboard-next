@@ -16,6 +16,7 @@ import {
   Palette,
   Archive,
   Trophy,
+  Shirt,
   type LucideIcon,
 } from "lucide-react";
 
@@ -55,6 +56,7 @@ export const navSections: NavSection[] = [
     title: "Инструменты",
     items: [
       { href: "/calculator", label: "Калькуляторы", icon: Calculator },
+      { href: "/doll-calculator", label: "Калькулятор куклы", icon: Shirt },
       { href: "/archeage", label: "ArcheAge", icon: Map, adminOnly: true },
       { href: "/auction", label: "Аукцион", icon: Gavel },
     ],
