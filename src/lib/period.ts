@@ -3,6 +3,11 @@ import { prisma } from "@/lib/prisma";
 /** Расчётный период идёт с 15-го числа одного месяца по 15-е следующего. */
 const PERIOD_START_DAY = 15;
 
+/** Ошибка уникальности в Prisma — на "активный" период есть частичный уникальный индекс. */
+function isUniqueViolation(err: unknown) {
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
+}
+
 const labelFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 export function periodLabel(startDate: Date, endDate: Date): string {
@@ -58,18 +63,38 @@ export async function getActivePeriod() {
   if (existing) {
     // Реальное время обогнало период (сайт не открывали несколько дней) —
     // закрываем старый и открываем актуальный цикл одной транзакцией.
-    const [, created] = await prisma.$transaction([
-      prisma.accountingPeriod.update({ where: { id: existing.id }, data: { status: "closed", closedAt: now } }),
-      prisma.accountingPeriod.create({
-        data: { startDate, endDate, label: periodLabel(startDate, endDate), status: "active" },
-      }),
-    ]);
-    return created;
+    //
+    // Два запроса могут одновременно увидеть один и тот же истёкший период
+    // и оба попытаться его закрыть и создать новый — частичный уникальный
+    // индекс на status="active" не даст второй вставке пройти, и она падает
+    // с ошибкой уникальности. Тогда просто перечитываем период, который
+    // успел создать первый запрос, вместо того чтобы плодить дубликат.
+    try {
+      const [, created] = await prisma.$transaction([
+        prisma.accountingPeriod.update({ where: { id: existing.id }, data: { status: "closed", closedAt: now } }),
+        prisma.accountingPeriod.create({
+          data: { startDate, endDate, label: periodLabel(startDate, endDate), status: "active" },
+        }),
+      ]);
+      return created;
+    } catch (err) {
+      if (!isUniqueViolation(err)) throw err;
+      const winner = await prisma.accountingPeriod.findFirst({ where: { status: "active" } });
+      if (winner) return winner;
+      throw err;
+    }
   }
 
-  return prisma.accountingPeriod.create({
-    data: { startDate, endDate, label: periodLabel(startDate, endDate), status: "active" },
-  });
+  try {
+    return await prisma.accountingPeriod.create({
+      data: { startDate, endDate, label: periodLabel(startDate, endDate), status: "active" },
+    });
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    const winner = await prisma.accountingPeriod.findFirst({ where: { status: "active" } });
+    if (winner) return winner;
+    throw err;
+  }
 }
 
 export async function getActivePeriodId(): Promise<string> {

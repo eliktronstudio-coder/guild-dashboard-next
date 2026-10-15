@@ -134,17 +134,36 @@ test("нормальный текущий период не трогается",
   assert.equal(again.label, first.label, "подпись не должна переписываться на ровном месте");
 });
 
-test("из нескольких активных выбирается тот, внутри которого мы сейчас", async () => {
+test("второй активный период создать нельзя — частичный уникальный индекс это запрещает", async () => {
+  // Раньше два одновременных вызова getActivePeriod() в момент истечения
+  // периода оба успевали увидеть "активного нет" и оба создавали новый —
+  // получалось два "активных" периода разом, и посещаемость/выплаты
+  // расходились по ним непредсказуемо. Индекс на status="active" делает
+  // такое состояние невозможным на уровне базы, а getActivePeriod() при
+  // столкновении с этой ошибкой просто перечитывает уже созданный период
+  // вместо того, чтобы упасть или создать дубликат.
   await reset();
-  const correct = await getActivePeriod();
+  await getActivePeriod();
 
-  // Лишний активный период в будущем — сортировка по startDate desc выбрала бы
-  // именно его, и весь учёт уехал бы туда.
   const { startDate, endDate } = futureBounds();
-  await prisma.accountingPeriod.create({
-    data: { startDate, endDate, label: "лишний будущий", status: "active" },
-  });
+  await assert.rejects(
+    prisma.accountingPeriod.create({
+      data: { startDate, endDate, label: "лишний будущий", status: "active" },
+    }),
+    /Unique constraint failed/,
+    "второй активный период должен быть отклонён на уровне базы"
+  );
+});
 
-  const active = await getActivePeriod();
-  assert.equal(active.id, correct.id, "должен остаться период, содержащий сегодняшний день");
+test("гонка при истечении периода не плодит дубликат активного", async () => {
+  await reset();
+  const expired = await getActivePeriod();
+  // Искусственно "истекаем" период, как будто сайт не открывали месяц.
+  await prisma.accountingPeriod.update({ where: { id: expired.id }, data: { endDate: new Date(2000, 0, 1) } });
+
+  // Два "одновременных" запроса видят один и тот же истёкший период.
+  const [a, b] = await Promise.all([getActivePeriod(), getActivePeriod()]);
+
+  assert.equal(a.id, b.id, "оба запроса должны сойтись на одном и том же новом периоде");
+  assert.equal(await prisma.accountingPeriod.count({ where: { status: "active" } }), 1);
 });
