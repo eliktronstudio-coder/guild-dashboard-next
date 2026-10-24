@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActivitiesManager } from "@/lib/auth";
 import { BOSS_ALIASES } from "@/lib/achievements/catalog";
-import { applyFullParticipation, applyPvpStats, applyRosterDiff } from "@/lib/activityRoster";
+import { applyCategoryToOwnDrops, applyFullParticipation, applyPvpStats, applyRosterDiff } from "@/lib/activityRoster";
 
 const STATUSES = ["К выплате", "Выплачено", "Отменено"];
 const CATEGORIES = ["Мини-РБ", "Прайм"];
@@ -143,6 +143,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (participantIds !== null) await applyRosterDiff(tx, id, participantIds);
     if (fullParticipantIds !== null) await applyFullParticipation(tx, id, fullParticipantIds);
     if (pvpStats !== null) await applyPvpStats(tx, id, pvpStats);
+
+    if (typeof data.category === "string") await applyCategoryToOwnDrops(tx, id, data.category);
 
     return tx.activity.update({ where: { id }, data });
   });

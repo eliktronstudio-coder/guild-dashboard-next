@@ -159,3 +159,23 @@ test("applyPvpStats не принимает отрицательные знач�
   assert.equal(part!.pvpKills, 0, "отрицательное убийство обнуляется, а не остаётся долгом");
   assert.equal(part!.honorPoints, 0);
 });
+
+test("applyCategoryToOwnDrops подтягивает дроп под исправленную категорию активности", async () => {
+  await reset();
+  // Мирового босса завели как "Мини-РБ" по умолчанию — дроп создался с той же
+  // категорией. Админ позже поправил саму активность на "Прайм".
+  const activity = await prisma.activity.create({ data: { name: "Кракен", category: "Мини-РБ" } });
+  const drop = await prisma.dropItem.create({
+    data: { item: "Чернильный мешочек Кракена", value: 200, quantity: 5, activityId: activity.id, category: "Мини-РБ" },
+  });
+  // Дроп без привязки к этой активности не должен трогаться.
+  const unrelated = await prisma.dropItem.create({ data: { item: "Прочее", value: 10, category: "Мини-РБ" } });
+
+  await prisma.$transaction((tx) => roster.applyCategoryToOwnDrops(tx, activity.id, "Прайм"));
+
+  const updated = await prisma.dropItem.findUnique({ where: { id: drop.id } });
+  assert.equal(updated!.category, "Прайм", "категория дропа следует за исправленной категорией активности");
+
+  const other = await prisma.dropItem.findUnique({ where: { id: unrelated.id } });
+  assert.equal(other!.category, "Мини-РБ", "дроп без привязки к активности не трогается");
+});

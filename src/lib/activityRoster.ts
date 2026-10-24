@@ -79,3 +79,17 @@ export async function applyFullParticipation(
     )
   );
 }
+
+/**
+ * Держит категорию уже привязанного дропа синхронной с категорией активности.
+ *
+ * Категория дропа копируется от активности только при создании записи.
+ * Если активность завели с неверной категорией (например, мирового босса
+ * по умолчанию как "Мини-РБ") и позже поправили на "Прайм", уже привязанный
+ * дроп молча оставался со старой категорией — и его продажа навсегда уходила
+ * не в ту казну (getTreasurySplitByCategory считает по DropItem.category,
+ * а не по категории активности).
+ */
+export async function applyCategoryToOwnDrops(tx: Prisma.TransactionClient, activityId: string, category: string) {
+  await tx.dropItem.updateMany({ where: { activityId }, data: { category } });
+}
