@@ -1,3 +1,4 @@
+import { getApprovedUser } from "@/lib/access";
 import Link from "next/link";
 import clsx from "clsx";
 import DashboardPanel from "@/components/dashboard/DashboardPanel";
@@ -8,7 +9,6 @@ import SchedulePanel from "@/components/dashboard/SchedulePanel";
 import DailyAttendanceChart from "@/components/charts/DailyAttendanceChart";
 import EmptyState from "@/components/EmptyState";
 import BlurValue from "@/components/BlurValue";
-import { getCurrentUser } from "@/lib/auth";
 import {
   getPlayerByUserId,
   getPlayerDailyAttendance,
@@ -44,40 +44,54 @@ function PersonalPlaceholder({ user }: { user: { username: string } | null }) {
 }
 
 export default async function HomePage() {
-  const user = await getCurrentUser();
+  const user = await getApprovedUser();
+  if (!user)
+    return (
+      <EmptyState
+        title="Командный центр XD"
+        hint="Войдите и дождитесь подтверждения аккаунта, чтобы увидеть данные гильдии."
+      />
+    );
 
   // Личные блоки завязаны на игрока, привязанного к аккаунту: без входа или
   // без привязки показываем подсказку, а не пустую сетку.
   const player = user ? await getPlayerByUserId(user.sub) : null;
 
-  const [dailyAttendance, primeTop, miniRbTop, allActivities, bannerNames] = await Promise.all([
-    player ? getPlayerDailyAttendance(player.id, 30) : Promise.resolve([]),
-    topPlayersByAttendanceCategory("attendancePctPrime", 5),
-    topPlayersByAttendanceCategory("attendancePctMiniRb", 5),
-    getAllActivities(),
-    getActivityBannerNames(),
-  ]);
+  const [dailyAttendance, primeTop, miniRbTop, allActivities, bannerNames] =
+    await Promise.all([
+      player ? getPlayerDailyAttendance(player.id, 30) : Promise.resolve([]),
+      topPlayersByAttendanceCategory("attendancePctPrime", 5),
+      topPlayersByAttendanceCategory("attendancePctMiniRb", 5),
+      getAllActivities(),
+      getActivityBannerNames(),
+    ]);
 
   // Баннеры отдаём ссылкой на /api/activity-banners/[id]/media, а не телом
   // картинки в пропсах клиентских компонентов — см. dashboard/page.tsx.
   const scheduleBanners: Record<string, { id: string; isVideo: boolean }> = {};
   for (const name of new Set(SCHEDULE.map((s) => s.name))) {
     const banner = findLabelMatch(name, bannerNames);
-    if (banner) scheduleBanners[name] = { id: banner.id, isVideo: banner.isVideo };
+    if (banner)
+      scheduleBanners[name] = { id: banner.id, isVideo: banner.isVideo };
   }
   const recentActivities = allActivities.slice(0, 3).map((a) => {
     const banner = findLabelMatch(a.name, bannerNames);
-    return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
+    return {
+      ...a,
+      bannerId: banner?.id ?? null,
+      bannerIsVideo: banner?.isVideo ?? false,
+    };
   });
 
   // Статические подписи: значения из кода остаются значением по умолчанию.
-  const [labelTotal, labelPrime, labelMiniRb, linkProfile, linkAll] = await Promise.all([
-    designText("home.statTotal", "Общая"),
-    designText("home.statPrime", "Прайм"),
-    designText("home.statMiniRb", "Мини-РБ"),
-    designText("home.linkProfile", "Профиль"),
-    designText("home.linkAll", "Все"),
-  ]);
+  const [labelTotal, labelPrime, labelMiniRb, linkProfile, linkAll] =
+    await Promise.all([
+      designText("home.statTotal", "Общая"),
+      designText("home.statPrime", "Прайм"),
+      designText("home.statMiniRb", "Мини-РБ"),
+      designText("home.linkProfile", "Профиль"),
+      designText("home.linkAll", "Все"),
+    ]);
 
   const isRandom = user?.role === "random";
 
@@ -89,7 +103,10 @@ export default async function HomePage() {
       <DashboardPanel designId="home.myAttendance" className="min-w-0">
         {!player ? (
           <>
-            <SectionHeader title="Моя посещаемость" textId="home.titleMyAttendance" />
+            <SectionHeader
+              title="Моя посещаемость"
+              textId="home.titleMyAttendance"
+            />
             <PersonalPlaceholder user={user} />
           </>
         ) : (
@@ -103,7 +120,10 @@ export default async function HomePage() {
                     title="Моя посещаемость"
                     textId="home.titleMyAttendance"
                     right={
-                      <Link href="/profile" className="text-xs text-accent hover:underline">
+                      <Link
+                        href="/profile"
+                        className="text-xs text-accent hover:underline"
+                      >
                         {linkProfile}
                       </Link>
                     }
@@ -115,8 +135,12 @@ export default async function HomePage() {
                       {player.name.charAt(0).toUpperCase()}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-foreground">{player.name}</p>
-                      <p className="truncate text-xs text-muted">{player.role}</p>
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {player.name}
+                      </p>
+                      <p className="truncate text-xs text-muted">
+                        {player.role}
+                      </p>
                     </div>
                   </div>
                 ),
@@ -134,7 +158,12 @@ export default async function HomePage() {
                       >
                         <p className="text-[11px] text-muted">{s.label}</p>
                         <BlurValue blurred={isRandom}>
-                          <p className={clsx("font-mono text-xl font-semibold", attendanceTone(s.value))}>
+                          <p
+                            className={clsx(
+                              "font-mono text-xl font-semibold",
+                              attendanceTone(s.value),
+                            )}
+                          >
                             {s.value}%
                           </p>
                         </BlurValue>
@@ -153,7 +182,10 @@ export default async function HomePage() {
       <DashboardPanel designId="home.myChart" className="min-w-0">
         {!player ? (
           <>
-            <SectionHeader title="Мой график посещаемости" textId="home.titleMyChart" />
+            <SectionHeader
+              title="Мой график посещаемости"
+              textId="home.titleMyChart"
+            />
             <PersonalPlaceholder user={user} />
           </>
         ) : (
@@ -211,7 +243,10 @@ export default async function HomePage() {
                 title="Последние активности"
                 textId="home.titleRecent"
                 right={
-                  <Link href="/activities" className="text-xs text-accent hover:underline">
+                  <Link
+                    href="/activities"
+                    className="text-xs text-accent hover:underline"
+                  >
                     {linkAll}
                   </Link>
                 }
@@ -219,7 +254,10 @@ export default async function HomePage() {
             ),
             list:
               recentActivities.length === 0 ? (
-                <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                <EmptyState
+                  variant="dashboard"
+                  title="Нет данных за выбранный период"
+                />
               ) : (
                 <div className="space-y-[5px]">
                   {recentActivities.map((a, i) => (
@@ -231,7 +269,10 @@ export default async function HomePage() {
                         /* Пустая метка высотой с заголовок дня («Сегодня») в
                            «До активностей» — без неё первая строка этой панели
                            встаёт на 20px выше и баннеры панелей не совпадают. */
-                        <p aria-hidden="true" className="invisible px-1 pb-1 text-[11px] uppercase tracking-wider">
+                        <p
+                          aria-hidden="true"
+                          className="invisible px-1 pb-1 text-[11px] uppercase tracking-wider"
+                        >
                           &nbsp;
                         </p>
                       )}
@@ -241,7 +282,11 @@ export default async function HomePage() {
                         participants={a.participants}
                         status={a.status}
                         date={a.date}
-                        bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
+                        bannerUrl={
+                          a.bannerId
+                            ? `/api/activity-banners/${a.bannerId}/media`
+                            : null
+                        }
                         bannerIsVideo={a.bannerIsVideo}
                       />
                     </div>
@@ -266,7 +311,10 @@ export default async function HomePage() {
                 right={
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted">за всё время</span>
-                    <Link href="/players" className="text-xs text-accent hover:underline">
+                    <Link
+                      href="/players"
+                      className="text-xs text-accent hover:underline"
+                    >
                       Состав
                     </Link>
                   </div>
@@ -275,7 +323,10 @@ export default async function HomePage() {
             ),
             list:
               primeTop.length === 0 ? (
-                <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                <EmptyState
+                  variant="dashboard"
+                  title="Нет данных за выбранный период"
+                />
               ) : (
                 <div className="space-y-[5px]">
                   {primeTop.map((p, i) => (
@@ -286,7 +337,10 @@ export default async function HomePage() {
                       name={p.name}
                       role={p.role}
                       valueLabel={`${p.attendancePctPrime}%`}
-                      valueClassName={clsx("font-mono", attendanceTone(p.attendancePctPrime))}
+                      valueClassName={clsx(
+                        "font-mono",
+                        attendanceTone(p.attendancePctPrime),
+                      )}
                     />
                   ))}
                 </div>
@@ -309,7 +363,10 @@ export default async function HomePage() {
                 right={
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted">за всё время</span>
-                    <Link href="/players" className="text-xs text-accent hover:underline">
+                    <Link
+                      href="/players"
+                      className="text-xs text-accent hover:underline"
+                    >
                       Состав
                     </Link>
                   </div>
@@ -318,7 +375,10 @@ export default async function HomePage() {
             ),
             list:
               miniRbTop.length === 0 ? (
-                <EmptyState variant="dashboard" title="Нет данных за выбранный период" />
+                <EmptyState
+                  variant="dashboard"
+                  title="Нет данных за выбранный период"
+                />
               ) : (
                 <div className="space-y-[5px]">
                   {miniRbTop.map((p, i) => (
@@ -329,7 +389,10 @@ export default async function HomePage() {
                       name={p.name}
                       role={p.role}
                       valueLabel={`${p.attendancePctMiniRb}%`}
-                      valueClassName={clsx("font-mono", attendanceTone(p.attendancePctMiniRb))}
+                      valueClassName={clsx(
+                        "font-mono",
+                        attendanceTone(p.attendancePctMiniRb),
+                      )}
                     />
                   ))}
                 </div>

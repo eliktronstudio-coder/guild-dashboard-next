@@ -46,6 +46,7 @@
 
 /* XD Guild — light fantasy-landscape theme: its own mood, not an inversion. */
 :root[data-theme="light"] {
+  --bg-sidebar: #faf7f3;
   --background: #f4f1ee;
   --bg-elevated: #faf7f3;
   --surface: rgba(255, 255, 255, 0.9);
@@ -203,4 +204,10 @@ table th {
 @keyframes xd-zoom-in {
   from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* Shared interaction states for the command center. */
+:where(a, button, input, select, textarea):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }

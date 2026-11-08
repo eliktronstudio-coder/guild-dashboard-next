@@ -1,3 +1,4 @@
+import { prepareDatabase } from "./prepare-database";
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -21,6 +22,7 @@ before(async () => {
   dir = mkdtempSync(path.join(tmpdir(), "xd-auction-"));
   process.env.DATABASE_URL = `file:${path.join(dir, "test.db").split(path.sep).join("/")}`;
 
+  prepareDatabase();
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
     cwd: process.cwd(),
     env: process.env,
@@ -569,7 +571,7 @@ test("удаление лота убирает и заведённое им зо
   // осталось бы золото за продажу, которой в истории больше нет.
   const after = await queries.getTreasuryBreakdown();
   assert.equal(after.total, 0, "золото ушло вместе с лотом");
-  assert.equal(await prisma.treasuryTransaction.count(), 0);
+  assert.equal(await prisma.treasuryTransaction.count(), 2, "исходная операция и её компенсация остаются в журнале");
 });
 
 test("удаление лота уносит и его ставки", async () => {
@@ -604,9 +606,10 @@ test("удаление не трогает чужие операции казн�
   await auction.deleteAuction(w.id);
 
   const left = await prisma.treasuryTransaction.findMany();
-  assert.equal(left.length, 1, "посторонняя продажа остаётся");
-  assert.equal(left[0].description, "Продажа дропа");
-  assert.equal(left[0].amount, 40_000);
+  assert.equal(left.length, 3, "посторонняя продажа и обе записи отменённого аукциона остаются");
+  const unrelated = left.find(row => row.description === "Продажа дропа")!;
+  assert.equal(unrelated.amount, 40_000);
+  assert.equal(left.reduce((sum,row) => sum+row.amount,0),40000);
 });
 
 test("если операцию казны убрали вручную, удаление лота всё равно проходит", async () => {

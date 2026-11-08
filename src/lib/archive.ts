@@ -73,7 +73,7 @@ export async function snapshotRosterInTx(
 ) {
   const archived = await tx.activity.findMany({
     where: { archiveId },
-    select: { name: true, category: true, mode: true, weight: true, participants: { select: { playerId: true } } },
+    select: { name: true, category: true, mode: true, weight: true, status:true, date:true, participants: { select: { playerId: true } } },
   });
   const maps = computeAttendanceMaps(archived);
 

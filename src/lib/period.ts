@@ -1,28 +1,26 @@
 import { prisma } from "@/lib/prisma";
 
 /** Расчётный период идёт с 15-го числа одного месяца по 15-е следующего. */
-const PERIOD_START_DAY = 15;
+export { computePeriodBounds } from "@/lib/period-bounds";
+import { computePeriodBounds } from "@/lib/period-bounds";
 
 /** Ошибка уникальности в Prisma — на "активный" период есть частичный уникальный индекс. */
 function isUniqueViolation(err: unknown) {
-  return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: string }).code === "P2002"
+  );
 }
 
-const labelFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
+const labelFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+});
 
 export function periodLabel(startDate: Date, endDate: Date): string {
   return `${labelFmt.format(startDate)} — ${labelFmt.format(endDate)}`;
-}
-
-/** Границы 15→15 цикла, содержащего указанную дату. */
-export function computePeriodBounds(date: Date): { startDate: Date; endDate: Date } {
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const d = date.getDate();
-
-  const startDate = d >= PERIOD_START_DAY ? new Date(y, m, PERIOD_START_DAY) : new Date(y, m - 1, PERIOD_START_DAY);
-  const endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, PERIOD_START_DAY);
-  return { startDate, endDate };
 }
 
 /**
@@ -41,7 +39,10 @@ export async function getActivePeriod() {
   // Если активных вдруг несколько, берём тот, внутри которого мы сейчас, а не
   // просто самый поздний: иначе один лишний период "в будущем" навсегда
   // перетянул бы на себя весь учёт.
-  const existing = active.find((p) => p.startDate <= now && p.endDate > now) ?? active[0] ?? null;
+  const existing =
+    active.find((p) => p.startDate <= now && p.endDate > now) ??
+    active[0] ??
+    null;
 
   const { startDate, endDate } = computePeriodBounds(now);
 
@@ -71,15 +72,25 @@ export async function getActivePeriod() {
     // успел создать первый запрос, вместо того чтобы плодить дубликат.
     try {
       const [, created] = await prisma.$transaction([
-        prisma.accountingPeriod.update({ where: { id: existing.id }, data: { status: "closed", closedAt: now } }),
+        prisma.accountingPeriod.update({
+          where: { id: existing.id },
+          data: { status: "closed", closedAt: now },
+        }),
         prisma.accountingPeriod.create({
-          data: { startDate, endDate, label: periodLabel(startDate, endDate), status: "active" },
+          data: {
+            startDate,
+            endDate,
+            label: periodLabel(startDate, endDate),
+            status: "active",
+          },
         }),
       ]);
       return created;
     } catch (err) {
       if (!isUniqueViolation(err)) throw err;
-      const winner = await prisma.accountingPeriod.findFirst({ where: { status: "active" } });
+      const winner = await prisma.accountingPeriod.findFirst({
+        where: { status: "active" },
+      });
       if (winner) return winner;
       throw err;
     }
@@ -87,11 +98,18 @@ export async function getActivePeriod() {
 
   try {
     return await prisma.accountingPeriod.create({
-      data: { startDate, endDate, label: periodLabel(startDate, endDate), status: "active" },
+      data: {
+        startDate,
+        endDate,
+        label: periodLabel(startDate, endDate),
+        status: "active",
+      },
     });
   } catch (err) {
     if (!isUniqueViolation(err)) throw err;
-    const winner = await prisma.accountingPeriod.findFirst({ where: { status: "active" } });
+    const winner = await prisma.accountingPeriod.findFirst({
+      where: { status: "active" },
+    });
     if (winner) return winner;
     throw err;
   }
@@ -106,5 +124,7 @@ export async function getActivePeriodId(): Promise<string> {
 export function daysUntilPeriodEnd(endDate: Date): number {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.round((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.round(
+    (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  );
 }

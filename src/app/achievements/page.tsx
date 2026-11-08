@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { isFullAdminRole } from "@/lib/accountRoles";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +11,7 @@ import { getActiveTiers } from "@/lib/achievements/thresholds";
 import { ACHIEVEMENTS } from "@/lib/achievements/catalog";
 
 export default async function AchievementsPage() {
+  await requireGuildMember();
   const user = await getCurrentUser();
 
   // Как и на аукционе: не выбрасываем на другую страницу молча, а объясняем.

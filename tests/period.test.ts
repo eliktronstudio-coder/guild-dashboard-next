@@ -1,3 +1,4 @@
+import { prepareDatabase } from "./prepare-database";
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -5,7 +6,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { computePeriodBounds } from "../src/lib/period";
+import { computePeriodBounds } from "../src/lib/period-bounds";
 
 /* ——— Границы цикла 15→15 ——— */
 
@@ -58,6 +59,7 @@ before(async () => {
   dir = mkdtempSync(path.join(tmpdir(), "xd-period-test-"));
   process.env.DATABASE_URL = `file:${path.join(dir, "test.db").split(path.sep).join("/")}`;
 
+  prepareDatabase();
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
     cwd: process.cwd(),
     env: process.env,

@@ -18,14 +18,23 @@ export type PayoutCategory = (typeof PAYOUT_CATEGORIES)[number];
  * Иначе выплата за прошлый период списывала бы золото из казны нового — то
  * есть люди, отходившие текущий период, недосчитались бы своей доли.
  */
-export type PayoutTarget = { key: string; periodId: string | null; archiveId: string | null };
+export type PayoutTarget = {
+  key: string;
+  periodId: string | null;
+  archiveId: string | null;
+};
 
-export async function resolvePayoutTarget(archiveId: string | null): Promise<PayoutTarget | null> {
+export async function resolvePayoutTarget(
+  archiveId: string | null,
+): Promise<PayoutTarget | null> {
   if (!archiveId) {
     const period = await getActivePeriodId();
     return { key: period, periodId: period, archiveId: null };
   }
-  const archive = await prisma.archive.findUnique({ where: { id: archiveId }, select: { id: true } });
+  const archive = await prisma.archive.findUnique({
+    where: { id: archiveId },
+    select: { id: true },
+  });
   if (!archive) return null;
   // Ключом периода для Payment служит id архива — так выплаты за закрытый
   // период не смешиваются с выплатами за текущий.
@@ -36,7 +45,7 @@ export async function resolvePayoutTarget(archiveId: string | null): Promise<Pay
 export async function resolvePayoutAmount(
   playerId: string,
   category: PayoutCategory,
-  target: PayoutTarget
+  target: PayoutTarget,
 ): Promise<number | null> {
   if (target.archiveId) {
     const stat = await prisma.archivePlayerStat.findFirst({
@@ -73,8 +82,23 @@ export async function recordPayout({
   amount: number;
   target: PayoutTarget;
 }) {
-  await prisma.$transaction([
-    prisma.payment.create({
+  return prisma.$transaction(async (tx) => {
+    await tx.appSetting.upsert({
+      where: { key: "xd:payout-lock" },
+      create: { key: "xd:payout-lock", value: "1" },
+      update: { value: "1" },
+    });
+    const existing = await tx.payment.findFirst({
+      where: {
+        playerId,
+        category,
+        source: "payout",
+        archiveMonth: target.key,
+        status: "Выплачено",
+      },
+    });
+    if (existing) return { repeated: true, amount: existing.amount };
+    await tx.payment.create({
       data: {
         playerId,
         amount,
@@ -84,8 +108,8 @@ export async function recordPayout({
         periodId: target.periodId,
         category,
       },
-    }),
-    prisma.treasuryTransaction.create({
+    });
+    await tx.treasuryTransaction.create({
       data: {
         description: `Выплата ЗП (${category}): ${playerName}`,
         amount: -amount,
@@ -94,8 +118,9 @@ export async function recordPayout({
         periodId: target.periodId,
         archiveId: target.archiveId,
       },
-    }),
-  ]);
+    });
+    return { repeated: false, amount };
+  });
 }
 
 /**
@@ -115,17 +140,34 @@ export async function cancelPayout({
   amount: number;
   target: PayoutTarget;
 }) {
-  await prisma.$transaction([
-    prisma.payment.delete({ where: { id: paymentId } }),
-    prisma.treasuryTransaction.create({
+  return prisma.$transaction(async (tx) => {
+    await tx.appSetting.upsert({
+      where: { key: "xd:payout-lock" },
+      create: { key: "xd:payout-lock", value: "1" },
+      update: { value: "1" },
+    });
+    const existing = await tx.payment.findUnique({ where: { id: paymentId } });
+    if (!existing || existing.status !== "Выплачено") return { repeated: true };
+    if (
+      existing.amount !== amount ||
+      existing.category !== category ||
+      existing.archiveMonth !== target.key
+    )
+      throw new Error("Выплата изменилась. Обновите страницу.");
+    await tx.payment.update({
+      where: { id: paymentId },
+      data: { status: "Отменено" },
+    });
+    await tx.treasuryTransaction.create({
       data: {
         description: `Отмена выплаты ЗП (${category}): ${playerName}`,
-        amount,
+        amount: existing.amount,
         category,
         kind: "payout",
         periodId: target.periodId,
         archiveId: target.archiveId,
       },
-    }),
-  ]);
+    });
+    return { repeated: false };
+  });
 }

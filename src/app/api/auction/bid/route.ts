@@ -1,14 +1,23 @@
+import { getApprovedUser } from "@/lib/access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
 import { placeBid, skipTurn, type BidOutcome } from "@/lib/auction";
 
-const ERRORS: Record<Exclude<BidOutcome & { ok: false }, { ok: true }>["reason"], { message: string; status: number }> = {
+const ERRORS: Record<
+  Exclude<BidOutcome & { ok: false }, { ok: true }>["reason"],
+  { message: string; status: number }
+> = {
   "no-auction": { message: "Торги не идут.", status: 404 },
   finished: { message: "Торги уже завершены.", status: 409 },
-  stale: { message: "Кто-то успел поставить раньше — цена изменилась.", status: 409 },
+  stale: {
+    message: "Кто-то успел поставить раньше — цена изменилась.",
+    status: 409,
+  },
   "already-leading": { message: "Вы и так лидируете.", status: 409 },
-  expired: { message: "Время торгов вышло — ставки больше не принимаются.", status: 409 },
+  expired: {
+    message: "Время торгов вышло — ставки больше не принимаются.",
+    status: 409,
+  },
 };
 
 /**
@@ -18,7 +27,7 @@ const ERRORS: Record<Exclude<BidOutcome & { ok: false }, { ok: true }>["reason"]
  * не из тела запроса: иначе любой мог бы поставить за другого.
  */
 export async function POST(request: NextRequest) {
-  const user = await getCurrentUser();
+  const user = await getApprovedUser();
   if (!user || user.role === "random") {
     return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
   }
@@ -29,8 +38,11 @@ export async function POST(request: NextRequest) {
   });
   if (!player) {
     return NextResponse.json(
-      { error: "Ваша учётная запись не привязана к игроку в составе — ставить нельзя." },
-      { status: 403 }
+      {
+        error:
+          "Ваша учётная запись не привязана к игроку в составе — ставить нельзя.",
+      },
+      { status: 403 },
     );
   }
 
@@ -43,9 +55,16 @@ export async function POST(request: NextRequest) {
   } else {
     const expectedBid = Number(body?.expectedBid);
     if (!Number.isFinite(expectedBid)) {
-      return NextResponse.json({ error: "Некорректные данные." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Некорректные данные." },
+        { status: 400 },
+      );
     }
-    outcome = await placeBid({ playerId: player.id, name: player.name, expectedBid });
+    outcome = await placeBid({
+      playerId: player.id,
+      name: player.name,
+      expectedBid,
+    });
   }
 
   if (!outcome.ok) {

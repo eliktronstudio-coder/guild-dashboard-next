@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import { getCurrentUser } from "@/lib/auth";
 import { isFullAdminRole } from "@/lib/accountRoles";
 import { getDropCatalog } from "@/lib/queries";
@@ -26,6 +27,7 @@ function Notice({ title, hint }: { title: string; hint: string }) {
 }
 
 export default async function AuctionPage() {
+  await requireGuildMember();
   const user = await getCurrentUser();
 
   if (!user) {

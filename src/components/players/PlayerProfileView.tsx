@@ -4,11 +4,16 @@ import StatusBadge from "@/components/StatusBadge";
 import EmptyState from "@/components/EmptyState";
 import BlurValue from "@/components/BlurValue";
 import AttendanceChart from "@/components/charts/AttendanceChart";
-import DailyAttendanceChart, { type DailyAttendancePoint } from "@/components/charts/DailyAttendanceChart";
+import DailyAttendanceChart, {
+  type DailyAttendancePoint,
+} from "@/components/charts/DailyAttendanceChart";
 import ActivityRow from "@/components/dashboard/ActivityRow";
 
 const numberFmt = new Intl.NumberFormat("ru-RU");
-const coefficientFmt = new Intl.NumberFormat("ru-RU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const coefficientFmt = new Intl.NumberFormat("ru-RU", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 const paymentStatusTone: Record<string, "accent" | "success" | "danger"> = {
   Ожидает: "accent",
@@ -46,6 +51,7 @@ export type PlayerProfileData = {
   /** За 30 дней, с разрывами в дни без участия — если задано, заменяет недельный график. */
   dailyAttendance?: DailyAttendancePoint[];
   isRandom: boolean;
+  canViewFinance?: boolean;
   /** Ссылка "назад" вверху страницы; пусто — без неё (например, на «Моём профиле»). */
   backHref?: string;
   backLabel?: string;
@@ -59,6 +65,7 @@ export default function PlayerProfileView({
   attendanceChart = [],
   dailyAttendance,
   isRandom,
+  canViewFinance = true,
   backHref,
   backLabel = "← Состав",
 }: PlayerProfileData) {
@@ -84,31 +91,81 @@ export default function PlayerProfileView({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <BlurValue blurred={isRandom}>
-          <StatCard label="Посещаемость" value={`${player.attendancePct}%`} hint="за всё время" />
+          <StatCard
+            label="Посещаемость"
+            value={`${player.attendancePct}%`}
+            hint="текущий расчётный период"
+          />
         </BlurValue>
         <BlurValue blurred={isRandom}>
-          <StatCard label="Посещаемость: Прайм" value={`${player.attendancePctPrime}%`} hint="за всё время" />
+          <StatCard
+            label="Посещаемость: Прайм"
+            value={`${player.attendancePctPrime}%`}
+            hint="текущий расчётный период"
+          />
         </BlurValue>
         <BlurValue blurred={isRandom}>
-          <StatCard label="Посещаемость: Мини-РБ" value={`${player.attendancePctMiniRb}%`} hint="за всё время" />
+          <StatCard
+            label="Посещаемость: Мини-РБ"
+            value={`${player.attendancePctMiniRb}%`}
+            hint="текущий расчётный период"
+          />
         </BlurValue>
         <BlurValue blurred={isRandom}>
-          <StatCard label="Зарплата" value={`${numberFmt.format(player.salary)} золота`} hint="расчётная" />
+          <StatCard
+            label="Зарплата"
+            value={
+              canViewFinance
+                ? `${numberFmt.format(player.salary)} золота`
+                : "Нет доступа"
+            }
+            hint="расчётная"
+          />
         </BlurValue>
         <BlurValue blurred={isRandom}>
-          <StatCard label="Зарплата: Прайм" value={`${numberFmt.format(player.salaryPrime)} золота`} hint="расчётная" />
+          <StatCard
+            label="Зарплата: Прайм"
+            value={
+              canViewFinance
+                ? `${numberFmt.format(player.salaryPrime)} золота`
+                : "Нет доступа"
+            }
+            hint="расчётная"
+          />
         </BlurValue>
         <BlurValue blurred={isRandom}>
-          <StatCard label="Зарплата: Мини-РБ" value={`${numberFmt.format(player.salaryMiniRb)} золота`} hint="расчётная" />
+          <StatCard
+            label="Зарплата: Мини-РБ"
+            value={
+              canViewFinance
+                ? `${numberFmt.format(player.salaryMiniRb)} золота`
+                : "Нет доступа"
+            }
+            hint="расчётная"
+          />
         </BlurValue>
-        <StatCard label="Уровень" value={String(player.level)} hint="текущий уровень" />
-        <StatCard label="Опыт" value={`${numberFmt.format(player.xp)} XP`} hint="накоплено" />
-        <StatCard label="Коэффициент" value={coefficientFmt.format(player.salaryCoefficient)} hint="настраивает админ" />
+        <StatCard
+          label="Уровень"
+          value={String(player.level)}
+          hint="текущий уровень"
+        />
+        <StatCard
+          label="Опыт"
+          value={`${numberFmt.format(player.xp)} XP`}
+          hint="накоплено"
+        />
+        <StatCard
+          label="Коэффициент"
+          value={coefficientFmt.format(player.salaryCoefficient)}
+          hint="настраивает админ"
+        />
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4">
         <h3 className="mb-3 text-sm font-semibold">
-          {dailyAttendance ? "Посещаемость за последние 30 дней" : "Посещаемость по неделям"}
+          {dailyAttendance
+            ? "Посещаемость за последние 30 дней"
+            : "Посещаемость по неделям"}
         </h3>
         <BlurValue blurred={isRandom}>
           {dailyAttendance ? (
@@ -123,7 +180,10 @@ export default function PlayerProfileView({
         <div className="rounded-lg border border-border bg-surface p-4">
           <h3 className="mb-3 text-sm font-semibold">История активностей</h3>
           {activities.length === 0 ? (
-            <EmptyState title="Нет данных за выбранный период" hint="Игрок ещё не участвовал в активностях." />
+            <EmptyState
+              title="Нет данных за выбранный период"
+              hint="Игрок ещё не участвовал в активностях."
+            />
           ) : (
             // Видно ровно 3 строки (92px + 8px отступ каждая), остальное — в
             // скролле: список может быть длинным, а карточка профиля не
@@ -137,7 +197,11 @@ export default function PlayerProfileView({
                   participants={a.participants}
                   status={a.status}
                   date={a.date}
-                  bannerUrl={a.bannerId ? `/api/activity-banners/${a.bannerId}/media` : null}
+                  bannerUrl={
+                    a.bannerId
+                      ? `/api/activity-banners/${a.bannerId}/media`
+                      : null
+                  }
                   bannerIsVideo={a.bannerIsVideo}
                 />
               ))}
@@ -148,18 +212,29 @@ export default function PlayerProfileView({
         <div className="rounded-lg border border-border bg-surface p-4">
           <h3 className="mb-3 text-sm font-semibold">История выплат</h3>
           {payments.length === 0 ? (
-            <EmptyState title="Нет данных за выбранный период" hint="Выплат этому игроку ещё не было." />
+            <EmptyState
+              title="Нет данных за выбранный период"
+              hint="Выплат этому игроку ещё не было."
+            />
           ) : (
             <ul className="divide-y divide-border">
               {payments.map((p) => (
-                <li key={p.id} className="flex items-center justify-between py-2.5 text-sm">
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between py-2.5 text-sm"
+                >
                   <div>
                     <BlurValue blurred={isRandom}>
-                      <p className="font-mono font-medium tabular-nums">{numberFmt.format(p.amount)} золота</p>
+                      <p className="font-mono font-medium tabular-nums">
+                        {numberFmt.format(p.amount)} золота
+                      </p>
                     </BlurValue>
                     <p className="text-xs text-muted">{p.date}</p>
                   </div>
-                  <StatusBadge label={p.status} tone={paymentStatusTone[p.status] ?? "muted"} />
+                  <StatusBadge
+                    label={p.status}
+                    tone={paymentStatusTone[p.status] ?? "muted"}
+                  />
                 </li>
               ))}
             </ul>

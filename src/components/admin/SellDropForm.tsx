@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { X } from "lucide-react";
 import AutocompleteInput from "./AutocompleteInput";
 
@@ -10,7 +10,12 @@ const JUNK = "__junk__";
 const MINI_RB = "__mini_rb__";
 
 type DropEntry = { id: string; quantity: number; value: number };
-type DropOption = { item: string; quantity: number; totalValue: number; entries: DropEntry[] };
+type DropOption = {
+  item: string;
+  quantity: number;
+  totalValue: number;
+  entries: DropEntry[];
+};
 type PlayerOption = { id: string; name: string };
 
 // Считает стоимость первых qty единиц предмета, "снимая" их по очереди
@@ -53,9 +58,13 @@ export default function SellDropForm({
   // Продажа Мини-РБ и мусор не берутся из инвентаря: предмета нет, сумму
   // вводит администратор.
   const isFreeform = isJunk || isMiniRb;
-  const selectedDrop = isFreeform ? null : (drops.find((d) => d.item === item) ?? null);
+  const selectedDrop = isFreeform
+    ? null
+    : (drops.find((d) => d.item === item) ?? null);
   const isAuction = buyer === AUCTION;
-  const fixedTotal = selectedDrop ? proportionalTotal(selectedDrop.entries, qty) : 0;
+  const fixedTotal = selectedDrop
+    ? proportionalTotal(selectedDrop.entries, qty)
+    : 0;
   const showManualAmount = isAuction || isFreeform;
   // У продажи Мини-РБ покупателя нет: это общий доход гильдии, а не выкуп
   // предмета игроком. Поэтому поле «Кому продажа» скрыто.
@@ -82,14 +91,21 @@ export default function SellDropForm({
     setQty(Math.min(max, Math.max(1, n)));
   }
 
+  const pendingSale = useRef<{ payload: string; key: string } | null>(null);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     if (!isFreeform && !selectedDrop) {
       setError("Выберите предмет из инвентаря.");
       return;
     }
-    if (!isFreeform && selectedDrop && (qty < 1 || qty > selectedDrop.quantity)) {
+    if (
+      !isFreeform &&
+      selectedDrop &&
+      (qty < 1 || qty > selectedDrop.quantity)
+    ) {
       setError("Некорректное количество.");
       return;
     }
@@ -97,7 +113,13 @@ export default function SellDropForm({
       setError("Укажите количество РБ опыта.");
       return;
     }
-    if (isFreeform && (qty < 1 || !amount || !Number.isFinite(Number(amount)) || Number(amount) < 0)) {
+    if (
+      isFreeform &&
+      (qty < 1 ||
+        !amount ||
+        !Number.isFinite(Number(amount)) ||
+        Number(amount) < 0)
+    ) {
       setError("Укажите количество и сумму продажи.");
       return;
     }
@@ -105,9 +127,19 @@ export default function SellDropForm({
       setError("Выберите, кому продажа.");
       return;
     }
-    const itemLabel = isJunk ? "Мусор" : isMiniRb ? "Продажа Мини-РБ" : (selectedDrop?.item ?? "");
-    const buyerLabel = isAuction ? "аукцион" : (players.find((p) => p.id === buyer)?.name ?? buyer);
-    const totalLabel = showManualAmount ? (amount ? `${numberFmt.format(Number(amount))} золота` : "сумма не указана") : `${numberFmt.format(fixedTotal)} золота`;
+    const itemLabel = isJunk
+      ? "Мусор"
+      : isMiniRb
+        ? "Продажа Мини-РБ"
+        : (selectedDrop?.item ?? "");
+    const buyerLabel = isAuction
+      ? "аукцион"
+      : (players.find((p) => p.id === buyer)?.name ?? buyer);
+    const totalLabel = showManualAmount
+      ? amount
+        ? `${numberFmt.format(Number(amount))} золота`
+        : "сумма не указана"
+      : `${numberFmt.format(fixedTotal)} золота`;
     const confirmText = isMiniRb
       ? `Провести продажу Мини-РБ: ${numberFmt.format(qty)} опыта, ${totalLabel}? Вся сумма пойдёт в Мини-РБ.`
       : `Продать ×${qty} «${itemLabel}» — ${buyerLabel}, ${totalLabel}?`;
@@ -116,20 +148,33 @@ export default function SellDropForm({
     }
     setBusy(true);
     try {
-      const res = await fetch("/api/drops/sell", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          isMiniRb
-            ? { miniRb: true, xp: qty, amount: Number(amount), note }
-            : isJunk
-            ? { junk: true, quantity: qty, amount: Number(amount), ...(isAuction ? {} : { playerId: buyer }) }
+      const payload = JSON.stringify(
+        isMiniRb
+          ? { miniRb: true, xp: qty, amount: Number(amount), note }
+          : isJunk
+            ? {
+                junk: true,
+                quantity: qty,
+                amount: Number(amount),
+                ...(isAuction ? {} : { playerId: buyer }),
+              }
             : {
                 entryIds: selectedDrop!.entries.map((en) => en.id),
                 quantity: qty,
-                ...(isAuction ? { amount: Number(amount) } : { playerId: buyer }),
-              }
-        ),
+                ...(isAuction
+                  ? { amount: Number(amount) }
+                  : { playerId: buyer }),
+              },
+      );
+      if (pendingSale.current?.payload !== payload)
+        pendingSale.current = { payload, key: crypto.randomUUID() };
+      const res = await fetch("/api/drops/sell", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": pendingSale.current.key,
+        },
+        body: payload,
       });
       const data = await res.json();
       if (!res.ok) {
@@ -150,7 +195,9 @@ export default function SellDropForm({
       className="grid grid-cols-1 gap-3 rounded-lg border border-border bg-surface p-4 sm:grid-cols-3"
     >
       <div className="sm:col-span-3">
-        <label className="mb-1 block text-xs text-muted">Предмет из Инвентаря ХД</label>
+        <label className="mb-1 block text-xs text-muted">
+          Предмет из Инвентаря ХД
+        </label>
         <AutocompleteInput
           value={item}
           onChange={handleItemChange}
@@ -163,7 +210,9 @@ export default function SellDropForm({
           placeholder="Поиск по дропу…"
         />
         {drops.length === 0 && (
-          <p className="mt-1 text-xs text-muted">В Инвентаре ХД нет непроданных предметов.</p>
+          <p className="mt-1 text-xs text-muted">
+            В Инвентаре ХД нет непроданных предметов.
+          </p>
         )}
       </div>
 
@@ -173,7 +222,8 @@ export default function SellDropForm({
           {selectedDrop && (
             <span className="text-muted-2">
               {" "}
-              (доступно {selectedDrop.quantity}, записей: {selectedDrop.entries.length})
+              (доступно {selectedDrop.quantity}, записей:{" "}
+              {selectedDrop.entries.length})
             </span>
           )}
         </label>
@@ -195,7 +245,10 @@ export default function SellDropForm({
           <AutocompleteInput
             value={buyer}
             onChange={setBuyer}
-            options={[{ value: AUCTION, label: "Аукцион" }, ...players.map((p) => ({ value: p.id, label: p.name }))]}
+            options={[
+              { value: AUCTION, label: "Аукцион" },
+              ...players.map((p) => ({ value: p.id, label: p.name })),
+            ]}
             pinnedValues={[AUCTION]}
             placeholder="Поиск по нику…"
           />
@@ -224,7 +277,10 @@ export default function SellDropForm({
       {isMiniRb && (
         <div className="sm:col-span-3">
           <label className="mb-1 block text-xs text-muted">
-            Примечание <span className="text-muted-2">(необязательно, попадёт в описание операции)</span>
+            Примечание{" "}
+            <span className="text-muted-2">
+              (необязательно, попадёт в описание операции)
+            </span>
           </label>
           <input
             value={note}
@@ -234,7 +290,8 @@ export default function SellDropForm({
             className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent"
           />
           <p className="mt-1 text-xs text-accent">
-            Вся сумма пойдёт в «Казну мини-РБ» — резерв гильдии с неё не удерживается.
+            Вся сумма пойдёт в «Казну мини-РБ» — резерв гильдии с неё не
+            удерживается.
           </p>
         </div>
       )}

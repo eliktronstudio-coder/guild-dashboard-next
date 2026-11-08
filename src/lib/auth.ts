@@ -36,10 +36,16 @@ export async function createSessionToken(payload: SessionPayload) {
     .sign(secretKey());
 }
 
-export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
+export async function verifySessionToken(
+  token: string,
+): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, secretKey());
-    if (typeof payload.sub !== "string" || typeof payload.username !== "string" || typeof payload.role !== "string") {
+    if (
+      typeof payload.sub !== "string" ||
+      typeof payload.username !== "string" ||
+      typeof payload.role !== "string"
+    ) {
       return null;
     }
     return { sub: payload.sub, username: payload.username, role: payload.role };
@@ -53,10 +59,9 @@ export async function setSessionCookie(payload: SessionPayload) {
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    // Secure cookies are only stored by browsers over HTTPS. The site currently
-    // runs on plain HTTP, so this must stay false until TLS is set up — flip via
-    // COOKIE_SECURE=true once there's a real domain + certificate.
-    secure: process.env.COOKIE_SECURE === "true",
+    secure:
+      process.env.NODE_ENV === "production" ||
+      process.env.COOKIE_SECURE === "true",
     sameSite: "lax",
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
@@ -77,7 +82,10 @@ export async function getCurrentUser(): Promise<SessionPayload | null> {
 
   // Роль читаем из БД, а не из JWT: иначе смена роли админом не действует,
   // пока пользователь сам не перелогинится.
-  const user = await prisma.user.findUnique({ where: { id: session.sub }, select: { role: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: session.sub },
+    select: { role: true },
+  });
   if (!user) return null;
 
   return { ...session, role: user.role };

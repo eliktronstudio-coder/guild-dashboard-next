@@ -29,7 +29,11 @@ export type GridPanel = {
 type ResizeKind = "width" | "height" | "both";
 
 export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
-  const defaults: PanelLayout[] = panels.map((p) => ({ id: p.id, span: p.defaultSpan, height: null }));
+  const defaults: PanelLayout[] = panels.map((p) => ({
+    id: p.id,
+    span: p.defaultSpan,
+    height: null,
+  }));
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const layout = reconcileLayout(raw, defaults);
 
@@ -61,14 +65,21 @@ export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
    * Слушатели вешаются на window, а не на саму ручку: курсор почти сразу уходит
    * с узкой полоски, и события pointermove на элементе приходить перестают.
    */
-  function beginResize(event: React.PointerEvent, entry: PanelLayout, kind: ResizeKind) {
+  function beginResize(
+    event: React.PointerEvent,
+    entry: PanelLayout,
+    kind: ResizeKind,
+  ) {
     event.preventDefault();
     event.stopPropagation();
-    const cell = (event.currentTarget as HTMLElement).closest("[data-panel-cell]") as HTMLElement | null;
+    const cell = (event.currentTarget as HTMLElement).closest(
+      "[data-panel-cell]",
+    ) as HTMLElement | null;
     const startX = event.clientX;
     const startY = event.clientY;
     const startSpan = entry.span;
-    const startHeight = entry.height ?? cell?.getBoundingClientRect().height ?? MIN_HEIGHT;
+    const startHeight =
+      entry.height ?? cell?.getBoundingClientRect().height ?? MIN_HEIGHT;
     const gridWidth = gridRef.current?.getBoundingClientRect().width ?? 0;
     const columnWidth = gridWidth > 0 ? gridWidth / MAX_SPAN : 0;
 
@@ -80,7 +91,10 @@ export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
       }
       if (kind !== "width") {
         const next = startHeight + (e.clientY - startY);
-        patch.height = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, Math.round(next)));
+        patch.height = Math.min(
+          MAX_HEIGHT,
+          Math.max(MIN_HEIGHT, Math.round(next)),
+        );
       }
       update(entry.id, patch);
     };
@@ -111,7 +125,9 @@ export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
           onClick={() => setEditing((v) => !v)}
           className={clsx(
             "flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors",
-            editing ? "border-accent/40 bg-accent-soft text-accent" : "border-border text-muted hover:text-foreground"
+            editing
+              ? "border-accent/40 bg-accent-soft text-accent"
+              : "border-border text-muted hover:text-foreground",
           )}
         >
           {editing ? <Check size={13} /> : <Settings2 size={13} />}
@@ -119,10 +135,29 @@ export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
         </button>
       </div>
 
+      {editing && (
+        <div className="flex flex-wrap gap-2" aria-label="Видимость панелей">
+          {layout.map((entry) => (
+            <label
+              key={entry.id}
+              className="flex min-h-11 items-center gap-2 rounded-lg border border-border px-3 text-xs"
+            >
+              <input
+                type="checkbox"
+                checked={!entry.hidden}
+                onChange={(e) =>
+                  update(entry.id, { hidden: !e.target.checked })
+                }
+              />
+              {byId.get(entry.id)?.label}
+            </label>
+          ))}
+        </div>
+      )}
       <div ref={gridRef} className="grid grid-cols-1 gap-3.5 lg:grid-cols-12">
         {layout.map((entry) => {
           const panel = byId.get(entry.id);
-          if (!panel) return null;
+          if (!panel || entry.hidden) return null;
           return (
             <div
               key={entry.id}
@@ -131,7 +166,7 @@ export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
               className={clsx(
                 "panel-cell relative min-w-0",
                 editing && "rounded-2xl ring-1 ring-accent/30",
-                dragOverId === entry.id && "ring-2 ring-accent"
+                dragOverId === entry.id && "ring-2 ring-accent",
               )}
               style={
                 {
@@ -144,7 +179,9 @@ export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
                 e.preventDefault();
                 setDragOverId(entry.id);
               }}
-              onDragLeave={() => setDragOverId((id) => (id === entry.id ? null : id))}
+              onDragLeave={() =>
+                setDragOverId((id) => (id === entry.id ? null : id))
+              }
               onDrop={(e) => {
                 e.preventDefault();
                 if (draggingId.current) reorder(draggingId.current, entry.id);
@@ -156,6 +193,65 @@ export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
 
               {editing && (
                 <>
+                  <div className="absolute right-2 top-12 z-30 flex flex-wrap gap-1 rounded-lg bg-background/95 p-1">
+                    <button
+                      type="button"
+                      aria-label={`Выше: ${panel.label}`}
+                      className="min-h-11 min-w-11 border border-border"
+                      onClick={() => {
+                        const index = layout.findIndex(
+                          (p) => p.id === entry.id,
+                        );
+                        if (index > 0) reorder(entry.id, layout[index - 1].id);
+                      }}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Ниже: ${panel.label}`}
+                      className="min-h-11 min-w-11 border border-border"
+                      onClick={() => {
+                        const index = layout.findIndex(
+                          (p) => p.id === entry.id,
+                        );
+                        if (index < layout.length - 1)
+                          reorder(entry.id, layout[index + 1].id);
+                      }}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Увеличить: ${panel.label}`}
+                      className="min-h-11 min-w-11 border border-border"
+                      onClick={() =>
+                        update(entry.id, {
+                          height: Math.min(
+                            MAX_HEIGHT,
+                            (entry.height ?? MIN_HEIGHT) + 50,
+                          ),
+                        })
+                      }
+                    >
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Уменьшить: ${panel.label}`}
+                      className="min-h-11 min-w-11 border border-border"
+                      onClick={() =>
+                        update(entry.id, {
+                          height: Math.max(
+                            MIN_HEIGHT,
+                            (entry.height ?? MIN_HEIGHT) - 50,
+                          ),
+                        })
+                      }
+                    >
+                      −
+                    </button>
+                  </div>
                   {/* Перетаскивание только за эту метку — иначе ресайз случайно
                       запускал бы drag всей панели. */}
                   <div
@@ -175,19 +271,19 @@ export default function CustomizableGrid({ panels }: { panels: GridPanel[] }) {
                     role="separator"
                     aria-label="Изменить ширину"
                     onPointerDown={(e) => beginResize(e, entry, "width")}
-                    className="absolute inset-y-4 -right-1 z-10 w-2 cursor-ew-resize rounded-full bg-accent/40 hover:bg-accent"
+                    className="absolute inset-y-4 -right-1 z-10 w-2 touch-none cursor-ew-resize rounded-full bg-accent/40 hover:bg-accent"
                   />
                   <div
                     role="separator"
                     aria-label="Изменить высоту"
                     onPointerDown={(e) => beginResize(e, entry, "height")}
-                    className="absolute inset-x-4 -bottom-1 z-10 h-2 cursor-ns-resize rounded-full bg-accent/40 hover:bg-accent"
+                    className="absolute inset-x-4 -bottom-1 z-10 h-2 touch-none cursor-ns-resize rounded-full bg-accent/40 hover:bg-accent"
                   />
                   <div
                     role="separator"
                     aria-label="Изменить размер"
                     onPointerDown={(e) => beginResize(e, entry, "both")}
-                    className="absolute -bottom-1 -right-1 z-20 h-4 w-4 cursor-nwse-resize rounded-full border-2 border-background bg-accent"
+                    className="absolute -bottom-1 -right-1 z-20 h-4 w-4 touch-none cursor-nwse-resize rounded-full border-2 border-background bg-accent"
                   />
                 </>
               )}

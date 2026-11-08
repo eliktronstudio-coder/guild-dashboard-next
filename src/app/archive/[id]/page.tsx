@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import EmptyState from "@/components/EmptyState";
@@ -10,6 +11,7 @@ const numberFmt = new Intl.NumberFormat("ru-RU");
 const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" });
 
 export default async function ArchiveDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireGuildMember();
   const user = await getCurrentUser();
   if (!isFullAdminRole(user?.role)) redirect("/treasury");
 

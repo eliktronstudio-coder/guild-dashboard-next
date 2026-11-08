@@ -1,3 +1,4 @@
+import { prepareDatabase } from "./prepare-database";
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -18,6 +19,7 @@ before(async () => {
   const dbPath = path.join(dir, "test.db").replace(/\\/g, "/");
   process.env.DATABASE_URL = `file:${dbPath}`;
 
+  prepareDatabase();
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
     cwd: process.cwd(),
     env: process.env,

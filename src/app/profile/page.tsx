@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import { redirect } from "next/navigation";
 import {
   getPlayerByUserId,
@@ -15,6 +16,7 @@ import SavedBuilds from "@/components/players/SavedBuilds";
 import EmptyState from "@/components/EmptyState";
 
 export default async function MyProfilePage() {
+  await requireGuildMember();
   const user = await getCurrentUser();
   if (!user) redirect("/dashboard");
 

@@ -1,9 +1,11 @@
+import { requireGuildMember } from "@/lib/access";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { getActivityBannerNames } from "@/lib/queries";
 import ActivityBannerPanel from "@/components/admin/ActivityBannerPanel";
 
 export default async function ActivityBannersPage() {
+  await requireGuildMember();
   const admin = await requireAdmin();
   if (!admin) redirect("/dashboard");
 

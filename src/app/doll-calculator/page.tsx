@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import { ExternalLink } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { getPlayerByUserId } from "@/lib/queries";
@@ -8,6 +9,7 @@ import SavedBuilds from "@/components/players/SavedBuilds";
 const CALC_URL = "https://aje-calc.h1n.ru";
 
 export default async function DollCalculatorPage() {
+  await requireGuildMember();
   const user = await getCurrentUser();
   const player = user ? await getPlayerByUserId(user.sub) : null;
   const rawBuilds = player

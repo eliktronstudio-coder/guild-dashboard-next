@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import StatCard from "@/components/StatCard";
 import PayoutSummaryTable from "@/components/admin/PayoutSummaryTable";
 import PaymentsTable from "@/components/admin/PaymentsTable";
@@ -15,7 +16,10 @@ import {
 import { getCurrentUser } from "@/lib/auth";
 import { isFullAdminRole } from "@/lib/accountRoles";
 
-const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
+const dateFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+});
 const numberFmt = new Intl.NumberFormat("ru-RU");
 
 export default async function PaymentsPage({
@@ -23,27 +27,50 @@ export default async function PaymentsPage({
 }: {
   searchParams: Promise<{ period?: string }>;
 }) {
-  const [{ period: requested }, activePeriod, user, archives] = await Promise.all([
-    searchParams,
-    getActivePeriod(),
-    getCurrentUser(),
-    getArchiveOptions(),
-  ]);
+  await requireGuildMember();
+  const [{ period: requested }, activePeriod, user, archives] =
+    await Promise.all([
+      searchParams,
+      getActivePeriod(),
+      getCurrentUser(),
+      getArchiveOptions(),
+    ]);
 
   const isRandom = user?.role === "random";
   const isAdmin = isFullAdminRole(user?.role);
 
   // Выбранный архив принимаем только если он есть в списке — иначе чужой
   // ?period= в адресе показывал бы пустую страницу вместо текущего периода.
-  const selectedArchiveId = requested && archives.some((a) => a.id === requested) ? requested : null;
+  const selectedArchiveId =
+    requested && archives.some((a) => a.id === requested) ? requested : null;
 
   const picker = (
-    <PeriodPicker current={activePeriod.label} archives={archives} selected={selectedArchiveId} />
+    <PeriodPicker
+      current={activePeriod.label}
+      archives={archives}
+      selected={selectedArchiveId}
+    />
   );
 
   /* ——— Закрытый период: всё из снимка архива ——— */
   if (selectedArchiveId) {
     const archive = await getArchivePayout(selectedArchiveId);
+    if (archive && !isAdmin) {
+      const own = await getAllPlayers().then((rows) =>
+        rows.find((p) => p.userId === user?.sub),
+      );
+      archive.players = archive.players.filter((p) => p.id === own?.id);
+      archive.total = archive.players.reduce((sum, p) => sum + p.salary, 0);
+      archive.paidTotal = archive.players.reduce(
+        (sum, p) =>
+          sum +
+          (p.paidPrime ? p.salaryPrime : 0) +
+          (p.paidMiniRb ? p.salaryMiniRb : 0),
+        0,
+      );
+      archive.remaining = archive.total - archive.paidTotal;
+      archive.recipients = archive.players.filter((p) => p.salary > 0).length;
+    }
     if (!archive) return <div className="space-y-6">{picker}</div>;
 
     return (
@@ -75,13 +102,19 @@ export default async function PaymentsPage({
               hint={`осталось ${numberFmt.format(archive.remaining)}`}
             />
           </BlurValue>
-          <StatCard label="Получателей" value={String(archive.recipients)} hint="игроков с ненулевой долей" />
+          <StatCard
+            label="Получателей"
+            value={String(archive.recipients)}
+            hint="игроков с ненулевой долей"
+          />
         </div>
 
-        {!isRandom && (
+        {isAdmin && (
           <div className="rounded-lg border border-border bg-surface px-4 py-3 text-sm text-muted">
-            Суммы взяты из снимка, сделанного при архивации, и не пересчитываются: живая казна после архивации
-            обнуляется. Выплата за закрытый период списывается из казны этого же периода и живой баланс не трогает.
+            Суммы взяты из снимка, сделанного при архивации, и не
+            пересчитываются: живая казна после архивации обнуляется. Выплата за
+            закрытый период списывается из казны этого же периода и живой баланс
+            не трогает.
           </div>
         )}
 
@@ -106,8 +139,11 @@ export default async function PaymentsPage({
           subtitle="Снимок на момент архивации: проценты и доли зафиксированы и не пересчитываются. Отметка «Выплата» списывает долю из казны этого же периода."
           paidStatus={archive.players.flatMap((p) =>
             p.id
-              ? [...(p.paidPrime ? [`${p.id}:Прайм`] : []), ...(p.paidMiniRb ? [`${p.id}:Мини-РБ`] : [])]
-              : []
+              ? [
+                  ...(p.paidPrime ? [`${p.id}:Прайм`] : []),
+                  ...(p.paidMiniRb ? [`${p.id}:Мини-РБ`] : []),
+                ]
+              : [],
           )}
         />
       </div>
@@ -126,7 +162,9 @@ export default async function PaymentsPage({
   // Фиксировать зарплату отдельной кнопкой больше не нужно: доли считаются от
   // исходного фонда периода, а не от остатка казны, поэтому выплата одному
   // игроку не меняет суммы у остальных (см. distributionPools в queries.ts).
-  const effective = players;
+  const effective = isAdmin
+    ? players
+    : players.filter((p) => p.userId === user?.sub);
 
   const totalPayout = effective.reduce((sum, p) => sum + p.salary, 0);
   const recipients = effective.filter((p) => p.salary > 0).length;
@@ -136,7 +174,13 @@ export default async function PaymentsPage({
   // зафиксированной зарплате остаётся прежним, так что напрямую их сравнивать
   // уже нельзя.
   const paidThisPeriod = payments
-    .filter((p) => p.source === "payout" && p.archiveMonth === period && p.status === "Выплачено")
+    .filter(
+      (p) =>
+        p.source === "payout" &&
+        p.archiveMonth === period &&
+        p.status === "Выплачено" &&
+        (isAdmin || p.player.userId === user?.sub),
+    )
     .reduce((sum, p) => sum + p.amount, 0);
 
   // Сверка: остаток казны обязан равняться тому, что ещё не выплачено.
@@ -167,28 +211,43 @@ export default async function PaymentsPage({
           hint={daysLeft >= 0 ? `через ${daysLeft} дн.` : "период завершён"}
         />
         <BlurValue blurred={isRandom}>
-          <StatCard label="Сумма к выплате" value={`${numberFmt.format(totalPayout)} золота`} hint="расчётная сумма" />
+          <StatCard
+            label="Сумма к выплате"
+            value={`${numberFmt.format(totalPayout)} золота`}
+            hint="расчётная сумма"
+          />
         </BlurValue>
-        <StatCard label="Получателей" value={String(recipients)} hint="игроков с ненулевой долей" />
+        <StatCard
+          label="Получателей"
+          value={String(recipients)}
+          hint="игроков с ненулевой долей"
+        />
       </div>
 
-      {!isRandom && (
+      {isAdmin && (
         <div
           className={`rounded-lg border px-4 py-3 text-sm ${
-            undistributed === 0 ? "border-border bg-surface text-muted" : "border-danger/40 bg-danger/10 text-danger"
+            undistributed === 0
+              ? "border-border bg-surface text-muted"
+              : "border-danger/40 bg-danger/10 text-danger"
           }`}
         >
           {undistributed === 0 ? (
             <>
               Сверка сошлась: остаток казны Прайма и Мини-РБ —{" "}
-              <span className="font-mono tabular-nums text-foreground">{numberFmt.format(pool)}</span> золота —
-              равен ещё не выплаченной части фонда. Если игрока удалить, его доля автоматически уйдёт остальным.
+              <span className="font-mono tabular-nums text-foreground">
+                {numberFmt.format(pool)}
+              </span>{" "}
+              золота — равен ещё не выплаченной части фонда. Доли рассчитываются
+              от исходного фонда, включая уже произведённые выплаты.
             </>
           ) : (
             <>
               Не сходится{" "}
-              <span className="font-mono tabular-nums">{numberFmt.format(undistributed)}</span> золота. Это ошибка
-              расчёта — сообщите разработчику.
+              <span className="font-mono tabular-nums">
+                {numberFmt.format(undistributed)}
+              </span>{" "}
+              золота. Это ошибка расчёта — сообщите разработчику.
             </>
           )}
         </div>
@@ -216,19 +275,23 @@ export default async function PaymentsPage({
         totalPayout={totalPayout}
         isRandom={isRandom}
         isAdmin={isAdmin}
-        paidStatus={[...paidStatus]}
+        paidStatus={[...paidStatus].filter((key) =>
+          effective.some((p) => key.startsWith(p.id + ":")),
+        )}
       />
 
       <PaymentsTable
-        payments={payments.map((p) => ({
-          id: p.id,
-          player: { id: p.player.id, name: p.player.name },
-          amount: p.amount,
-          status: p.status,
-          date: dateFmt.format(p.date),
-          dateISO: p.date.toISOString().slice(0, 10),
-          source: p.source,
-        }))}
+        payments={payments
+          .filter((p) => isAdmin || p.player.userId === user?.sub)
+          .map((p) => ({
+            id: p.id,
+            player: { id: p.player.id, name: p.player.name },
+            amount: p.amount,
+            status: p.status,
+            date: dateFmt.format(p.date),
+            dateISO: p.date.toISOString().slice(0, 10),
+            source: p.source,
+          }))}
         players={players.map((p) => ({ id: p.id, name: p.name }))}
         isAdmin={isAdmin}
         isRandom={isRandom}

@@ -1,3 +1,4 @@
+import { prepareDatabase } from "./prepare-database";
 import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -25,6 +26,7 @@ before(async () => {
   dir = mkdtempSync(path.join(tmpdir(), "xd-payout-stability-"));
   process.env.DATABASE_URL = `file:${path.join(dir, "test.db").split(path.sep).join("/")}`;
 
+  prepareDatabase();
   execFileSync("npx", ["prisma", "migrate", "deploy"], {
     cwd: process.cwd(),
     env: process.env,

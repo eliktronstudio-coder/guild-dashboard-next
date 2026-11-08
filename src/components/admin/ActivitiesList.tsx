@@ -1,12 +1,27 @@
 "use client";
 
-import { useState, useEffect, type ChangeEvent, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
-import { Plus, Trash2, X, Search, RotateCcw, ChevronLeft, ChevronRight, Filter } from "lucide-react";
+import {
+  Plus,
+  Trash2,
+  X,
+  Search,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  Filter,
+} from "lucide-react";
 import clsx from "clsx";
-import { ACTIVITY_CATEGORIES, ACTIVITY_MODES, ACTIVITY_DIFFICULTIES, ACTIVITY_STATUSES, statusColor } from "@/lib/activityOptions";
+import {
+  ACTIVITY_CATEGORIES,
+  ACTIVITY_MODES,
+  ACTIVITY_DIFFICULTIES,
+  ACTIVITY_STATUSES,
+  statusColor,
+} from "@/lib/activityOptions";
 import { activityAttendanceWeight } from "@/lib/activityWeights";
 import StatCard from "@/components/StatCard";
 import EmptyState from "@/components/EmptyState";
@@ -100,6 +115,7 @@ export default function ActivitiesList({
 
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
+  const [planned, setPlanned] = useState(false);
   const [newDate, setNewDate] = useState(todayISO());
   const [newCategory, setNewCategory] = useState(ACTIVITY_CATEGORIES[0]);
   const [newMode, setNewMode] = useState(ACTIVITY_MODES[0]);
@@ -121,12 +137,14 @@ export default function ActivitiesList({
 
   // Коэффициент подсказывается по названию/режиму (та же таблица, что и на
   // сервере) — пока админ не тронул поле руками, оно едет вслед за названием.
-  useEffect(() => {
-    if (weightTouched) return;
-    setNewWeight(String(activityAttendanceWeight(newName, newMode)));
-  }, [newName, newMode, weightTouched]);
+  const effectiveWeight = weightTouched
+    ? newWeight
+    : String(activityAttendanceWeight(newName, newMode));
 
-  async function handleShotFiles(e: ChangeEvent<HTMLInputElement>, setShots: (fn: (prev: string[]) => string[]) => void) {
+  async function handleShotFiles(
+    e: ChangeEvent<HTMLInputElement>,
+    setShots: (fn: (prev: string[]) => string[]) => void,
+  ) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
     if (files.length === 0) return;
@@ -146,8 +164,12 @@ export default function ActivitiesList({
     setShots((prev) => [...prev, ...urls].slice(0, MAX_SCREENSHOTS));
   }
 
-  const filteredPlayers = players.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()));
-  const filteredCatalog = catalog.filter((c) => c.name.toLowerCase().includes(dropSearch.trim().toLowerCase()));
+  const filteredPlayers = players.filter((p) =>
+    p.name.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+  const filteredCatalog = catalog.filter((c) =>
+    c.name.toLowerCase().includes(dropSearch.trim().toLowerCase()),
+  );
 
   function applyFilters(overrides: Partial<Record<string, string>> = {}) {
     const params = new URLSearchParams();
@@ -180,7 +202,15 @@ export default function ActivitiesList({
 
   function goToPage(p: number) {
     const params = new URLSearchParams();
-    const values: Record<string, string> = { dateFrom, dateTo, status, mode, category, name, player };
+    const values: Record<string, string> = {
+      dateFrom,
+      dateTo,
+      status,
+      mode,
+      category,
+      name,
+      player,
+    };
     for (const [key, value] of Object.entries(values)) {
       if (value) params.set(key, value);
     }
@@ -190,6 +220,7 @@ export default function ActivitiesList({
 
   function cancelAdd() {
     setAdding(false);
+    setPlanned(false);
     setNewName("");
     setNewDate(todayISO());
     setNewCategory(ACTIVITY_CATEGORIES[0]);
@@ -258,17 +289,20 @@ export default function ActivitiesList({
         body: JSON.stringify({
           name: newName,
           date: newDate,
+          status: planned ? "Запланировано" : "К выплате",
           category: newCategory,
           mode: newMode,
           difficulty: newDifficulty,
           isNight: newIsNight,
           perAttendanceValue: Number(newPerAttendance),
-          weight: Number(newWeight),
+          weight: Number(effectiveWeight),
           participantIds: [...selected],
-          drops: Object.entries(dropSelected).map(([catalogItemId, quantity]) => ({
-            catalogItemId,
-            quantity: Number(quantity) || 1,
-          })),
+          drops: Object.entries(dropSelected).map(
+            ([catalogItemId, quantity]) => ({
+              catalogItemId,
+              quantity: Number(quantity) || 1,
+            }),
+          ),
           screenshots: [
             ...rosterShots.map((imageUrl) => ({ kind: "roster", imageUrl })),
             ...dropShots.map((imageUrl) => ({ kind: "drop", imageUrl })),
@@ -306,10 +340,26 @@ export default function ActivitiesList({
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Активностей за период" value={String(summary.total)} hint="в текущей выборке" />
-        <StatCard label="Средняя посещаемость" value={String(summary.avgAttendance)} hint="участников на активность" />
-        <StatCard label="Лучший показатель" value={String(summary.bestAttendance)} hint="максимум участников" />
-        <StatCard label="Отменено" value={String(summary.cancelled)} hint="в текущей выборке" />
+        <StatCard
+          label="Активностей за период"
+          value={String(summary.total)}
+          hint="в текущей выборке"
+        />
+        <StatCard
+          label="Средняя посещаемость"
+          value={String(summary.avgAttendance)}
+          hint="участников на активность"
+        />
+        <StatCard
+          label="Лучший показатель"
+          value={String(summary.bestAttendance)}
+          hint="максимум участников"
+        />
+        <StatCard
+          label="Отменено"
+          value={String(summary.cancelled)}
+          hint="в текущей выборке"
+        />
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4">
@@ -421,10 +471,23 @@ export default function ActivitiesList({
           )}
 
           {adding && (
-            <form onSubmit={handleSubmit} className="space-y-3 rounded-lg border border-border bg-surface p-4">
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-3 rounded-lg border border-border bg-surface p-4"
+            >
+              <label className="flex min-h-11 items-center gap-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={planned}
+                  onChange={(e) => setPlanned(e.target.checked)}
+                />{" "}
+                Запланированное событие (запись не увеличивает посещаемость)
+              </label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div>
-                  <label className="mb-1 block text-xs text-muted">Название</label>
+                  <label className="mb-1 block text-xs text-muted">
+                    Название
+                  </label>
                   <input
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
@@ -479,7 +542,9 @@ export default function ActivitiesList({
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-muted">Сложность</label>
+                  <label className="mb-1 block text-xs text-muted">
+                    Сложность
+                  </label>
                   <select
                     value={newDifficulty}
                     onChange={(e) => setNewDifficulty(e.target.value)}
@@ -493,7 +558,9 @@ export default function ActivitiesList({
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-muted">Золота за посещение</label>
+                  <label className="mb-1 block text-xs text-muted">
+                    Золота за посещение
+                  </label>
                   <input
                     type="number"
                     value={newPerAttendance}
@@ -503,12 +570,15 @@ export default function ActivitiesList({
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-muted" title="Вес активности для посещаемости Прайма — подставляется по названию, можно поправить">
+                  <label
+                    className="mb-1 block text-xs text-muted"
+                    title="Вес активности для посещаемости Прайма — подставляется по названию, можно поправить"
+                  >
                     Коэффициент
                   </label>
                   <input
                     type="number"
-                    value={newWeight}
+                    value={effectiveWeight}
                     onChange={(e) => {
                       setNewWeight(e.target.value);
                       setWeightTouched(true);
@@ -534,10 +604,16 @@ export default function ActivitiesList({
 
               <div>
                 <p className="mb-1.5 text-xs text-muted">
-                  Состав <span className="text-muted/70">(только зарегистрированные на сайте)</span>
+                  Состав{" "}
+                  <span className="text-muted/70">
+                    (только зарегистрированные на сайте)
+                  </span>
                 </p>
                 <div className="relative mb-2">
-                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                  <Search
+                    size={14}
+                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+                  />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -548,7 +624,8 @@ export default function ActivitiesList({
                 <div className="flex max-h-52 flex-wrap gap-2 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
                   {players.length === 0 && (
                     <p className="text-xs text-muted">
-                      Пока никто из состава не зарегистрирован на сайте — участников добавить нельзя.
+                      Пока никто из состава не зарегистрирован на сайте —
+                      участников добавить нельзя.
                     </p>
                   )}
                   {players.length > 0 && filteredPlayers.length === 0 && (
@@ -569,13 +646,19 @@ export default function ActivitiesList({
                     </label>
                   ))}
                 </div>
-                {selected.size > 0 && <p className="mt-1.5 text-xs text-muted">Выбрано: {selected.size}</p>}
+                {selected.size > 0 && (
+                  <p className="mt-1.5 text-xs text-muted">
+                    Выбрано: {selected.size}
+                  </p>
+                )}
               </div>
 
               <div>
                 <p className="mb-1.5 text-xs text-muted">
                   Незарегистрированные участники{" "}
-                  <span className="text-muted/70">(для информации, не учитываются в статистике)</span>
+                  <span className="text-muted/70">
+                    (для информации, не учитываются в статистике)
+                  </span>
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -623,10 +706,16 @@ export default function ActivitiesList({
 
               <div>
                 <p className="mb-1.5 text-xs text-muted">
-                  Дроп <span className="text-muted/70">(необязательно, из реестра)</span>
+                  Дроп{" "}
+                  <span className="text-muted/70">
+                    (необязательно, из реестра)
+                  </span>
                 </p>
                 <div className="relative mb-2">
-                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+                  <Search
+                    size={14}
+                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+                  />
                   <input
                     value={dropSearch}
                     onChange={(e) => setDropSearch(e.target.value)}
@@ -637,7 +726,8 @@ export default function ActivitiesList({
                 <div className="flex max-h-52 flex-col gap-1 overflow-y-auto rounded-md border border-border bg-surface-2 p-2">
                   {catalog.length === 0 && (
                     <p className="text-xs text-muted">
-                      Реестр дропа пуст — добавьте предметы в разделе «Реестр дропа».
+                      Реестр дропа пуст — добавьте предметы в разделе «Реестр
+                      дропа».
                     </p>
                   )}
                   {catalog.length > 0 && filteredCatalog.length === 0 && (
@@ -657,7 +747,8 @@ export default function ActivitiesList({
                           className="accent-accent"
                         />
                         <span className="flex-1">
-                          {c.name} <span className="text-muted">· {c.price}/ед.</span>
+                          {c.name}{" "}
+                          <span className="text-muted">· {c.price}/ед.</span>
                         </span>
                         {checked && (
                           <input
@@ -680,13 +771,17 @@ export default function ActivitiesList({
                   label="Скрины состава"
                   urls={rosterShots}
                   onFiles={(e) => handleShotFiles(e, setRosterShots)}
-                  onRemove={(i) => setRosterShots((prev) => prev.filter((_, idx) => idx !== i))}
+                  onRemove={(i) =>
+                    setRosterShots((prev) => prev.filter((_, idx) => idx !== i))
+                  }
                 />
                 <ScreenshotPicker
                   label="Скрины дропа"
                   urls={dropShots}
                   onFiles={(e) => handleShotFiles(e, setDropShots)}
-                  onRemove={(i) => setDropShots((prev) => prev.filter((_, idx) => idx !== i))}
+                  onRemove={(i) =>
+                    setDropShots((prev) => prev.filter((_, idx) => idx !== i))
+                  }
                 />
               </div>
 
@@ -737,65 +832,79 @@ export default function ActivitiesList({
             <tbody className="divide-y divide-border">
               {activities.map((a) => {
                 return (
-                <tr key={a.id} className="hover:bg-surface-2">
-                  <td className="whitespace-nowrap px-4 py-3 text-muted">{a.dateIso}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2.5">
-                      {a.bannerId && (
-                        <BannerMedia
-                          src={`/api/activity-banners/${a.bannerId}/media`}
-                          isVideo={a.bannerIsVideo}
-                          width={44}
-                          height={26}
-                          className="h-[26px] w-11 flex-shrink-0 rounded object-cover"
-                        />
-                      )}
-                      <Link href={`/activities/${a.id}`} className="font-medium hover:text-accent">
-                        {a.name}
-                      </Link>
-                      {a.isNight && <span className="text-xs text-muted">🌙</span>}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      <span className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-muted">
-                        {a.category}
-                      </span>
+                  <tr key={a.id} className="hover:bg-surface-2">
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">
+                      {a.dateIso}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2.5">
+                        {a.bannerId && (
+                          <BannerMedia
+                            src={`/api/activity-banners/${a.bannerId}/media`}
+                            isVideo={a.bannerIsVideo}
+                            width={44}
+                            height={26}
+                            className="h-[26px] w-11 flex-shrink-0 rounded object-cover"
+                          />
+                        )}
+                        <Link
+                          href={`/activities/${a.id}`}
+                          className="font-medium hover:text-accent"
+                        >
+                          {a.name}
+                        </Link>
+                        {a.isNight && (
+                          <span className="text-xs text-muted">🌙</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1">
+                        <span className="rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs text-muted">
+                          {a.category}
+                        </span>
+                        <span
+                          className={clsx(
+                            "rounded-md border px-1.5 py-0.5 text-xs",
+                            a.mode === "PvP"
+                              ? "border-danger/40 bg-danger/10 text-danger"
+                              : "border-success/40 bg-success/10 text-success",
+                          )}
+                        >
+                          {a.mode}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted">{a.difficulty}</td>
+                    <td className="px-4 py-3">{a.participants}</td>
+                    <td className="px-4 py-3 font-mono tabular-nums text-muted">
+                      {summary.totalPlayers > 0
+                        ? `${Math.min(100, Math.round((a.participants / summary.totalPlayers) * 100))}%`
+                        : "—"}
+                    </td>
+                    <td className="px-4 py-3">
                       <span
                         className={clsx(
-                          "rounded-md border px-1.5 py-0.5 text-xs",
-                          a.mode === "PvP" ? "border-danger/40 bg-danger/10 text-danger" : "border-success/40 bg-success/10 text-success"
+                          "rounded-md border px-2 py-0.5 text-xs font-medium",
+                          statusColor[a.status],
                         )}
                       >
-                        {a.mode}
+                        {a.status}
                       </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted">{a.difficulty}</td>
-                  <td className="px-4 py-3">{a.participants}</td>
-                  <td className="px-4 py-3 font-mono tabular-nums text-muted">
-                    {summary.totalPlayers > 0
-                      ? `${Math.min(100, Math.round((a.participants / summary.totalPlayers) * 100))}%`
-                      : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={clsx("rounded-md border px-2 py-0.5 text-xs font-medium", statusColor[a.status])}>
-                      {a.status}
-                    </span>
-                  </td>
-                  {isAdmin && (
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(a.id)}
-                        aria-label="Удалить"
-                        className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-danger"
-                      >
-                        <Trash2 size={15} />
-                      </button>
                     </td>
-                  )}
-                </tr>
+                    {isAdmin && (
+                      <td className="px-4 py-3">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(a.id)}
+                          aria-label="Удалить"
+                          className="rounded p-1.5 text-muted hover:bg-surface-2 hover:text-danger"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
                 );
               })}
               {activities.length === 0 && (
@@ -853,7 +962,13 @@ function ScreenshotPicker({
         <p className="text-xs text-muted">{label}</p>
         <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs text-foreground/80 hover:bg-surface-2 hover:text-foreground">
           <Plus size={12} /> Добавить
-          <input type="file" accept="image/*" multiple onChange={onFiles} className="hidden" />
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={onFiles}
+            className="hidden"
+          />
         </label>
       </div>
       {urls.length === 0 ? (

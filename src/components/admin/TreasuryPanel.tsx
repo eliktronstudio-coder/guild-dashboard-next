@@ -18,7 +18,12 @@ type Transaction = {
 };
 
 type DropEntry = { id: string; quantity: number; value: number };
-type DropOption = { item: string; quantity: number; totalValue: number; entries: DropEntry[] };
+type DropOption = {
+  item: string;
+  quantity: number;
+  totalValue: number;
+  entries: DropEntry[];
+};
 type PlayerOption = { id: string; name: string };
 
 export default function TreasuryPanel({
@@ -35,20 +40,38 @@ export default function TreasuryPanel({
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleDelete(id: string) {
-    if (!confirm("Удалить операцию?")) return;
+    if (
+      busy ||
+      !confirm("Отменить операцию? Исходная запись сохранится в журнале.")
+    )
+      return;
     setBusy(true);
-    await fetch(`/api/treasury/transactions/${id}`, { method: "DELETE" });
-    setBusy(false);
-    router.refresh();
+    setError(null);
+    try {
+      const response = await fetch(`/api/treasury/transactions/${id}`, {
+        method: "DELETE",
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error ?? "Не удалось отменить операцию.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("Нет связи с сервером. Изменения не подтверждены.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (!isAdmin) {
     return (
       <div className="rounded-lg border border-border bg-surface">
         <div className="border-b border-border p-4">
-          <h2 className="text-sm font-semibold">Последняя продажа</h2>
+          <h2 className="text-sm font-semibold">Журнал операций</h2>
         </div>
         <TransactionList transactions={transactions} />
       </div>
@@ -67,6 +90,11 @@ export default function TreasuryPanel({
         </button>
       )}
 
+      {error && (
+        <p role="alert" className="text-sm text-danger">
+          {error}
+        </p>
+      )}
       {adding && (
         <SellDropForm
           drops={drops}
@@ -81,9 +109,13 @@ export default function TreasuryPanel({
 
       <div className="rounded-lg border border-border bg-surface">
         <div className="border-b border-border p-4">
-          <h2 className="text-sm font-semibold">Последняя продажа</h2>
+          <h2 className="text-sm font-semibold">Журнал операций</h2>
         </div>
-        <TransactionList transactions={transactions} onDelete={handleDelete} busy={busy} />
+        <TransactionList
+          transactions={transactions}
+          onDelete={handleDelete}
+          busy={busy}
+        />
       </div>
     </div>
   );
@@ -101,7 +133,10 @@ function TransactionList({
   return (
     <ul className="divide-y divide-border">
       {transactions.map((t) => (
-        <li key={t.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+        <li
+          key={t.id}
+          className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+        >
           <span className="flex min-w-0 items-center gap-2">
             {t.imageUrl ? (
               <Image
@@ -119,7 +154,9 @@ function TransactionList({
             )}
             <span className="truncate">{t.description}</span>
             {t.quantity > 0 && (
-              <span className="flex-shrink-0 text-xs text-muted">×{numberFmt.format(t.quantity)}</span>
+              <span className="flex-shrink-0 text-xs text-muted">
+                ×{numberFmt.format(t.quantity)}
+              </span>
             )}
           </span>
           <span className="flex flex-shrink-0 items-center gap-3">
@@ -133,7 +170,7 @@ function TransactionList({
                 type="button"
                 onClick={() => onDelete(t.id)}
                 disabled={busy}
-                aria-label="Удалить"
+                aria-label="Отменить операцию"
                 className="rounded p-1 text-muted hover:bg-surface-2 hover:text-danger disabled:opacity-60"
               >
                 <Trash2 size={14} />
