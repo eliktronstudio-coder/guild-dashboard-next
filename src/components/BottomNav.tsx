@@ -2,18 +2,29 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Swords, Users, Landmark, Wallet, Menu } from "lucide-react";
+import {
+  LayoutDashboard,
+  Swords,
+  Users,
+  Landmark,
+  Wallet,
+  Menu,
+} from "lucide-react";
 import clsx from "clsx";
 
 const PRIMARY_ITEMS = [
-  { href: "/dashboard", label: "Статистика", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
   { href: "/activities", label: "Активность", icon: Swords },
   { href: "/players", label: "Состав", icon: Users },
   { href: "/treasury", label: "Казна", icon: Landmark },
-  { href: "/payments", label: "Выплаты", icon: Wallet },
+  { href: "/statistics", label: "Статистика", icon: Wallet },
 ];
 
-export default function BottomNav({ onMoreClick }: { onMoreClick: () => void }) {
+export default function BottomNav({
+  onMoreClick,
+}: {
+  onMoreClick: () => void;
+}) {
   const pathname = usePathname();
 
   return (
@@ -23,7 +34,8 @@ export default function BottomNav({ onMoreClick }: { onMoreClick: () => void }) 
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {PRIMARY_ITEMS.map((item) => {
-        const active = pathname === item.href || pathname.startsWith(item.href + "/");
+        const active =
+          pathname === item.href || pathname.startsWith(item.href + "/");
         const Icon = item.icon;
         return (
           <Link
@@ -31,7 +43,7 @@ export default function BottomNav({ onMoreClick }: { onMoreClick: () => void }) 
             href={item.href}
             className={clsx(
               "flex min-h-[56px] flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium",
-              active ? "text-accent-bright" : "text-muted"
+              active ? "text-accent-bright" : "text-muted",
             )}
           >
             <Icon size={20} strokeWidth={active ? 2.4 : 2} />

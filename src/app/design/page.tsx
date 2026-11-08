@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { getUnpublishedMap } from "@/lib/design/store";
@@ -8,6 +9,7 @@ import DesignEditor from "@/components/design/DesignEditor";
  * независимо от неё, в каждом методе /api/design/*.
  */
 export default async function DesignPage() {
+  await requireGuildMember();
   const admin = await requireAdmin();
   if (!admin) redirect("/dashboard");
 

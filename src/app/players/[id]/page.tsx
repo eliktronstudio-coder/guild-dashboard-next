@@ -1,3 +1,5 @@
+import { isFullAdminRole } from "@/lib/accountRoles";
+import { requireGuildMember } from "@/lib/access";
 import { notFound } from "next/navigation";
 import {
   getPlayerById,
@@ -13,7 +15,10 @@ import { enrichBuildsWithSummary } from "@/lib/dollBuild";
 import PlayerProfileView from "@/components/players/PlayerProfileView";
 import ProfileAchievements from "@/components/achievements/ProfileAchievements";
 import SavedBuilds from "@/components/players/SavedBuilds";
-import { buildAchievements, getMetricsForPlayer } from "@/lib/achievements/progress";
+import {
+  buildAchievements,
+  getMetricsForPlayer,
+} from "@/lib/achievements/progress";
 import { MAX_POINTS_PER_CHAIN } from "@/lib/achievements/tiers";
 
 export default async function PlayerDetailPage({
@@ -21,27 +26,52 @@ export default async function PlayerDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireGuildMember();
   const { id } = await params;
-  const [player, activities, payments, dailyAttendance, user, bannerNames, rawBuilds] = await Promise.all([
+  const [
+    player,
+    activities,
+    payments,
+    dailyAttendance,
+    user,
+    bannerNames,
+    rawBuilds,
+  ] = await Promise.all([
     getPlayerById(id),
     getPlayerActivityHistory(id, 100),
     getPlayerPayments(id, 20),
     getPlayerDailyAttendance(id, 30),
     getCurrentUser(),
     getActivityBannerNames(),
-    prisma.savedBuild.findMany({ where: { playerId: id }, orderBy: { createdAt: "desc" } }),
+    prisma.savedBuild.findMany({
+      where: { playerId: id },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
   const activitiesWithBanners = activities.map((a) => {
     const banner = findLabelMatch(a.name, bannerNames);
-    return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
+    return {
+      ...a,
+      bannerId: banner?.id ?? null,
+      bannerIsVideo: banner?.isVideo ?? false,
+    };
   });
-  const builds = await enrichBuildsWithSummary(rawBuilds.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() })));
-  const ach = buildAchievements(await getMetricsForPlayer(id), MAX_POINTS_PER_CHAIN);
+  const builds = await enrichBuildsWithSummary(
+    rawBuilds.map((b) => ({ ...b, createdAt: b.createdAt.toISOString() })),
+  );
+  const ach = buildAchievements(
+    await getMetricsForPlayer(id),
+    MAX_POINTS_PER_CHAIN,
+  );
   if (!player) notFound();
   const isRandom = user?.role === "random";
+  const canViewFinance =
+    isFullAdminRole(user?.role) || player.userId === user?.sub;
   let pinnedKeys: string[] | null = null;
   try {
-    pinnedKeys = player.pinnedAchievements ? (JSON.parse(player.pinnedAchievements) as string[]) : null;
+    pinnedKeys = player.pinnedAchievements
+      ? (JSON.parse(player.pinnedAchievements) as string[])
+      : null;
   } catch {
     pinnedKeys = null;
   }
@@ -49,13 +79,24 @@ export default async function PlayerDetailPage({
   return (
     <div className="space-y-4">
       <PlayerProfileView
-      player={player}
-      activities={activitiesWithBanners}
-      payments={payments}
-      dailyAttendance={dailyAttendance}
-      isRandom={isRandom}
-      backHref="/players"
-      backLabel="← Состав"
+        player={
+          canViewFinance
+            ? player
+            : {
+                ...player,
+                salary: 0,
+                salaryPrime: 0,
+                salaryMiniRb: 0,
+                userId: null,
+              }
+        }
+        canViewFinance={canViewFinance}
+        activities={activitiesWithBanners}
+        payments={canViewFinance ? payments : []}
+        dailyAttendance={dailyAttendance}
+        isRandom={isRandom}
+        backHref="/players"
+        backLabel="← Состав"
       />
       {!isRandom && (
         <ProfileAchievements
@@ -69,7 +110,11 @@ export default async function PlayerDetailPage({
         />
       )}
       {!isRandom && (
-        <SavedBuilds playerId={id} builds={builds} canEdit={!!user && player.userId === user.sub} />
+        <SavedBuilds
+          playerId={id}
+          builds={builds}
+          canEdit={!!user && player.userId === user.sub}
+        />
       )}
     </div>
   );

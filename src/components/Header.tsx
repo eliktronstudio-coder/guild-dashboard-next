@@ -1,9 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import clsx from "clsx";
 import { allNavItems, navSections } from "@/lib/nav";
 import { accountRoleLabel } from "@/lib/accountRoles";
 import ThemeToggle from "./ThemeToggle";
@@ -16,15 +14,19 @@ type HeaderProps = {
 };
 
 function useCurrentPage(pathname: string) {
-  const item = allNavItems.find((i) => pathname === i.href || pathname.startsWith(i.href + "/"));
+  const item = allNavItems.find(
+    (i) => pathname === i.href || pathname.startsWith(i.href + "/"),
+  );
   const section = navSections.find((s) => s.items.includes(item!));
-  return { label: item?.label ?? "Статистика", section: section?.title ?? "Обзор" };
+  return {
+    label: item?.label ?? "Статистика",
+    section: section?.title ?? "Обзор",
+  };
 }
 
 export default function Header({ onMenuClick, user }: HeaderProps) {
   const pathname = usePathname();
   const { label, section } = useCurrentPage(pathname);
-  const [lang, setLang] = useState<"ru" | "en">("ru");
 
   return (
     <header
@@ -55,23 +57,6 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="hidden items-center gap-1 rounded-md border border-border p-1 text-xs sm:flex">
-          {(["ru", "en"] as const).map((code) => (
-            <button
-              key={code}
-              type="button"
-              onClick={() => setLang(code)}
-              className={clsx(
-                "rounded border px-2.5 py-1 font-medium uppercase transition-colors duration-150",
-                lang === code
-                  ? "border-accent/30 bg-accent text-background"
-                  : "border-transparent text-muted hover:text-foreground"
-              )}
-            >
-              {code}
-            </button>
-          ))}
-        </div>
         <ThemeToggle />
         {user && (
           <div className="hidden items-center gap-2 rounded-md border border-border py-1 pl-1 pr-3 lg:flex">
@@ -80,7 +65,9 @@ export default function Header({ onMenuClick, user }: HeaderProps) {
             </span>
             <div className="leading-tight">
               <p className="text-xs font-medium">{user.username}</p>
-              <p className="text-[10px] text-muted">{accountRoleLabel[user.role] ?? user.role}</p>
+              <p className="text-[10px] text-muted">
+                {accountRoleLabel[user.role] ?? user.role}
+              </p>
             </div>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getActivityById, getRegisteredPlayers, getDropCatalog, getActivityBannerNames } from "@/lib/queries";
@@ -12,6 +13,7 @@ export default async function ActivityDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireGuildMember();
   const { id } = await params;
   const [activity, user, players, catalog, bannerNames] = await Promise.all([
     getActivityById(id),

@@ -1,9 +1,11 @@
+import { requireGuildMember } from "@/lib/access";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { getDropCatalog } from "@/lib/queries";
 import DropCatalogPanel from "@/components/admin/DropCatalogPanel";
 
 export default async function DropCatalogPage() {
+  await requireGuildMember();
   const admin = await requireAdmin();
   if (!admin) redirect("/dashboard");
 

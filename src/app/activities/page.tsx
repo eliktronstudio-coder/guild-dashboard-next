@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import {
   getFilteredActivities,
   getDistinctActivityNames,
@@ -18,7 +19,12 @@ function str(v: string | string[] | undefined): string | undefined {
   return typeof v === "string" && v ? v : undefined;
 }
 
-export default async function ActivitiesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
+export default async function ActivitiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  await requireGuildMember();
   const sp = await searchParams;
   const filters = {
     dateFrom: str(sp.dateFrom),
@@ -28,10 +34,21 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
     category: str(sp.category),
     name: str(sp.name),
     player: str(sp.player),
-    page: sp.page && typeof sp.page === "string" ? Math.max(1, Number(sp.page) || 1) : 1,
+    page:
+      sp.page && typeof sp.page === "string"
+        ? Math.max(1, Number(sp.page) || 1)
+        : 1,
   };
 
-  const [result, distinctNames, players, allPlayers, user, catalog, bannerNames] = await Promise.all([
+  const [
+    result,
+    distinctNames,
+    players,
+    allPlayers,
+    user,
+    catalog,
+    bannerNames,
+  ] = await Promise.all([
     getFilteredActivities(filters),
     getDistinctActivityNames(),
     getRegisteredPlayers(),
@@ -47,24 +64,29 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
   // ~12 МБ) отдаётся отдельным HTTP-запросом на /api/activity-banners/[id]/media,
   // а не встраивается в пропсы: иначе Next дублирует эти байты в
   // hydration-payload поверх уже отрендеренного HTML.
-  const bannerByName = new Map<string, { id: string; isVideo: boolean } | null>();
+  const bannerByName = new Map<
+    string,
+    { id: string; isVideo: boolean } | null
+  >();
   function resolveBanner(name: string) {
     if (!bannerByName.has(name)) {
       const match = findLabelMatch(name, bannerNames);
-      bannerByName.set(name, match ? { id: match.id, isVideo: match.isVideo } : null);
+      bannerByName.set(
+        name,
+        match ? { id: match.id, isVideo: match.isVideo } : null,
+      );
     }
     return bannerByName.get(name) ?? null;
   }
 
   const activitiesWithBanner = result.activities.map((a) => {
     const banner = resolveBanner(a.name);
-    return { ...a, bannerId: banner?.id ?? null, bannerIsVideo: banner?.isVideo ?? false };
+    return {
+      ...a,
+      bannerId: banner?.id ?? null,
+      bannerIsVideo: banner?.isVideo ?? false,
+    };
   });
-
-  const counts = result.activities.map((a) => a.participants);
-  const avgAttendance = counts.length ? Math.round(counts.reduce((s, c) => s + c, 0) / counts.length) : 0;
-  const bestAttendance = counts.length ? Math.max(...counts) : 0;
-  const cancelled = result.activities.filter((a) => a.status === "Отменено").length;
 
   return (
     <BlurGate blurred={user?.role === "random"}>
@@ -75,13 +97,15 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
         filters={filters}
         distinctNames={distinctNames}
         players={players.map((p) => ({ id: p.id, name: p.name, role: p.role }))}
-        catalog={catalog.map((c) => ({ id: c.id, name: c.name, price: c.price }))}
+        catalog={catalog.map((c) => ({
+          id: c.id,
+          name: c.name,
+          price: c.price,
+        }))}
         isAdmin={canManageActivitiesRole(user?.role)}
         summary={{
           total: result.total,
-          avgAttendance,
-          bestAttendance,
-          cancelled,
+          ...result.summary,
           totalPlayers: allPlayers.length,
         }}
       />

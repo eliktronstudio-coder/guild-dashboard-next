@@ -1,9 +1,11 @@
+import { requireGuildMember } from "@/lib/access";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { getAllPlayers } from "@/lib/queries";
 import RbPurchaseCalculator from "@/components/admin/RbPurchaseCalculator";
 
 export default async function RbPurchasePage() {
+  await requireGuildMember();
   const admin = await requireAdmin();
   if (!admin) redirect("/dashboard");
 

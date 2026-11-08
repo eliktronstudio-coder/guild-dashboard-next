@@ -1,3 +1,4 @@
+import { requireGuildMember } from "@/lib/access";
 import { ExternalLink } from "lucide-react";
 import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
@@ -20,6 +21,7 @@ function SourceLink({ href, children }: { href: string; children: React.ReactNod
 }
 
 export default async function ArcheAgePage() {
+  await requireGuildMember();
   const admin = await requireAdmin();
   if (!admin) redirect("/dashboard");
 

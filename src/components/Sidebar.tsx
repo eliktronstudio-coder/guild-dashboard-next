@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { navSections } from "@/lib/nav";
-import { guild } from "@/lib/config";
 import { accountRoleLabel, isFullAdminRole } from "@/lib/accountRoles";
 import Logo from "./Logo";
 import type { SessionPayload } from "@/lib/auth";
@@ -99,23 +98,6 @@ export default function Sidebar({ mobileOpen, onCloseMobile, onLoginClick, user,
             );
           })}
         </nav>
-
-        <div className="px-4 pt-4">
-          {(() => {
-            const pct = Math.min(100, Math.round((guild.xp / guild.xpToNext) * 100));
-            return (
-              <>
-                <div className="mb-2 flex items-baseline justify-between text-xs">
-                  <span className="text-muted">Уровень {guild.level}</span>
-                  <span className="text-accent">{pct}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
-                  <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-                </div>
-              </>
-            );
-          })()}
-        </div>
 
         <div className="p-4 pt-4">
           {user ? (
