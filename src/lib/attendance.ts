@@ -14,19 +14,23 @@ export type ActivityForAttendance = {
   category: string;
   mode: string;
   weight: number;
+  status?: string;
+  date?: Date;
   participants: { playerId: string }[];
 };
 
 /** Доля активностей, в которых игрок участвовал, в процентах. */
-export function buildAttendanceMap(activities: { participants: { playerId: string }[] }[]): Map<string, number> {
+export function buildAttendanceMap(
+  activities: { participants: { playerId: string }[] }[],
+): Map<string, number> {
   const total = activities.length;
   const map = new Map<string, number>();
   if (total === 0) return map;
 
   const counts = new Map<string, number>();
   for (const a of activities) {
-    for (const p of a.participants) {
-      counts.set(p.playerId, (counts.get(p.playerId) ?? 0) + 1);
+    for (const playerId of new Set(a.participants.map((p) => p.playerId))) {
+      counts.set(playerId, (counts.get(playerId) ?? 0) + 1);
     }
   }
   for (const [playerId, count] of counts) {
@@ -37,7 +41,7 @@ export function buildAttendanceMap(activities: { participants: { playerId: strin
 
 /** То же, но активности весят по-разному (лёгкий контент 0.5, разъярённые 1.5 и т.д.). */
 export function buildWeightedAttendanceMap(
-  activities: { weight: number; participants: { playerId: string }[] }[]
+  activities: { weight: number; participants: { playerId: string }[] }[],
 ): Map<string, number> {
   const weights = activities.map((a) => a.weight);
   const totalWeight = weights.reduce((s, w) => s + w, 0);
@@ -46,8 +50,11 @@ export function buildWeightedAttendanceMap(
 
   const weightByPlayer = new Map<string, number>();
   activities.forEach((a, i) => {
-    for (const p of a.participants) {
-      weightByPlayer.set(p.playerId, (weightByPlayer.get(p.playerId) ?? 0) + weights[i]);
+    for (const playerId of new Set(a.participants.map((p) => p.playerId))) {
+      weightByPlayer.set(
+        playerId,
+        (weightByPlayer.get(playerId) ?? 0) + weights[i],
+      );
     }
   });
   for (const [playerId, w] of weightByPlayer) {
@@ -57,11 +64,13 @@ export function buildWeightedAttendanceMap(
 }
 
 /** Просто «сколько раз сходил» — не процент. */
-export function buildCountMap(activities: { participants: { playerId: string }[] }[]): Map<string, number> {
+export function buildCountMap(
+  activities: { participants: { playerId: string }[] }[],
+): Map<string, number> {
   const map = new Map<string, number>();
   for (const a of activities) {
-    for (const p of a.participants) {
-      map.set(p.playerId, (map.get(p.playerId) ?? 0) + 1);
+    for (const playerId of new Set(a.participants.map((p) => p.playerId))) {
+      map.set(playerId, (map.get(playerId) ?? 0) + 1);
     }
   }
   return map;
@@ -84,9 +93,16 @@ export type AttendanceMaps = {
  * (resolveAttendanceFund), а НЕ по категории, выбранной админом при создании:
  * АГЛ/АГЛ Т2/Кошка всегда Мини-РБ, всё остальное — Прайм, PvP — всегда Прайм.
  */
-export function computeAttendanceMaps(activities: ActivityForAttendance[]): AttendanceMaps {
-  const prime = activities.filter((a) => resolveAttendanceFund(a.name, a.mode) === "Прайм");
-  const miniRb = activities.filter((a) => resolveAttendanceFund(a.name, a.mode) === "Мини-РБ");
+export function computeAttendanceMaps(
+  activities: ActivityForAttendance[],
+): AttendanceMaps {
+  activities = activities.filter((activity) => isCountedActivity(activity));
+  const prime = activities.filter(
+    (a) => resolveAttendanceFund(a.name, a.mode) === "Прайм",
+  );
+  const miniRb = activities.filter(
+    (a) => resolveAttendanceFund(a.name, a.mode) === "Мини-РБ",
+  );
 
   return {
     overall: buildAttendanceMap(activities),
@@ -94,6 +110,22 @@ export function computeAttendanceMaps(activities: ActivityForAttendance[]): Atte
     miniRb: buildAttendanceMap(miniRb),
     pvpCount: buildCountMap(activities.filter((a) => a.mode === "PvP")),
     attended: buildCountMap(activities),
-    totals: { overall: activities.length, prime: prime.length, miniRb: miniRb.length },
+    totals: {
+      overall: activities.length,
+      prime: prime.length,
+      miniRb: miniRb.length,
+    },
   };
+}
+
+/** Legacy «К выплате»/«Выплачено» are recorded events, not signup states. */
+export function isCountedActivity(
+  activity: { status?: string; date?: Date },
+  now = new Date(),
+) {
+  return (
+    activity.status !== "Отменено" &&
+    activity.status !== "Запланировано" &&
+    (!activity.date || activity.date <= now)
+  );
 }

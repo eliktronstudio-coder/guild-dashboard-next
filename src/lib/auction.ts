@@ -1,3 +1,4 @@
+import { reverseTreasuryTransactionInTx } from "@/lib/treasury-reversal";
 import { prisma } from "@/lib/prisma";
 import { getActivePeriodId } from "@/lib/period";
 import { clampDuration } from "@/lib/auctionTime";
@@ -284,25 +285,24 @@ export async function getAuctionWinners(limit = WINNERS_LIMIT) {
  *
  * Убирать лот, но оставлять выручку нельзя: в казне повисло бы золото за
  * продажу, которой в истории больше нет, и сверка на странице выплат
- * разошлась бы. Обе записи удаляются одной транзакцией.
+ * разошлась бы. Выручка компенсируется одной транзакцией; исходная денежная запись сохраняется.
  *
  * Ставки уходят каскадом (AuctionBid.onDelete: Cascade).
  */
 export async function deleteAuction(id: string) {
-  const auction = await prisma.auction.findUnique({ where: { id } });
-  if (!auction) return null;
-
-  const removed = await prisma.$transaction(async (tx) => {
-    let goldRemoved = 0;
-    if (auction.saleTransactionId) {
-      // deleteMany, а не delete: операцию могли убрать вручную со страницы
-      // казны, и тогда её уже нет — это не повод падать.
-      const { count } = await tx.treasuryTransaction.deleteMany({ where: { id: auction.saleTransactionId } });
-      if (count > 0) goldRemoved = auction.currentBid;
+  return prisma.$transaction(async tx => {
+    await tx.appSetting.upsert({where:{key:'xd:sales-lock'},create:{key:'xd:sales-lock',value:'1'},update:{value:'1'}});
+    const auction=await tx.auction.findUnique({where:{id}});
+    if(!auction) return null;
+    let goldRemoved=0;
+    if(auction.saleTransactionId) {
+      const receipt=await tx.treasuryTransaction.findUnique({where:{id:auction.saleTransactionId}});
+      if(receipt) {
+        const reversal=await reverseTreasuryTransactionInTx(tx,receipt.id);
+        if(!reversal.repeated) goldRemoved=receipt.amount;
+      }
     }
-    await tx.auction.delete({ where: { id } });
-    return goldRemoved;
+    await tx.auction.delete({where:{id}});
+    return {itemName:auction.itemName,winner:auction.leaderName,goldRemoved};
   });
-
-  return { itemName: auction.itemName, winner: auction.leaderName, goldRemoved: removed };
 }

@@ -6,19 +6,38 @@ import { promoteMatchingGuests } from "@/lib/guests";
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+  if (!admin)
+    return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const role = typeof body?.role === "string" ? body.role : "";
   const level = body?.level === undefined ? 1 : Number(body.level);
   const xp = body?.xp === undefined ? 0 : Number(body.xp);
-  const salaryCoefficient = body?.salaryCoefficient === undefined ? 1 : Number(body.salaryCoefficient);
+  const salaryCoefficient =
+    body?.salaryCoefficient === undefined ? 1 : Number(body.salaryCoefficient);
   const userId = typeof body?.userId === "string" ? body.userId : undefined;
 
   if (!name || name.length > 40) {
-    return NextResponse.json({ error: "Укажите имя игрока (до 40 символов)." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Укажите имя игрока (до 40 символов)." },
+      { status: 400 },
+    );
   }
+  const conflicting = await prisma.player.findMany({
+    select: { id: true, name: true, userId: true },
+  });
+  if (
+    conflicting.some(
+      (player) =>
+        player.name.normalize("NFKC").trim().toLocaleLowerCase("ru") ===
+        name.normalize("NFKC").trim().toLocaleLowerCase("ru") && (!userId || player.userId !== null),
+    )
+  )
+    return NextResponse.json(
+      { error: "Этот ник уже есть в составе." },
+      { status: 409 },
+    );
   if (!ROLES.includes(role)) {
     return NextResponse.json({ error: "Неверная роль." }, { status: 400 });
   }
@@ -28,13 +47,22 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(xp) || xp < 0) {
     return NextResponse.json({ error: "Неверный опыт." }, { status: 400 });
   }
-  if (!Number.isFinite(salaryCoefficient) || salaryCoefficient < 0 || salaryCoefficient > 1.25) {
-    return NextResponse.json({ error: "Коэффициент должен быть от 0.0 до 1.25." }, { status: 400 });
+  if (
+    !Number.isFinite(salaryCoefficient) ||
+    salaryCoefficient < 0 ||
+    salaryCoefficient > 1.25
+  ) {
+    return NextResponse.json(
+      { error: "Коэффициент должен быть от 0.0 до 1.25." },
+      { status: 400 },
+    );
   }
 
   if (userId) {
     const unlinked = await prisma.player.findMany({ where: { userId: null } });
-    const existing = unlinked.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    const existing = unlinked.find(
+      (p) => p.name.normalize("NFKC").trim().toLocaleLowerCase("ru") === name.normalize("NFKC").trim().toLocaleLowerCase("ru"),
+    );
     if (existing) {
       const linked = await prisma.player.update({
         where: { id: existing.id },

@@ -1,5 +1,6 @@
 import {
   LayoutDashboard,
+  ChartNoAxesCombined,
   Swords,
   Users,
   Landmark,
@@ -37,7 +38,8 @@ export const navSections: NavSection[] = [
     title: "Обзор",
     items: [
       { href: "/", label: "Главная", icon: House },
-      { href: "/dashboard", label: "Статистика", icon: LayoutDashboard },
+      { href: "/dashboard", label: "Дашборд", icon: LayoutDashboard },
+      { href: "/statistics", label: "Статистика", icon: ChartNoAxesCombined },
       { href: "/activities", label: "Активность", icon: Swords },
       { href: "/players", label: "Состав", icon: Users },
       { href: "/profile", label: "Мой профиль", icon: UserCircle },
@@ -64,10 +66,30 @@ export const navSections: NavSection[] = [
   {
     title: "Администрирование",
     items: [
-      { href: "/users", label: "Пользователи", icon: ShieldCheck, adminOnly: true },
-      { href: "/drop-catalog", label: "Реестр дропа", icon: BookOpen, adminOnly: true },
-      { href: "/activity-banners", label: "Баннеры активностей", icon: ImagePlay, adminOnly: true },
-      { href: "/rb-purchase", label: "Расчёт покупки РБ", icon: Coins, adminOnly: true },
+      {
+        href: "/users",
+        label: "Пользователи",
+        icon: ShieldCheck,
+        adminOnly: true,
+      },
+      {
+        href: "/drop-catalog",
+        label: "Реестр дропа",
+        icon: BookOpen,
+        adminOnly: true,
+      },
+      {
+        href: "/activity-banners",
+        label: "Баннеры активностей",
+        icon: ImagePlay,
+        adminOnly: true,
+      },
+      {
+        href: "/rb-purchase",
+        label: "Расчёт покупки РБ",
+        icon: Coins,
+        adminOnly: true,
+      },
       { href: "/design", label: "Дизайн", icon: Palette, adminOnly: true },
     ],
   },

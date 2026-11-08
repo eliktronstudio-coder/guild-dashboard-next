@@ -1,3 +1,4 @@
+import { promoteMatchingGuests } from "@/lib/guests";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin, hashPassword } from "@/lib/auth";
@@ -40,6 +41,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     select: { id: true, username: true, role: true, createdAt: true },
   });
 
+  if (user.role !== 'random') {
+    const player = await prisma.player.findUnique({where:{userId:user.id},select:{id:true,name:true}});
+    if(player) await promoteMatchingGuests(player.id,player.name);
+  }
   return NextResponse.json(user);
 }
 

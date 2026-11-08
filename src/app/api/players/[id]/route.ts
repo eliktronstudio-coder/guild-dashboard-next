@@ -1,13 +1,23 @@
+import { isFullAdminRole } from "@/lib/accountRoles";
+import { getApprovedUser } from "@/lib/access";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin, getCurrentUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { ROLES } from "@/lib/roles";
-import { getPlayerById, getPlayerActivityHistory, getPlayerPayments, getPlayerAttendanceChartData } from "@/lib/queries";
-import { redistributePlayerPayments } from "@/lib/payoutRedistribution";
+import {
+  getPlayerById,
+  getPlayerActivityHistory,
+  getPlayerPayments,
+  getPlayerAttendanceChartData,
+} from "@/lib/queries";
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const user = await getApprovedUser();
+  if (!user)
+    return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const { id } = await params;
   const [player, activities, payments, attendanceChart] = await Promise.all([
@@ -16,29 +26,85 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     getPlayerPayments(id),
     getPlayerAttendanceChartData(id),
   ]);
-  if (!player) return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
+  if (!player)
+    return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
 
-  return NextResponse.json({ player, activities, payments, attendanceChart });
+  const own = isFullAdminRole(user.role) || player.userId === user.sub;
+  const safe = {
+    id: player.id,
+    name: player.name,
+    role: player.role,
+    attendancePct: player.attendancePct,
+    attendancePctPrime: player.attendancePctPrime,
+    attendancePctMiniRb: player.attendancePctMiniRb,
+    pvpCount: player.pvpCount,
+    ...(own
+      ? {
+          salary: player.salary,
+          salaryPrime: player.salaryPrime,
+          salaryMiniRb: player.salaryMiniRb,
+        }
+      : {}),
+  };
+  return NextResponse.json(
+    {
+      player: safe,
+      activities,
+      payments: own ? payments : [],
+      attendanceChart,
+    },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+  if (!admin)
+    return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const { id } = await params;
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const role = typeof body?.role === "string" ? body.role : "";
-  const salaryCoefficient = body?.salaryCoefficient === undefined ? 1 : Number(body.salaryCoefficient);
+  const salaryCoefficient =
+    body?.salaryCoefficient === undefined ? 1 : Number(body.salaryCoefficient);
 
   if (!name || name.length > 40) {
-    return NextResponse.json({ error: "Укажите имя игрока (до 40 символов)." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Укажите имя игрока (до 40 символов)." },
+      { status: 400 },
+    );
   }
+  const conflicting = await prisma.player.findMany({
+    select: { id: true, name: true },
+  });
+  if (
+    conflicting.some(
+      (player) =>
+        player.name.normalize("NFKC").trim().toLocaleLowerCase("ru") ===
+          name.normalize("NFKC").trim().toLocaleLowerCase("ru") &&
+        player.id !== id,
+    )
+  )
+    return NextResponse.json(
+      { error: "Этот ник уже есть в составе." },
+      { status: 409 },
+    );
   if (!ROLES.includes(role)) {
     return NextResponse.json({ error: "Неверная роль." }, { status: 400 });
   }
-  if (!Number.isFinite(salaryCoefficient) || salaryCoefficient < 0 || salaryCoefficient > 1.25) {
-    return NextResponse.json({ error: "Коэффициент должен быть от 0.0 до 1.25." }, { status: 400 });
+  if (
+    !Number.isFinite(salaryCoefficient) ||
+    salaryCoefficient < 0 ||
+    salaryCoefficient > 1.25
+  ) {
+    return NextResponse.json(
+      { error: "Коэффициент должен быть от 0.0 до 1.25." },
+      { status: 400 },
+    );
   }
 
   const data: Record<string, unknown> = { name, role, salaryCoefficient };
@@ -65,21 +131,39 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   return NextResponse.json(player);
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+  if (!admin)
+    return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const { id } = await params;
 
-  // Начисленное, но не выплаченное золото игрока раздаём остальным
-  // участникам тех же месяцев — иначе каскадное удаление его выплат
-  // просто теряло бы эти деньги. Всё одной транзакцией: раздать и удалить
-  // должно произойти целиком, иначе можно раздать дважды.
-  const redistribution = await prisma.$transaction(async (tx) => {
-    const result = await redistributePlayerPayments(tx, id);
-    await tx.player.delete({ where: { id } });
-    return result;
+  const player = await prisma.player.findUnique({
+    where: { id },
+    include: {
+      _count: {
+        select: {
+          activities: true,
+          payments: true,
+          drops: true,
+          archiveStats: true,
+        },
+      },
+    },
   });
-
-  return NextResponse.json({ ok: true, redistribution });
+  if (!player)
+    return NextResponse.json({ error: "Игрок не найден." }, { status: 404 });
+  if (Object.values(player._count).some((count) => count > 0))
+    return NextResponse.json(
+      {
+        error:
+          "У игрока есть история участия или финансов. Удаление запрещено.",
+      },
+      { status: 409 },
+    );
+  await prisma.player.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
 }

@@ -60,3 +60,9 @@ skills-lock.json
 
 # tesseract.js downloads OCR language data here at runtime
 /*.traineddata
+
+# Local browser-verification bytecode and SQLite sidecars
+__pycache__/
+*.pyc
+*.db-wal
+*.db-shm

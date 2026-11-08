@@ -1,3 +1,4 @@
+import { isFullAdminRole } from "@/lib/accountRoles";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireActivitiesManager } from "@/lib/auth";
@@ -15,42 +16,70 @@ const MAX_GUESTS = 30;
 
 export async function POST(request: NextRequest) {
   const admin = await requireActivitiesManager();
-  if (!admin) return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
+  if (!admin)
+    return NextResponse.json({ error: "Нет доступа." }, { status: 403 });
 
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const dateStr = typeof body?.date === "string" ? body.date : "";
-  const category = typeof body?.category === "string" && CATEGORIES.includes(body.category) ? body.category : CATEGORIES[0];
-  const mode = typeof body?.mode === "string" && MODES.includes(body.mode) ? body.mode : MODES[0];
+  const category =
+    typeof body?.category === "string" && CATEGORIES.includes(body.category)
+      ? body.category
+      : CATEGORIES[0];
+  const mode =
+    typeof body?.mode === "string" && MODES.includes(body.mode)
+      ? body.mode
+      : MODES[0];
   const difficulty =
-    typeof body?.difficulty === "string" && DIFFICULTIES.includes(body.difficulty) ? body.difficulty : DIFFICULTIES[0];
+    typeof body?.difficulty === "string" &&
+    DIFFICULTIES.includes(body.difficulty)
+      ? body.difficulty
+      : DIFFICULTIES[0];
   const isNight = Boolean(body?.isNight);
-  const perAttendanceValue = Number.isFinite(Number(body?.perAttendanceValue)) ? Number(body.perAttendanceValue) : 0;
+  const perAttendanceValue = Number.isFinite(Number(body?.perAttendanceValue))
+    ? Number(body.perAttendanceValue)
+    : 0;
   const participantIds = Array.isArray(body?.participantIds)
-    ? body.participantIds.filter((id: unknown) => typeof id === "string")
+    ? [
+        ...new Set<string>(
+          body.participantIds.filter(
+            (id: unknown): id is string => typeof id === "string",
+          ),
+        ),
+      ]
     : [];
-  const dropEntries: { catalogItemId: string; quantity: number }[] = Array.isArray(body?.drops)
-    ? body.drops
-        .filter(
-          (d: unknown): d is { catalogItemId: unknown; quantity: unknown } =>
-            typeof d === "object" && d !== null
-        )
-        .map((d: { catalogItemId: unknown; quantity: unknown }) => ({
-          catalogItemId: typeof d.catalogItemId === "string" ? d.catalogItemId : "",
-          quantity: Number(d.quantity) || 1,
-        }))
-        .filter((d: { catalogItemId: string; quantity: number }) => d.catalogItemId)
-    : [];
-  const screenshotEntries: { kind: string; imageUrl: string }[] = Array.isArray(body?.screenshots)
+  const dropEntries: { catalogItemId: string; quantity: number }[] =
+    Array.isArray(body?.drops)
+      ? body.drops
+          .filter(
+            (d: unknown): d is { catalogItemId: unknown; quantity: unknown } =>
+              typeof d === "object" && d !== null,
+          )
+          .map((d: { catalogItemId: unknown; quantity: unknown }) => ({
+            catalogItemId:
+              typeof d.catalogItemId === "string" ? d.catalogItemId : "",
+            quantity: Number(d.quantity) || 1,
+          }))
+          .filter(
+            (d: { catalogItemId: string; quantity: number }) => d.catalogItemId,
+          )
+      : [];
+  const screenshotEntries: { kind: string; imageUrl: string }[] = Array.isArray(
+    body?.screenshots,
+  )
     ? body.screenshots
         .filter(
-          (s: unknown): s is { kind: unknown; imageUrl: unknown } => typeof s === "object" && s !== null
+          (s: unknown): s is { kind: unknown; imageUrl: unknown } =>
+            typeof s === "object" && s !== null,
         )
         .map((s: { kind: unknown; imageUrl: unknown }) => ({
           kind: typeof s.kind === "string" ? s.kind : "",
           imageUrl: typeof s.imageUrl === "string" ? s.imageUrl : "",
         }))
-        .filter((s: { kind: string; imageUrl: string }) => SCREENSHOT_KINDS.includes(s.kind) && s.imageUrl)
+        .filter(
+          (s: { kind: string; imageUrl: string }) =>
+            SCREENSHOT_KINDS.includes(s.kind) && s.imageUrl,
+        )
     : [];
   const guestNames: string[] = Array.isArray(body?.guestNames)
     ? body.guestNames
@@ -67,10 +96,16 @@ export async function POST(request: NextRequest) {
       : activityAttendanceWeight(name, mode);
 
   if (!name || name.length > 60) {
-    return NextResponse.json({ error: "Укажите название активности (до 60 символов)." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Укажите название активности (до 60 символов)." },
+      { status: 400 },
+    );
   }
   if (weight < 0 || weight > 10) {
-    return NextResponse.json({ error: "Коэффициент должен быть от 0 до 10." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Коэффициент должен быть от 0 до 10." },
+      { status: 400 },
+    );
   }
 
   const date = dateStr ? new Date(dateStr) : new Date();
@@ -78,23 +113,48 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Неверная дата." }, { status: 400 });
   }
   if (perAttendanceValue < 0) {
-    return NextResponse.json({ error: "Сумма за посещение не может быть отрицательной." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Сумма за посещение не может быть отрицательной." },
+      { status: 400 },
+    );
   }
   for (const kind of SCREENSHOT_KINDS) {
     const count = screenshotEntries.filter((s) => s.kind === kind).length;
     if (count > MAX_SCREENSHOTS_PER_KIND) {
-      return NextResponse.json({ error: `Максимум ${MAX_SCREENSHOTS_PER_KIND} скринов на раздел.` }, { status: 400 });
+      return NextResponse.json(
+        { error: `Максимум ${MAX_SCREENSHOTS_PER_KIND} скринов на раздел.` },
+        { status: 400 },
+      );
     }
   }
-  if (screenshotEntries.some((s) => !s.imageUrl.startsWith("data:image/") || s.imageUrl.length > MAX_IMAGE_BYTES)) {
-    return NextResponse.json({ error: "Скрин слишком большой или неверного формата (до ~600 КБ)." }, { status: 400 });
+  if (
+    screenshotEntries.some(
+      (s) =>
+        !s.imageUrl.startsWith("data:image/") ||
+        s.imageUrl.length > MAX_IMAGE_BYTES,
+    )
+  ) {
+    return NextResponse.json(
+      { error: "Скрин слишком большой или неверного формата (до ~600 КБ)." },
+      { status: 400 },
+    );
   }
   if (guestNames.length > MAX_GUESTS) {
-    return NextResponse.json({ error: `Максимум ${MAX_GUESTS} незарегистрированных участников.` }, { status: 400 });
+    return NextResponse.json(
+      { error: `Максимум ${MAX_GUESTS} незарегистрированных участников.` },
+      { status: 400 },
+    );
   }
 
+  if (dropEntries.length && !isFullAdminRole(admin.role))
+    return NextResponse.json(
+      { error: "РЛ не может создавать финансовые записи дропа." },
+      { status: 403 },
+    );
   const catalogItems = dropEntries.length
-    ? await prisma.dropCatalogItem.findMany({ where: { id: { in: dropEntries.map((d) => d.catalogItemId) } } })
+    ? await prisma.dropCatalogItem.findMany({
+        where: { id: { in: dropEntries.map((d) => d.catalogItemId) } },
+      })
     : [];
   const catalogById = new Map(catalogItems.map((c) => [c.id, c]));
 
@@ -102,18 +162,26 @@ export async function POST(request: NextRequest) {
   // с Мини-РБ активности — сразу на склад ХД, с Прайм — в Общий инвентарь.
   const dropWarehouse = category === "Мини-РБ" ? "ХД" : "Общий";
 
-  // Активность заводят уже по факту прошедшего боя, а не заранее — раз она
-  // есть в системе, значит, босс убит. Отдельно подтверждать это вручную не
-  // нужно; поле остаётся редактируемым на случай вайпа, который всё же
-  // решили залогировать.
+  // A recorded visit is not proof of a boss kill. Confirmation is explicit.
   const matchedBossKey = bossKeyFromAliases(name);
-  const isMiniBoss = category === "Мини-РБ";
-  const bossKillConfirmed = isMiniBoss || matchedBossKey !== null;
+  const bossKillConfirmed = body?.bossKillConfirmed === true;
 
+  if (
+    body?.status === "Запланировано" &&
+    (dropEntries.length || bossKillConfirmed)
+  )
+    return NextResponse.json(
+      {
+        error:
+          "Запланированное событие не подтверждает дроп или убийство босса.",
+      },
+      { status: 400 },
+    );
   const periodId = await getActivePeriodId();
   const activity = await prisma.activity.create({
     data: {
       name,
+      status: body?.status === "Запланировано" ? "Запланировано" : "К выплате",
       date,
       category,
       mode,
@@ -125,7 +193,9 @@ export async function POST(request: NextRequest) {
       periodId,
       bossKey: matchedBossKey,
       bossKillConfirmed,
-      participants: { create: participantIds.map((playerId: string) => ({ playerId })) },
+      participants: {
+        create: participantIds.map((playerId: string) => ({ playerId })),
+      },
       drops: {
         create: dropEntries
           .map((d) => {

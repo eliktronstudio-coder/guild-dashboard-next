@@ -1,10 +1,21 @@
+import type { Prisma } from "@/generated/prisma/client";
+import { splitTreasuryReceipt } from "@/lib/treasury-split";
+import { parseDay, positivePage } from "@/lib/report-filters";
+import { resolveAttendanceFund } from "@/lib/activityWeights";
+import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { getActivePeriodId } from "@/lib/period";
 import { computeAttendanceMaps } from "@/lib/attendance";
 import { computeSalaryMap } from "@/lib/salary";
 
-const dateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" });
-const shortDateFmt = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" });
+const dateFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "long",
+});
+const shortDateFmt = new Intl.DateTimeFormat("ru-RU", {
+  day: "numeric",
+  month: "short",
+});
 
 function dayKey(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -12,7 +23,9 @@ function dayKey(d: Date) {
 
 /** Начало недели (понедельник, UTC), в виде YYYY-MM-DD. */
 function weekKey(d: Date) {
-  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const date = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
   const isoDay = date.getUTCDay() || 7; // Вс=0 -> 7, чтобы неделя начиналась с Пн.
   if (isoDay !== 1) date.setUTCDate(date.getUTCDate() - (isoDay - 1));
   return date.toISOString().slice(0, 10);
@@ -28,7 +41,15 @@ function weekKey(d: Date) {
 async function getAttendanceMaps(periodId: string) {
   const activities = await prisma.activity.findMany({
     where: { periodId, archiveId: null },
-    select: { name: true, category: true, mode: true, weight: true, participants: { select: { playerId: true } } },
+    select: {
+      name: true,
+      category: true,
+      mode: true,
+      weight: true,
+      status: true,
+      date: true,
+      participants: { select: { playerId: true } },
+    },
   });
   return computeAttendanceMaps(activities);
 }
@@ -37,8 +58,13 @@ async function getAttendanceMaps(periodId: string) {
 // продаж категории Прайм) и Мини-РБ (100% с продаж категории Мини-РБ) — и
 // делится между игроками пропорционально ИХ посещаемости той же категории.
 // Сам расчёт — в src/lib/salary.ts, общий со снимком при архивации.
-async function getSalaryMapForPool(attendanceMap: Map<string, number>, pool: number): Promise<Map<string, number>> {
-  const players = await prisma.player.findMany({ select: { id: true, salaryCoefficient: true } });
+async function getSalaryMapForPool(
+  attendanceMap: Map<string, number>,
+  pool: number,
+): Promise<Map<string, number>> {
+  const players = await prisma.player.findMany({
+    select: { id: true, salaryCoefficient: true },
+  });
   return computeSalaryMap(players, attendanceMap, pool);
 }
 
@@ -60,9 +86,12 @@ export function distributionPools(breakdown: {
   };
 }
 
-async function getDerivedPlayerMaps() {
+const getDerivedPlayerMaps = cache(async function getDerivedPlayerMaps() {
   const periodId = await getActivePeriodId();
-  const [attendanceMaps, treasuryBreakdown] = await Promise.all([getAttendanceMaps(periodId), getTreasuryBreakdown()]);
+  const [attendanceMaps, treasuryBreakdown] = await Promise.all([
+    getAttendanceMaps(periodId),
+    getTreasuryBreakdown(),
+  ]);
   const pools = distributionPools(treasuryBreakdown);
   const [salaryPrime, salaryMiniRb] = await Promise.all([
     getSalaryMapForPool(attendanceMaps.prime, pools.prime),
@@ -76,7 +105,7 @@ async function getDerivedPlayerMaps() {
     salaryPrime,
     salaryMiniRb,
   };
-}
+});
 
 function withDerived<T extends { id: string }>(
   players: T[],
@@ -87,7 +116,7 @@ function withDerived<T extends { id: string }>(
     pvpCount: Map<string, number>;
     salaryPrime: Map<string, number>;
     salaryMiniRb: Map<string, number>;
-  }
+  },
 ) {
   return players.map((p) => {
     const salaryPrime = derived.salaryPrime.get(p.id) ?? 0;
@@ -105,13 +134,13 @@ function withDerived<T extends { id: string }>(
   });
 }
 
-export async function getAllPlayers() {
+export const getAllPlayers = cache(async function getAllPlayers() {
   const [players, derived] = await Promise.all([
     prisma.player.findMany({ orderBy: { createdAt: "asc" } }),
     getDerivedPlayerMaps(),
   ]);
   return withDerived(players, derived);
-}
+});
 
 export async function getPlayerById(id: string) {
   const [player, derived] = await Promise.all([
@@ -135,7 +164,9 @@ export async function getPlayerByUserId(userId: string) {
 export async function getPlayerActivityHistory(playerId: string, limit = 8) {
   const rows = await prisma.activityParticipant.findMany({
     where: { playerId },
-    include: { activity: { include: { _count: { select: { participants: true } } } } },
+    include: {
+      activity: { include: { _count: { select: { participants: true } } } },
+    },
     orderBy: { activity: { date: "desc" } },
     take: limit,
   });
@@ -153,9 +184,18 @@ export async function getPlayerActivityHistory(playerId: string, limit = 8) {
  * посещений (0), чтобы график шёл сплошной шкалой, а не перескакивал через
  * пропуски.
  */
-export async function getPlayerAttendanceChartData(playerId: string, weeks = 10) {
+export async function getPlayerAttendanceChartData(
+  playerId: string,
+  weeks = 10,
+) {
   const rows = await prisma.activityParticipant.findMany({
-    where: { playerId },
+    where: {
+      playerId,
+      activity: {
+        status: { notIn: ["Отменено", "Запланировано"] },
+        date: { lte: new Date() },
+      },
+    },
     select: { activity: { select: { date: true } } },
   });
   const byWeek = new Map<string, number>();
@@ -168,7 +208,10 @@ export async function getPlayerAttendanceChartData(playerId: string, weeks = 10)
   for (let i = weeks - 1; i >= 0; i--) {
     const d = new Date(currentWeekStart);
     d.setUTCDate(d.getUTCDate() - i * 7);
-    result.push({ date: shortDateFmt.format(d), count: byWeek.get(dayKey(d)) ?? 0 });
+    result.push({
+      date: shortDateFmt.format(d),
+      count: byWeek.get(dayKey(d)) ?? 0,
+    });
   }
   return result;
 }
@@ -184,11 +227,25 @@ export async function getPlayerAttendanceChartData(playerId: string, weeks = 10)
 export async function getPlayerDailyAttendance(playerId: string, days = 30) {
   const [rows, guildActivities] = await Promise.all([
     prisma.activityParticipant.findMany({
-      where: { playerId },
-      select: { activity: { select: { date: true, category: true, mode: true } } },
+      where: {
+        playerId,
+        activity: {
+          status: { notIn: ["Отменено", "Запланировано"] },
+          date: { lte: new Date() },
+        },
+      },
+      select: {
+        activity: {
+          select: { name: true, date: true, category: true, mode: true },
+        },
+      },
     }),
     prisma.activity.findMany({
-      where: { category: { in: ["Прайм", "Мини-РБ"] } },
+      where: {
+        category: { in: ["Прайм", "Мини-РБ"] },
+        status: { notIn: ["Отменено", "Запланировано"] },
+        date: { lte: new Date() },
+      },
       select: { date: true },
     }),
   ]);
@@ -197,9 +254,12 @@ export async function getPlayerDailyAttendance(playerId: string, days = 30) {
   const byDayPvp = new Map<string, number>();
   for (const r of rows) {
     const key = dayKey(r.activity.date);
-    if (r.activity.category === "Прайм") byDayPrime.set(key, (byDayPrime.get(key) ?? 0) + 1);
-    if (r.activity.category === "Мини-РБ") byDayMiniRb.set(key, (byDayMiniRb.get(key) ?? 0) + 1);
-    if (r.activity.mode === "PvP") byDayPvp.set(key, (byDayPvp.get(key) ?? 0) + 1);
+    if (resolveAttendanceFund(r.activity.name, r.activity.mode) === "Прайм")
+      byDayPrime.set(key, (byDayPrime.get(key) ?? 0) + 1);
+    if (resolveAttendanceFund(r.activity.name, r.activity.mode) === "Мини-РБ")
+      byDayMiniRb.set(key, (byDayMiniRb.get(key) ?? 0) + 1);
+    if (r.activity.mode === "PvP")
+      byDayPvp.set(key, (byDayPvp.get(key) ?? 0) + 1);
   }
   const byDayTotal = new Map<string, number>();
   for (const a of guildActivities) {
@@ -207,8 +267,16 @@ export async function getPlayerDailyAttendance(playerId: string, days = 30) {
     byDayTotal.set(key, (byDayTotal.get(key) ?? 0) + 1);
   }
   const now = new Date();
-  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const result: { date: string; prime: number; miniRb: number; pvp: number; total: number }[] = [];
+  const todayUTC = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  const result: {
+    date: string;
+    prime: number;
+    miniRb: number;
+    pvp: number;
+    total: number;
+  }[] = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(todayUTC);
     d.setUTCDate(d.getUTCDate() - i);
@@ -250,7 +318,10 @@ export async function getRegisteredPlayers() {
 }
 
 export async function topPlayersByAttendance(count = 5) {
-  const [players, derived] = await Promise.all([prisma.player.findMany(), getDerivedPlayerMaps()]);
+  const [players, derived] = await Promise.all([
+    prisma.player.findMany(),
+    getDerivedPlayerMaps(),
+  ]);
   return withDerived(players, derived)
     .sort((a, b) => b.attendancePct - a.attendancePct)
     .slice(0, count);
@@ -258,9 +329,12 @@ export async function topPlayersByAttendance(count = 5) {
 
 export async function topPlayersByAttendanceCategory(
   field: "attendancePctPrime" | "attendancePctMiniRb",
-  count = 5
+  count = 5,
 ) {
-  const [players, derived] = await Promise.all([prisma.player.findMany(), getDerivedPlayerMaps()]);
+  const [players, derived] = await Promise.all([
+    prisma.player.findMany(),
+    getDerivedPlayerMaps(),
+  ]);
   return withDerived(players, derived)
     .sort((a, b) => b[field] - a[field])
     .slice(0, count);
@@ -308,15 +382,25 @@ export type ActivityFilters = {
 };
 
 export async function getFilteredActivities(filters: ActivityFilters) {
-  const { dateFrom, dateTo, status, mode, category, name, player, page = 1, pageSize = 15 } = filters;
+  const {
+    dateFrom,
+    dateTo,
+    status,
+    mode,
+    category,
+    name,
+    player,
+    page = 1,
+    pageSize = 15,
+  } = filters;
 
   const where: Record<string, unknown> = { archiveId: null };
   const dateFilter: Record<string, Date> = {};
-  if (dateFrom) dateFilter.gte = new Date(dateFrom);
-  if (dateTo) {
-    const end = new Date(dateTo);
-    end.setHours(23, 59, 59, 999);
-    dateFilter.lte = end;
+  if (dateFrom && parseDay(dateFrom)) dateFilter.gte = parseDay(dateFrom)!;
+  if (dateTo && parseDay(dateTo)) {
+    const end = parseDay(dateTo)!;
+    end.setUTCDate(end.getUTCDate() + 1);
+    dateFilter.lt = end;
   }
   if (Object.keys(dateFilter).length > 0) where.date = dateFilter;
   if (status) where.status = status;
@@ -327,15 +411,25 @@ export async function getFilteredActivities(filters: ActivityFilters) {
     where.participants = { some: { player: { name: { contains: player } } } };
   }
 
-  const [activities, total] = await Promise.all([
+  const [activities, total, allCounts, cancelledCount] = await Promise.all([
     prisma.activity.findMany({
       where,
       orderBy: { date: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      skip:
+        (positivePage(String(page)) - 1) * Math.min(100, Math.max(1, pageSize)),
+      take: Math.min(100, Math.max(1, pageSize)),
       include: { _count: { select: { participants: true } } },
     }),
     prisma.activity.count({ where }),
+    prisma.activity.findMany({
+      where,
+      select: {
+        status: true,
+        date: true,
+        _count: { select: { participants: true } },
+      },
+    }),
+    prisma.activity.count({ where: { ...where, status: "Отменено" } }),
   ]);
 
   return {
@@ -353,6 +447,27 @@ export async function getFilteredActivities(filters: ActivityFilters) {
       participants: a._count.participants,
     })),
     total,
+    summary: (() => {
+      const recorded = allCounts.filter(
+        (a) =>
+          a.status !== "Отменено" &&
+          a.status !== "Запланировано" &&
+          a.date <= new Date(),
+      );
+      return {
+        avgAttendance: recorded.length
+          ? Math.round(
+              recorded.reduce((sum, a) => sum + a._count.participants, 0) /
+                recorded.length,
+            )
+          : 0,
+        bestAttendance: recorded.reduce(
+          (best, a) => Math.max(best, a._count.participants),
+          0,
+        ),
+        cancelled: cancelledCount,
+      };
+    })(),
     totalPages: Math.max(1, Math.ceil(total / pageSize)),
     page,
   };
@@ -363,8 +478,14 @@ export async function getActivityById(id: string) {
     where: { id },
     include: {
       participants: { include: { player: true } },
-      drops: { include: { player: true, catalogItem: true }, orderBy: { createdAt: "desc" } },
-      screenshots: { orderBy: { createdAt: "asc" } },
+      drops: {
+        include: { player: true, catalogItem: true },
+        orderBy: { createdAt: "desc" },
+      },
+      screenshots: {
+        select: { id: true, kind: true },
+        orderBy: { createdAt: "asc" },
+      },
       guests: { orderBy: { createdAt: "asc" } },
       addedBy: { select: { username: true } },
       organizer: { select: { id: true, name: true } },
@@ -374,7 +495,10 @@ export async function getActivityById(id: string) {
   });
   if (!activity) return null;
 
-  const dropTotal = activity.drops.reduce((sum, d) => sum + d.value * d.quantity, 0);
+  const dropTotal = activity.drops.reduce(
+    (sum, d) => sum + d.value * d.quantity,
+    0,
+  );
   const roleCounts: Record<string, number> = {};
   for (const p of activity.participants) {
     roleCounts[p.player.role] = (roleCounts[p.player.role] ?? 0) + 1;
@@ -426,31 +550,43 @@ export async function getActivityById(id: string) {
     })),
     rosterScreenshots: activity.screenshots
       .filter((s) => s.kind === "roster")
-      .map((s) => ({ id: s.id, imageUrl: s.imageUrl })),
+      .map((s) => ({
+        id: s.id,
+        imageUrl: `/api/activities/${activity.id}/screenshots/${s.id}`,
+      })),
     dropScreenshots: activity.screenshots
       .filter((s) => s.kind === "drop")
-      .map((s) => ({ id: s.id, imageUrl: s.imageUrl })),
+      .map((s) => ({
+        id: s.id,
+        imageUrl: `/api/activities/${activity.id}/screenshots/${s.id}`,
+      })),
     guests: activity.guests.map((g) => ({ id: g.id, name: g.name })),
   };
 }
 
-export async function getTreasuryTransactions(limit?: number) {
+export async function getTreasuryTransactions(limit?: number, filter?: { where: Prisma.TreasuryTransactionWhereInput; skip: number }) {
   const transactions = await prisma.treasuryTransaction.findMany({
-    where: { archiveId: null },
+    where: filter?.where ?? { archiveId: null },
     orderBy: { date: "desc" },
     take: limit,
+    skip: filter?.skip,
   });
 
   const txIds = transactions.map((t) => t.id);
   const soldDrops = await prisma.dropItem.findMany({
     where: { treasuryTransactionId: { in: txIds } },
-    select: { treasuryTransactionId: true, quantity: true, catalogItem: { select: { imageUrl: true } } },
+    select: {
+      treasuryTransactionId: true,
+      quantity: true,
+      catalogItem: { select: { imageUrl: true } },
+    },
   });
   const iconByTxId = new Map<string, string | null>();
   const quantityByTxId = new Map<string, number>();
   for (const d of soldDrops) {
     const txId = d.treasuryTransactionId as string;
-    if (!iconByTxId.has(txId)) iconByTxId.set(txId, d.catalogItem?.imageUrl ?? null);
+    if (!iconByTxId.has(txId))
+      iconByTxId.set(txId, d.catalogItem?.imageUrl ?? null);
     quantityByTxId.set(txId, (quantityByTxId.get(txId) ?? 0) + d.quantity);
   }
 
@@ -468,13 +604,16 @@ export async function getTreasuryTransactions(limit?: number) {
  * напрямую — без разбора категорий по проданным позициям, без резерва
  * гильдии и без учёта выплат, — и показывал неверные Мини-РБ и итог.
  */
-export type TreasuryScope = { archiveId: string | null };
+export type TreasuryScope = {
+  archiveId: string | null;
+  date?: { gte: Date; lt: Date };
+};
 
 const LIVE: TreasuryScope = { archiveId: null };
 
 export async function getTreasuryGold(scope: TreasuryScope = LIVE) {
   const result = await prisma.treasuryTransaction.aggregate({
-    where: { archiveId: scope.archiveId },
+    where: { archiveId: scope.archiveId, date: scope.date },
     _sum: { amount: true },
   });
   return result._sum.amount ?? 0;
@@ -494,72 +633,46 @@ export async function getTreasuryGold(scope: TreasuryScope = LIVE) {
 // один раз. Позиции без категории (ручное добавление в Общий без
 // активности) считаются как Прайм — тот же порядок, что и в "Дроп с
 // Мини-РБ / Дроп с Прайм".
-async function getTreasurySplitByCategory(scope: TreasuryScope = LIVE): Promise<{ prime: number; miniRb: number }> {
-  // Операции только из своей области: для живого баланса — незаархивированные,
-  // для архива — его собственные (см. Archive в schema.prisma).
-  const liveTxIds = new Set(
-    (await prisma.treasuryTransaction.findMany({ where: { archiveId: scope.archiveId }, select: { id: true } })).map((t) => t.id)
-  );
-
-  const soldAll = await prisma.dropItem.findMany({
-    where: { status: "Продано", treasuryTransactionId: { not: null } },
-    select: { treasuryTransactionId: true, category: true, value: true, quantity: true },
-  });
-  const sold = soldAll.filter((d) => liveTxIds.has(d.treasuryTransactionId as string));
-
-  // Операции с собственной категорией и без привязанного дропа («Продажа
-  // Мини-РБ»): вся сумма идёт в свою категорию. Без этого такая продажа
-  // не попадала бы ни в Прайм, ни в Мини-РБ и оседала в остатке, то есть
-  // в «Казне гильдии». Выплаты ЗП (kind="payout") сюда не входят — они
-  // расход, а не доход, и считаются отдельно в getTreasuryPayoutSplit,
-  // минуя 70%-й множитель (см. комментарий у поля kind в schema.prisma).
-  const tagged = await prisma.treasuryTransaction.findMany({
-    where: { category: { not: null }, kind: null, archiveId: scope.archiveId },
-    select: { id: true, amount: true, category: true },
-  });
-  const soldTxIds = new Set(sold.map((d) => d.treasuryTransactionId as string));
-  let taggedPrime = 0;
-  let taggedMiniRb = 0;
-  for (const tx of tagged) {
-    // Если к операции всё же привязан дроп, категория позиций точнее —
-    // её и используем, чтобы не посчитать сумму дважды.
-    if (soldTxIds.has(tx.id)) continue;
-    if (tx.category === "Мини-РБ") taggedMiniRb += tx.amount;
-    else taggedPrime += tx.amount;
-  }
-
-  if (sold.length === 0) return { prime: Math.round(taggedPrime), miniRb: Math.round(taggedMiniRb) };
-
-  const txIds = [...new Set(sold.map((d) => d.treasuryTransactionId as string))];
+async function getGrossTreasuryMovements(scope: TreasuryScope = LIVE) {
   const transactions = await prisma.treasuryTransaction.findMany({
-    where: { id: { in: txIds } },
-    select: { id: true, amount: true },
+    where: { archiveId: scope.archiveId, date: scope.date, kind: null },
+    select: { id: true, date: true, amount: true, category: true },
   });
-  const amountByTx = new Map(transactions.map((t) => [t.id, t.amount]));
-
-  const byTx = new Map<string, { prime: number; miniRb: number; nominalTotal: number }>();
-  for (const d of sold) {
-    const txId = d.treasuryTransactionId as string;
-    const line = d.value * d.quantity;
-    const bucket = byTx.get(txId) ?? { prime: 0, miniRb: 0, nominalTotal: 0 };
-    bucket.nominalTotal += line;
-    if (d.category === "Мини-РБ") bucket.miniRb += line;
-    else bucket.prime += line;
-    byTx.set(txId, bucket);
+  const drops = await prisma.dropItem.findMany({
+    where: {
+      status: "Продано",
+      treasuryTransactionId: { in: transactions.map((t) => t.id) },
+    },
+    select: {
+      treasuryTransactionId: true,
+      category: true,
+      value: true,
+      quantity: true,
+    },
+  });
+  const byTransaction = new Map<string, typeof drops>();
+  for (const drop of drops) {
+    const items = byTransaction.get(drop.treasuryTransactionId!) ?? [];
+    items.push(drop);
+    byTransaction.set(drop.treasuryTransactionId!, items);
   }
-
-  let prime = taggedPrime;
-  let miniRb = taggedMiniRb;
-  for (const [txId, bucket] of byTx) {
-    const amount = amountByTx.get(txId) ?? 0;
-    if (bucket.nominalTotal <= 0) {
-      prime += amount;
-      continue;
-    }
-    prime += amount * (bucket.prime / bucket.nominalTotal);
-    miniRb += amount * (bucket.miniRb / bucket.nominalTotal);
-  }
-  return { prime: Math.round(prime), miniRb: Math.round(miniRb) };
+  return transactions.map((t) => ({
+    date: t.date,
+    ...splitTreasuryReceipt(
+      t.amount,
+      t.category,
+      byTransaction.get(t.id) ?? [],
+    ),
+  }));
+}
+async function getTreasurySplitByCategory(
+  scope: TreasuryScope = LIVE,
+): Promise<{ prime: number; miniRb: number }> {
+  const movements = await getGrossTreasuryMovements(scope);
+  return {
+    prime: Math.round(movements.reduce((sum, t) => sum + t.prime, 0)),
+    miniRb: Math.round(movements.reduce((sum, t) => sum + t.miniRb, 0)),
+  };
 }
 
 // Казна делится на основную (фонд ЗП) и казну гильдии (резерв) в пропорции 70/30.
@@ -568,10 +681,12 @@ const TREASURY_MAIN_SHARE = 0.7;
 // Сколько уже выплачено по каждой категории (kind="payout", см. schema.prisma).
 // Считается отдельно от дохода и вычитается из prime/miniRb 1:1, ПОСЛЕ
 // 70%-го множителя — см. комментарий у поля kind.
-async function getTreasuryPayoutSplit(scope: TreasuryScope = LIVE): Promise<{ prime: number; miniRb: number }> {
+async function getTreasuryPayoutSplit(
+  scope: TreasuryScope = LIVE,
+): Promise<{ prime: number; miniRb: number }> {
   const rows = await prisma.treasuryTransaction.groupBy({
     by: ["category"],
-    where: { kind: "payout", archiveId: scope.archiveId },
+    where: { kind: "payout", archiveId: scope.archiveId, date: scope.date },
     _sum: { amount: true },
   });
   let prime = 0;
@@ -587,11 +702,12 @@ async function getTreasuryPayoutSplit(scope: TreasuryScope = LIVE): Promise<{ pr
 }
 
 export async function getTreasuryBreakdown(scope: TreasuryScope = LIVE) {
-  const [total, { prime: primeGold, miniRb: miniRbGold }, payout] = await Promise.all([
-    getTreasuryGold(scope),
-    getTreasurySplitByCategory(scope),
-    getTreasuryPayoutSplit(scope),
-  ]);
+  const [total, { prime: primeGold, miniRb: miniRbGold }, payout] =
+    await Promise.all([
+      getTreasuryGold(scope),
+      getTreasurySplitByCategory(scope),
+      getTreasuryPayoutSplit(scope),
+    ]);
   const main = Math.round(total * TREASURY_MAIN_SHARE);
   // Мини-РБ без резерва гильдии — весь доход категории идёт на выплату,
   // поэтому 30%-й резерв гильдии считаем только с дохода Прайма (и прочих
@@ -613,7 +729,10 @@ export async function getTreasuryBreakdown(scope: TreasuryScope = LIVE) {
 }
 
 export async function getTreasuryChartData() {
-  const transactions = await prisma.treasuryTransaction.findMany({ where: { archiveId: null }, orderBy: { date: "asc" } });
+  const transactions = await prisma.treasuryTransaction.findMany({
+    where: { archiveId: null },
+    orderBy: { date: "asc" },
+  });
   const byDay = new Map<string, number>();
   for (const t of transactions) {
     const key = dayKey(t.date);
@@ -644,22 +763,16 @@ async function getTreasuryDailyDeltas(): Promise<Map<string, number>> {
 // сумма treasury-операций, порождённых продажей предмета, чья активность
 // принадлежит этой категории. Дата берётся из самой операции (когда
 // золото реально попало в казну), а не из даты записи в журнале дропа.
-async function getCategoryDailyDeltas(category: string): Promise<Map<string, number>> {
-  const soldDrops = await prisma.dropItem.findMany({
-    where: { status: "Продано", treasuryTransactionId: { not: null }, activity: { category } },
-    select: { treasuryTransactionId: true },
-  });
-  const txIds = soldDrops.map((d) => d.treasuryTransactionId).filter((tid): tid is string => Boolean(tid));
+async function getCategoryDailyDeltas(
+  category: string,
+): Promise<Map<string, number>> {
+  const movements = await getGrossTreasuryMovements();
   const byDay = new Map<string, number>();
-  if (txIds.length === 0) return byDay;
-
-  const transactions = await prisma.treasuryTransaction.findMany({
-    where: { id: { in: txIds }, archiveId: null },
-    select: { date: true, amount: true },
-  });
-  for (const t of transactions) {
-    const key = dayKey(t.date);
-    byDay.set(key, (byDay.get(key) ?? 0) + t.amount);
+  for (const transaction of movements) {
+    const key = dayKey(transaction.date);
+    const amount =
+      category === "Мини-РБ" ? transaction.miniRb : transaction.prime;
+    byDay.set(key, (byDay.get(key) ?? 0) + amount);
   }
   return byDay;
 }
@@ -672,7 +785,9 @@ export async function getTreasuryChartCombined() {
     getCategoryDailyDeltas("Мини-РБ"),
     getCategoryDailyDeltas("Прайм"),
   ]);
-  const days = [...new Set([...total.keys(), ...miniRb.keys(), ...prime.keys()])].sort();
+  const days = [
+    ...new Set([...total.keys(), ...miniRb.keys(), ...prime.keys()]),
+  ].sort();
   let runningTotal = 0;
   let runningMiniRb = 0;
   let runningPrime = 0;
@@ -683,8 +798,8 @@ export async function getTreasuryChartCombined() {
     return {
       date: shortDateFmt.format(new Date(key)),
       gold: runningTotal,
-      goldMiniRb: runningMiniRb,
-      goldPrime: runningPrime,
+      goldMiniRb: Math.round(runningMiniRb),
+      goldPrime: Math.round(runningPrime),
     };
   });
 }
@@ -770,9 +885,19 @@ type InventoryEntry = {
   playerName: string | null;
   activityName: string | null;
 };
-type InventoryItem = { item: string; quantity: number; totalValue: number; imageUrl: string | null; entries: InventoryEntry[] };
+type InventoryItem = {
+  item: string;
+  quantity: number;
+  totalValue: number;
+  imageUrl: string | null;
+  entries: InventoryEntry[];
+};
 
-export async function getInventory(): Promise<{ hd: InventoryItem[]; nt: InventoryItem[]; general: InventoryItem[] }> {
+export async function getInventory(): Promise<{
+  hd: InventoryItem[];
+  nt: InventoryItem[];
+  general: InventoryItem[];
+}> {
   const drops = await prisma.dropItem.findMany({
     where: { status: "Не продано" },
     include: {
@@ -805,7 +930,8 @@ export async function getInventory(): Promise<{ hd: InventoryItem[]; nt: Invento
       existing.quantity += d.quantity;
       existing.totalValue += lineValue;
       existing.entries.push(entry);
-      if (!existing.imageUrl && d.catalogItem?.imageUrl) existing.imageUrl = d.catalogItem.imageUrl;
+      if (!existing.imageUrl && d.catalogItem?.imageUrl)
+        existing.imageUrl = d.catalogItem.imageUrl;
     } else {
       map.set(d.item, {
         item: d.item,
@@ -817,7 +943,8 @@ export async function getInventory(): Promise<{ hd: InventoryItem[]; nt: Invento
     }
   }
 
-  const sortByValue = (items: InventoryItem[]) => items.sort((a, b) => b.totalValue - a.totalValue);
+  const sortByValue = (items: InventoryItem[]) =>
+    items.sort((a, b) => b.totalValue - a.totalValue);
   return {
     hd: sortByValue([...maps["ХД"].values()]),
     nt: sortByValue([...maps["НТ"].values()]),
@@ -862,11 +989,17 @@ export async function getAttendanceChartData() {
     byDay.set(key, (byDay.get(key) ?? 0) + a._count.participants);
   }
   const days = [...byDay.keys()].sort().slice(-7);
-  return days.map((key) => ({ date: shortDateFmt.format(new Date(key)), count: byDay.get(key)! }));
+  return days.map((key) => ({
+    date: shortDateFmt.format(new Date(key)),
+    count: byDay.get(key)!,
+  }));
 }
 
 export async function getAllPayments() {
-  return prisma.payment.findMany({ orderBy: { date: "desc" }, include: { player: true } });
+  return prisma.payment.findMany({
+    orderBy: { date: "desc" },
+    include: { player: true },
+  });
 }
 
 /**
@@ -875,15 +1008,21 @@ export async function getAllPayments() {
  */
 export async function getPayoutStatusMap(period: string): Promise<Set<string>> {
   const rows = await prisma.payment.findMany({
-    where: { source: "payout", archiveMonth: period, status: "Выплачено", category: { not: null } },
+    where: {
+      source: "payout",
+      archiveMonth: period,
+      status: "Выплачено",
+      category: { not: null },
+    },
     select: { playerId: true, category: true },
   });
   return new Set(rows.map((r) => `${r.playerId}:${r.category}`));
 }
 
-
 /** Сколько игроку выплачено (по обеим казнам) в рамках указанного периода — для «Состава». */
-export async function getPlayerPeriodPaidMap(periodId: string): Promise<Map<string, number>> {
+export async function getPlayerPeriodPaidMap(
+  periodId: string,
+): Promise<Map<string, number>> {
   const rows = await prisma.payment.groupBy({
     by: ["playerId"],
     where: { periodId, source: "payout", status: "Выплачено" },
@@ -899,7 +1038,9 @@ export async function getArchivePreview(dateFrom: Date, dateTo: Date) {
   // ЗП архивируются все, независимо от даты (см. комментарий там же).
   const [activityCount, txCount, treasury] = await Promise.all([
     prisma.activity.count({ where: { date: dateWhere, archiveId: null } }),
-    prisma.treasuryTransaction.count({ where: { archiveId: null, OR: [{ date: dateWhere }, { kind: "payout" }] } }),
+    prisma.treasuryTransaction.count({
+      where: { archiveId: null, OR: [{ date: dateWhere }, { kind: "payout" }] },
+    }),
     getTreasuryBreakdown(),
   ]);
   return {
@@ -915,12 +1056,19 @@ export async function getArchivePreview(dateFrom: Date, dateTo: Date) {
 export async function getArchives() {
   const archives = await prisma.archive.findMany({
     orderBy: { dateFrom: "desc" },
-    include: { _count: { select: { activities: true, transactions: true, playerStats: true } } },
+    include: {
+      _count: {
+        select: { activities: true, transactions: true, playerStats: true },
+      },
+    },
   });
   // Итог по каждому архиву считаем тем же кодом, что и живую казну —
   // иначе в списке стояла бы одна сумма, а внутри архива другая.
   const breakdowns = await Promise.all(
-    archives.map(async (a) => [a.id, await getTreasuryBreakdown({ archiveId: a.id })] as const)
+    archives.map(
+      async (a) =>
+        [a.id, await getTreasuryBreakdown({ archiveId: a.id })] as const,
+    ),
   );
   const totalByArchive = new Map(breakdowns.map(([id, b]) => [id, b.total]));
   return archives.map((a) => ({
@@ -945,12 +1093,16 @@ export async function getArchiveDetail(id: string) {
       activities: {
         orderBy: { date: "desc" },
         include: {
-          _count: { select: { participants: true, guests: true, screenshots: true } },
+          _count: {
+            select: { participants: true, guests: true, screenshots: true },
+          },
           drops: { select: { value: true, quantity: true } },
         },
       },
       transactions: { orderBy: { date: "desc" } },
-      playerStats: { orderBy: [{ attendancePct: "desc" }, { playerName: "asc" }] },
+      playerStats: {
+        orderBy: [{ attendancePct: "desc" }, { playerName: "asc" }],
+      },
     },
   });
   if (!archive) return null;
@@ -1053,7 +1205,12 @@ export async function getArchivePayout(archiveId: string) {
   if (!archive) return null;
 
   const paid = await prisma.payment.findMany({
-    where: { source: "payout", archiveMonth: archiveId, status: "Выплачено", category: { not: null } },
+    where: {
+      source: "payout",
+      archiveMonth: archiveId,
+      status: "Выплачено",
+      category: { not: null },
+    },
     select: { playerId: true, category: true, amount: true },
   });
   const paidKeys = new Set(paid.map((p) => `${p.playerId}:${p.category}`));
@@ -1092,5 +1249,81 @@ export async function getArchiveOptions() {
     orderBy: { dateFrom: "desc" },
     include: { _count: { select: { playerStats: true } } },
   });
-  return archives.map((a) => ({ id: a.id, label: a.label, hasRoster: a._count.playerStats > 0 }));
+  return archives.map((a) => ({
+    id: a.id,
+    label: a.label,
+    hasRoster: a._count.playerStats > 0,
+  }));
+}
+
+export async function getRecentActivities(limit = 5) {
+  const rows = await prisma.activity.findMany({
+    where: {
+      archiveId: null,
+      status: { notIn: ["Отменено", "Запланировано"] },
+      date: { lte: new Date() },
+    },
+    orderBy: { date: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      name: true,
+      date: true,
+      status: true,
+      _count: { select: { participants: true } },
+    },
+  });
+  return rows.map((a) => ({
+    id: a.id,
+    name: a.name,
+    date: dateFmt.format(a.date),
+    status: a.status,
+    participants: a._count.participants,
+  }));
+}
+
+/** Date-filtered financial movements, using the same split as the treasury itself. */
+export async function getFinancialRange(
+  from: Date,
+  to: Date,
+  archiveId: string | null,
+) {
+  const scope = { archiveId, date: { gte: from, lt: to } };
+  const [receipts, payout] = await Promise.all([
+    getTreasurySplitByCategory(scope),
+    getTreasuryPayoutSplit(scope),
+  ]);
+  return {
+    primeSales: receipts.prime,
+    miniRbSales: receipts.miniRb,
+    guildShare:
+      receipts.prime - Math.round(receipts.prime * TREASURY_MAIN_SHARE),
+    paid: payout.prime + payout.miniRb,
+  };
+}
+
+export async function getUpcomingActivities(limit = 5) {
+  const rows = await prisma.activity.findMany({
+    where: {
+      archiveId: null,
+      status: "Запланировано",
+      date: { gte: new Date() },
+    },
+    orderBy: { date: "asc" },
+    take: limit,
+    select: {
+      id: true,
+      name: true,
+      date: true,
+      status: true,
+      _count: { select: { participants: true } },
+    },
+  });
+  return rows.map((a) => ({
+    id: a.id,
+    name: a.name,
+    date: dateFmt.format(a.date),
+    status: a.status,
+    participants: a._count.participants,
+  }));
 }

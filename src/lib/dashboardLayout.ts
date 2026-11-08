@@ -10,6 +10,7 @@ export type PanelLayout = {
   span: number;
   /** Высота в пикселях; null — по содержимому. */
   height: number | null;
+  hidden?: boolean;
 };
 
 export const MIN_SPAN = 3;
@@ -28,7 +29,10 @@ function clamp(value: number, min: number, max: number) {
  * отбрасываются, новые панели добавляются в конец. Без этого добавление панели
  * в код ломало бы дашборд у всех, кто уже что-то настроил.
  */
-export function reconcileLayout(raw: string | null, defaults: PanelLayout[]): PanelLayout[] {
+export function reconcileLayout(
+  raw: string | null,
+  defaults: PanelLayout[],
+): PanelLayout[] {
   let saved: unknown = null;
   try {
     saved = raw ? JSON.parse(raw) : null;
@@ -42,10 +46,20 @@ export function reconcileLayout(raw: string | null, defaults: PanelLayout[]): Pa
   for (const entry of saved) {
     if (typeof entry !== "object" || entry === null) continue;
     const { id, span, height } = entry as Partial<PanelLayout>;
-    if (typeof id !== "string" || !byId.has(id) || result.some((r) => r.id === id)) continue;
+    if (
+      typeof id !== "string" ||
+      !byId.has(id) ||
+      result.some((r) => r.id === id)
+    )
+      continue;
     result.push({
       id,
-      span: clamp(Math.round(Number(span) || byId.get(id)!.span), MIN_SPAN, MAX_SPAN),
+      hidden: (entry as PanelLayout).hidden === true,
+      span: clamp(
+        Math.round(Number(span) || byId.get(id)!.span),
+        MIN_SPAN,
+        MAX_SPAN,
+      ),
       height:
         typeof height === "number" && Number.isFinite(height)
           ? clamp(Math.round(height), MIN_HEIGHT, MAX_HEIGHT)
@@ -70,10 +84,14 @@ function emit() {
 export function subscribe(listener: () => void) {
   listeners.add(listener);
   // Раскладка может измениться в другой вкладке.
-  window.addEventListener("storage", listener);
+  const onStorage = () => {
+    cacheValid = false;
+    listener();
+  };
+  window.addEventListener("storage", onStorage);
   return () => {
     listeners.delete(listener);
-    window.removeEventListener("storage", listener);
+    window.removeEventListener("storage", onStorage);
   };
 }
 

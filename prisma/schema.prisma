@@ -173,6 +173,8 @@ model ActivityParticipant {
 }
 
 model TreasuryTransaction {
+  /// Compensating transaction: original ledger row is retained unchanged.
+  reversalOfId String? @unique
   id          String            @id @default(cuid())
   description String
   amount      Int
